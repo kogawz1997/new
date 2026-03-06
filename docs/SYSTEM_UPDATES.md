@@ -94,3 +94,50 @@
 - `test/scum-webhook.integration.test.js`
 - `test/item-icon-service.test.js`
 - `PROJECT_REVIEW.md`
+
+---
+
+## 2026-03-06 (Security hardening baseline)
+
+### เป้าหมาย
+- ยกระดับความพร้อม production ด้านความปลอดภัยสำหรับ admin web + webhook
+
+### สิ่งที่เปลี่ยน
+- `src/adminWebServer.js`
+  - เพิ่ม security headers ครอบคลุมหน้า HTML/API/SSE
+  - เพิ่ม CSRF-style protection (origin + sec-fetch-site) สำหรับ session requests ที่เป็น mutating API
+  - ปิด token query auth โดย default (`ADMIN_WEB_ALLOW_TOKEN_QUERY=false`)
+  - ปรับ token compare เป็น timing-safe
+  - เพิ่ม body-size limit ที่ตั้งค่าได้ (`ADMIN_WEB_MAX_BODY_BYTES`)
+  - เพิ่ม `ADMIN_WEB_TRUST_PROXY` เพื่อกัน spoof `x-forwarded-for` โดยค่าเริ่มต้น
+- `src/scumWebhookServer.js`
+  - harden webhook input: content-type check, payload size limit, request timeout
+  - validate event type เป็น whitelist
+  - secret compare แบบ timing-safe
+  - startup warning เมื่อ `SCUM_WEBHOOK_SECRET` ว่าง
+- เพิ่ม/ขยาย integration tests:
+  - `test/admin-api.integration.test.js` (cross-site block + auth path)
+  - `test/scum-webhook.integration.test.js` (invalid type/content-type reject)
+- อัปเดต env docs:
+  - `.env.example`
+  - `README.md` (security checklist + production flags)
+
+### ผลกระทบ
+- ลดความเสี่ยง CSRF, brute-force bypass แบบ IP spoof, oversized request abuse, webhook misuse
+- เพิ่มความชัดเจนการตั้งค่าปลอดภัยก่อนขึ้น production
+
+### วิธีทดสอบ
+- `npm run lint`
+- `npm test`
+
+### ผลทดสอบล่าสุด
+- ผ่านทั้งหมด (`13/13`)
+
+### ไฟล์หลักที่อัปเดต
+- `src/adminWebServer.js`
+- `src/scumWebhookServer.js`
+- `test/admin-api.integration.test.js`
+- `test/scum-webhook.integration.test.js`
+- `.env.example`
+- `README.md`
+- `PROJECT_REVIEW.md`

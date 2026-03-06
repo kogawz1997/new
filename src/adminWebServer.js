@@ -67,14 +67,36 @@ const SESSION_TTL_MS = Math.max(
   10 * 60 * 1000,
   Number(process.env.ADMIN_WEB_SESSION_TTL_HOURS || 12) * 60 * 60 * 1000,
 );
+const ADMIN_WEB_MAX_BODY_BYTES = Math.max(
+  8 * 1024,
+  Number(process.env.ADMIN_WEB_MAX_BODY_BYTES || 1024 * 1024),
+);
 const LIVE_HEARTBEAT_MS = Math.max(
   10000,
   Number(process.env.ADMIN_WEB_LIVE_HEARTBEAT_MS || 20000),
 );
-const SESSION_SECURE_COOKIE =
-  String(process.env.ADMIN_WEB_SECURE_COOKIE || '')
-    .trim()
-    .toLowerCase() === 'true';
+const SESSION_SECURE_COOKIE = envBool('ADMIN_WEB_SECURE_COOKIE', false);
+const ADMIN_WEB_HSTS_ENABLED = envBool(
+  'ADMIN_WEB_HSTS_ENABLED',
+  SESSION_SECURE_COOKIE,
+);
+const ADMIN_WEB_HSTS_MAX_AGE_SEC = Math.max(
+  300,
+  Number(process.env.ADMIN_WEB_HSTS_MAX_AGE_SEC || 31536000),
+);
+const ADMIN_WEB_TRUST_PROXY = envBool('ADMIN_WEB_TRUST_PROXY', false);
+const ADMIN_WEB_ALLOW_TOKEN_QUERY = envBool('ADMIN_WEB_ALLOW_TOKEN_QUERY', false);
+const ADMIN_WEB_ENFORCE_ORIGIN_CHECK = envBool(
+  'ADMIN_WEB_ENFORCE_ORIGIN_CHECK',
+  true,
+);
+const ADMIN_WEB_ALLOWED_ORIGINS = String(
+  process.env.ADMIN_WEB_ALLOWED_ORIGINS || '',
+).trim();
+const ADMIN_WEB_CSP = String(
+  process.env.ADMIN_WEB_CSP ||
+    "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; connect-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'",
+).trim();
 const ADMIN_WEB_USER =
   String(process.env.ADMIN_WEB_USER || 'admin').trim() || 'admin';
 const LOGIN_RATE_LIMIT_WINDOW_MS = Math.max(
@@ -109,35 +131,71 @@ const LOGIN_SPIKE_ALERT_COOLDOWN_MS = Math.max(
   Number(process.env.ADMIN_WEB_LOGIN_SPIKE_ALERT_COOLDOWN_MS || 60 * 1000),
 );
 
+function envBool(name, fallback = false) {
+  const raw = String(process.env[name] || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
 function jsonReplacer(_key, value) {
   if (typeof value === 'bigint') return Number(value);
   if (value instanceof Date) return value.toISOString();
   return value;
 }
 
+function buildSecurityHeaders(extraHeaders = {}, options = {}) {
+  const headers = {
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
+    'Cross-Origin-Resource-Policy': 'same-origin',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
+  };
+  if (ADMIN_WEB_HSTS_ENABLED) {
+    headers['Strict-Transport-Security'] = `max-age=${ADMIN_WEB_HSTS_MAX_AGE_SEC}; includeSubDomains`;
+  }
+  if (options.isHtml && ADMIN_WEB_CSP) {
+    headers['Content-Security-Policy'] = ADMIN_WEB_CSP;
+  }
+  return { ...headers, ...extraHeaders };
+}
+
 function sendJson(res, statusCode, payload, extraHeaders = {}) {
   const body = JSON.stringify(payload, jsonReplacer);
-  res.writeHead(statusCode, {
+  res.writeHead(
+    statusCode,
+    buildSecurityHeaders({
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     ...extraHeaders,
-  });
+    }),
+  );
   res.end(body);
 }
 
 function sendHtml(res, statusCode, html) {
-  res.writeHead(statusCode, {
+  res.writeHead(
+    statusCode,
+    buildSecurityHeaders(
+      {
     'Content-Type': 'text/html; charset=utf-8',
     'Cache-Control': 'no-store',
-  });
+      },
+      { isHtml: true },
+    ),
+  );
   res.end(html);
 }
 
 function sendText(res, statusCode, text) {
-  res.writeHead(statusCode, {
+  res.writeHead(
+    statusCode,
+    buildSecurityHeaders({
     'Content-Type': 'text/plain; charset=utf-8',
     'Cache-Control': 'no-store',
-  });
+    }),
+  );
   res.end(text);
 }
 
@@ -182,12 +240,12 @@ function broadcastLiveUpdate(eventType, payload = {}) {
 }
 
 function openLiveStream(req, res) {
-  res.writeHead(200, {
+  res.writeHead(200, buildSecurityHeaders({
     'Content-Type': 'text/event-stream; charset=utf-8',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
-  });
+  }));
   res.write(': connected\n\n');
   liveClients.add(res);
   ensureLiveHeartbeat();
@@ -264,10 +322,12 @@ function parseCookies(req) {
 }
 
 function getClientIp(req) {
-  const forwarded = String(req.headers['x-forwarded-for'] || '')
-    .split(',')[0]
-    .trim();
-  if (forwarded) return forwarded;
+  if (ADMIN_WEB_TRUST_PROXY) {
+    const forwarded = String(req.headers['x-forwarded-for'] || '')
+      .split(',')[0]
+      .trim();
+    if (forwarded) return forwarded;
+  }
   return String(req.socket?.remoteAddress || '').trim() || 'unknown';
 }
 
@@ -453,7 +513,7 @@ function getRequestToken(req, urlObj) {
   }
 
   const tokenQuery = String(urlObj.searchParams.get('token') || '').trim();
-  if (tokenQuery) return tokenQuery;
+  if (tokenQuery && ADMIN_WEB_ALLOW_TOKEN_QUERY) return tokenQuery;
   return '';
 }
 
@@ -461,7 +521,68 @@ function isAuthorized(req, urlObj) {
   if (hasValidSession(req)) return true;
   const requestToken = getRequestToken(req, urlObj);
   const expected = getAdminToken();
-  return requestToken !== '' && requestToken === expected;
+  return requestToken !== '' && secureEqual(requestToken, expected);
+}
+
+function normalizeOrigin(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    return new URL(raw).origin.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function buildAllowedOrigins(host, port) {
+  const out = new Set();
+  const add = (value) => {
+    const normalized = normalizeOrigin(value);
+    if (normalized) out.add(normalized);
+  };
+
+  add(`http://127.0.0.1:${port}`);
+  add(`http://localhost:${port}`);
+  if (host && host !== '0.0.0.0' && host !== '::') {
+    add(`http://${host}:${port}`);
+  }
+
+  for (const item of ADMIN_WEB_ALLOWED_ORIGINS.split(',')) {
+    add(item);
+  }
+
+  return out;
+}
+
+function getRequestOrigin(req) {
+  const fromOrigin = normalizeOrigin(req.headers.origin);
+  if (fromOrigin) return fromOrigin;
+  const referrer = String(req.headers.referer || '').trim();
+  if (!referrer) return '';
+  try {
+    return new URL(referrer).origin.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isSafeHttpMethod(method) {
+  const text = String(method || '').toUpperCase();
+  return text === 'GET' || text === 'HEAD' || text === 'OPTIONS';
+}
+
+function violatesBrowserOriginPolicy(req, allowedOrigins) {
+  if (!ADMIN_WEB_ENFORCE_ORIGIN_CHECK) return false;
+  const fetchSite = String(req.headers['sec-fetch-site'] || '')
+    .trim()
+    .toLowerCase();
+  if (fetchSite && !['same-origin', 'same-site', 'none'].includes(fetchSite)) {
+    return true;
+  }
+
+  const origin = getRequestOrigin(req);
+  if (!origin) return false;
+  return !allowedOrigins.has(origin);
 }
 
 function asInt(value, fallback = null) {
@@ -504,13 +625,19 @@ function parseDeliveryItemsBody(input) {
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
+    let done = false;
     req.on('data', (chunk) => {
+      if (done) return;
       body += chunk;
-      if (body.length > 1024 * 1024) {
+      if (body.length > ADMIN_WEB_MAX_BODY_BYTES) {
+        done = true;
         reject(new Error('เนื้อหาคำขอใหญ่เกินกำหนด'));
+        req.destroy();
       }
     });
     req.on('end', () => {
+      if (done) return;
+      done = true;
       if (!body.trim()) return resolve({});
       try {
         resolve(JSON.parse(body));
@@ -518,7 +645,11 @@ function readJsonBody(req) {
         reject(new Error('รูปแบบ JSON ไม่ถูกต้อง'));
       }
     });
-    req.on('error', reject);
+    req.on('error', (error) => {
+      if (done) return;
+      done = true;
+      reject(error);
+    });
   });
 }
 
@@ -1076,6 +1207,7 @@ function startAdminWebServer(client) {
 
   const host = String(process.env.ADMIN_WEB_HOST || '127.0.0.1').trim() || '127.0.0.1';
   const port = asInt(process.env.ADMIN_WEB_PORT, 3200) || 3200;
+  const allowedOrigins = buildAllowedOrigins(host, port);
   const token = getAdminToken();
   if (!liveBusBound) {
     adminLiveBus.on('update', (evt) => {
@@ -1116,6 +1248,17 @@ function startAdminWebServer(client) {
 
     if (pathname.startsWith('/admin/api/')) {
       try {
+        if (
+          hasValidSession(req) &&
+          !isSafeHttpMethod(req.method) &&
+          violatesBrowserOriginPolicy(req, allowedOrigins)
+        ) {
+          return sendJson(res, 403, {
+            ok: false,
+            error: 'Cross-site request denied',
+          });
+        }
+
         if (req.method === 'POST' && pathname === '/admin/api/login') {
           const rateLimit = getLoginRateLimitState(req);
           if (rateLimit.limited) {
@@ -1273,6 +1416,11 @@ function startAdminWebServer(client) {
   adminServer.listen(port, host, () => {
     console.log(`[admin-web] เปิดใช้งานที่ http://${host}:${port}/admin`);
     console.log(`[admin-web] login user: ${ADMIN_WEB_USER}`);
+    if ((host !== '127.0.0.1' && host !== 'localhost') && !SESSION_SECURE_COOKIE) {
+      console.warn(
+        '[admin-web] SESSION cookie is not secure. Set ADMIN_WEB_SECURE_COOKIE=true for HTTPS production.',
+      );
+    }
     if (!process.env.ADMIN_WEB_PASSWORD) {
       console.log(
         '[admin-web] ยังไม่ได้ตั้งค่า ADMIN_WEB_PASSWORD จึงใช้ ADMIN_WEB_TOKEN (หรือโทเค็นชั่วคราว) เป็นรหัสผ่านล็อกอิน',

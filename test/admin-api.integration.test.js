@@ -70,6 +70,18 @@ test('admin API auth + validation integration flow', async (t) => {
   const unauthorizedMe = await request('/admin/api/me');
   assert.equal(unauthorizedMe.res.status, 401);
 
+  const tokenByQuery = await request('/admin/api/me?token=token_test');
+  assert.equal(tokenByQuery.res.status, 401);
+
+  const tokenByHeaderRes = await fetch(`${baseUrl}/admin/api/me`, {
+    headers: {
+      'x-admin-token': 'token_test',
+    },
+  });
+  const tokenByHeaderData = await tokenByHeaderRes.json().catch(() => ({}));
+  assert.equal(tokenByHeaderRes.status, 200);
+  assert.equal(tokenByHeaderData.ok, true);
+
   const login = await request('/admin/api/login', 'POST', {
     username: 'admin_test',
     password: 'pass_test',
@@ -84,6 +96,8 @@ test('admin API auth + validation integration flow', async (t) => {
   assert.equal(me.res.status, 200);
   assert.equal(me.data.ok, true);
   assert.equal(me.data.data.user, 'admin_test');
+  assert.equal(me.res.headers.get('x-content-type-options'), 'nosniff');
+  assert.equal(me.res.headers.get('x-frame-options'), 'DENY');
 
   const invalidWallet = await request(
     '/admin/api/wallet/set',
@@ -93,6 +107,23 @@ test('admin API auth + validation integration flow', async (t) => {
   );
   assert.equal(invalidWallet.res.status, 400);
   assert.equal(invalidWallet.data.error, 'Invalid request payload');
+
+  const csrfAttempt = await fetch(`${baseUrl}/admin/api/wallet/set`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      cookie,
+      origin: 'http://evil.example',
+      'sec-fetch-site': 'cross-site',
+    },
+    body: JSON.stringify({
+      userId: '12345678901234567',
+      balance: 100,
+    }),
+  });
+  const csrfData = await csrfAttempt.json().catch(() => ({}));
+  assert.equal(csrfAttempt.status, 403);
+  assert.equal(csrfData.ok, false);
 
   const observability = await request('/admin/api/observability', 'GET', null, cookie);
   assert.equal(observability.res.status, 200);

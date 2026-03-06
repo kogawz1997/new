@@ -100,6 +100,26 @@ test('SCUM webhook server validates auth and dispatches events', async (t) => {
   });
   assert.equal(unknownGuild.status, 400);
 
+  const invalidType = await post('/scum-event', {
+    secret: 'test-secret',
+    guildId: fakeGuild.id,
+    type: 'invalid-type',
+  });
+  assert.equal(invalidType.status, 400);
+
+  const badContentType = await fetch(`${baseUrl}/scum-event`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'text/plain',
+    },
+    body: JSON.stringify({
+      secret: 'test-secret',
+      guildId: fakeGuild.id,
+      type: 'status',
+    }),
+  });
+  assert.equal(badContentType.status, 415);
+
   const statusOk = await post('/scum-event', {
     secret: 'test-secret',
     guildId: fakeGuild.id,

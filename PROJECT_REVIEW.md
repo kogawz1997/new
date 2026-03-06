@@ -109,6 +109,31 @@
 
 หมายเหตุสำคัญ: คำว่า "ทดสอบ 100%" ในงานระบบจริงหมายถึง "ครอบคลุมตามชุดทดสอบที่นิยามไว้" ไม่สามารถการันตี 100% ทุกเหตุการณ์ production ได้ แต่รอบนี้ปิดช่องทดสอบเชิง integration เพิ่มในจุดเสี่ยงหลักแล้ว
 
+### F) Security hardening สำหรับ production
+สถานะ: เสร็จแล้ว (baseline hardening)  
+- Admin Web:
+  - เพิ่ม security headers (CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, ฯลฯ)
+  - เพิ่ม origin/`sec-fetch-site` protection สำหรับคำขอที่ใช้ session (ลดความเสี่ยง CSRF)
+  - ปิด token ผ่าน query string โดยค่าเริ่มต้น (`ADMIN_WEB_ALLOW_TOKEN_QUERY=false`)
+  - เพิ่ม body-size guard สำหรับ API (`ADMIN_WEB_MAX_BODY_BYTES`)
+  - ปรับ `x-forwarded-for` ให้ใช้ได้เฉพาะตอนตั้ง `ADMIN_WEB_TRUST_PROXY=true` เพื่อลด spoof IP
+- SCUM Webhook:
+  - บังคับ `Content-Type: application/json`
+  - เพิ่ม request body limit + timeout
+  - ตรวจ event type ให้เป็น whitelist เท่านั้น
+  - เทียบ secret แบบ timing-safe
+  - แจ้งเตือนเมื่อไม่ได้ตั้ง `SCUM_WEBHOOK_SECRET`
+- เพิ่ม integration tests ด้าน security:
+  - cross-site POST (cookie session) ต้องโดน block 403
+  - webhook invalid content-type / invalid event type ต้อง reject
+  - header token ยังใช้ได้, query token ถูกปิดตามค่าเริ่มต้น
+
+สิ่งที่ “ยังต้องทำ” ถ้าจะยกระดับอีกขั้น:
+1. แยก RBAC role-based permissions ใน admin API (owner/admin/mod)
+2. เพิ่ม 2FA หรือ SSO หน้าแอดมิน
+3. วาง reverse proxy + WAF + fail2ban ที่ชั้น network
+4. เพิ่ม external secret manager + key rotation automation
+
 ## งานที่ควรทำต่อรอบถัดไป
 
 1. RBAC ใน admin web (owner/admin/moderator)

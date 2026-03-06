@@ -224,13 +224,26 @@ ADMIN_WEB_USER=admin
 ADMIN_WEB_PASSWORD=your_secure_password
 ADMIN_WEB_SESSION_TTL_HOURS=12
 ADMIN_WEB_SECURE_COOKIE=false
+ADMIN_WEB_HSTS_ENABLED=false
+ADMIN_WEB_HSTS_MAX_AGE_SEC=31536000
 ADMIN_WEB_TOKEN=optional_api_token_fallback
+ADMIN_WEB_MAX_BODY_BYTES=1048576
+ADMIN_WEB_TRUST_PROXY=false
+ADMIN_WEB_ALLOW_TOKEN_QUERY=false
+ADMIN_WEB_ENFORCE_ORIGIN_CHECK=true
+ADMIN_WEB_ALLOWED_ORIGINS=http://127.0.0.1:3200
 ```
 
 Notes:
 
 - If `ADMIN_WEB_PASSWORD` is empty, login password falls back to `ADMIN_WEB_TOKEN`.
 - If both are empty, a one-time token/password is generated and printed at startup.
+- For HTTPS production behind reverse proxy:
+  - set `ADMIN_WEB_SECURE_COOKIE=true`
+  - set `ADMIN_WEB_HSTS_ENABLED=true`
+  - set `ADMIN_WEB_TRUST_PROXY=true` only when proxy is trusted
+  - set `ADMIN_WEB_ALLOWED_ORIGINS` to your admin domain(s)
+- Query token auth (`?token=`) is disabled by default. Use `x-admin-token` or `Authorization: Bearer ...`.
 
 The dashboard includes one-place management for:
 
@@ -401,3 +414,35 @@ Midnight cleanup:
 - มี GitHub Actions workflow ที่ `.github/workflows/ci.yml` ให้รันอัตโนมัติบน push/PR
 - มีเอกสาร architecture ที่ `docs/ARCHITECTURE.md`
 - persistence หลักถูกย้ายไปเก็บใน SQLite (`DATABASE_URL`) ผ่าน `src/store/_persist.js` แล้ว (มี fallback migrate จากไฟล์ JSON เดิมอัตโนมัติ)
+
+## Security Hardening Checklist (Production)
+
+Use this baseline before exposing the bot/admin services to public networks:
+
+- Set strong secrets:
+  - `ADMIN_WEB_PASSWORD` (long random)
+  - `ADMIN_WEB_TOKEN` (for script/API fallback)
+  - `SCUM_WEBHOOK_SECRET` (long random)
+- Prefer HTTPS + reverse proxy for admin panel:
+  - `ADMIN_WEB_SECURE_COOKIE=true`
+  - `ADMIN_WEB_HSTS_ENABLED=true`
+  - `ADMIN_WEB_ALLOWED_ORIGINS=https://admin.your-domain.com`
+  - `ADMIN_WEB_TRUST_PROXY=true` only when your proxy is trusted
+- Keep query-token auth off by default:
+  - `ADMIN_WEB_ALLOW_TOKEN_QUERY=false`
+  - use `x-admin-token` or `Authorization: Bearer <token>` instead
+- Keep origin enforcement enabled for session-based API calls:
+  - `ADMIN_WEB_ENFORCE_ORIGIN_CHECK=true`
+- Keep request limits enabled:
+  - `ADMIN_WEB_MAX_BODY_BYTES=1048576`
+  - `SCUM_WEBHOOK_MAX_BODY_BYTES=65536`
+  - `SCUM_WEBHOOK_REQUEST_TIMEOUT_MS=10000`
+- Network exposure:
+  - keep `SCUM_WEBHOOK_PORT` bound to local/internal network when possible
+  - do not expose admin port directly to internet without TLS/reverse proxy/WAF
+- Operational hygiene:
+  - rotate admin/webhook/RCON secrets periodically
+  - run `npm run check` before deploy
+  - keep dependencies updated and patch CVEs quickly
+
+Note: no software can guarantee "unhackable". This checklist and current hardening significantly reduce common attack paths (CSRF, brute-force pressure, oversized payload abuse, weak auth usage).
