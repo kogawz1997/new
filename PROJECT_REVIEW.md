@@ -92,6 +92,23 @@
   - admin login failure spikes
 - เพิ่ม endpoint สรุป metrics สำหรับแอดมิน
 
+### E) QA hardening รอบล่าสุด (6 มีนาคม 2026)
+สถานะ: เสร็จแล้ว  
+- เพิ่ม integration test ใหม่สำหรับ SCUM webhook server:
+  - ตรวจ path/auth/guild validation
+  - ตรวจ dispatch event (`status`, `kill`) ไป service ถูกต้อง
+- เพิ่ม test ใหม่สำหรับ item icon resolver:
+  - โหลดจาก `index.json`
+  - fallback ไป scan directory เมื่อไม่มี index
+  - รองรับ alias แบบ blueprint ที่ลงท้าย `_C` (เช่น `BP_WEAPON_AK47_C`)
+- ปรับ `startScumServer()` ให้คืนค่า `server` เพื่อปิดพอร์ตใน test และรองรับ automation test ได้เสถียรขึ้น
+- สถานะทดสอบล่าสุด:
+  - `npm run check` ผ่าน
+  - `npm run doctor` ผ่าน
+  - `npm test` ผ่าน 13/13
+
+หมายเหตุสำคัญ: คำว่า "ทดสอบ 100%" ในงานระบบจริงหมายถึง "ครอบคลุมตามชุดทดสอบที่นิยามไว้" ไม่สามารถการันตี 100% ทุกเหตุการณ์ production ได้ แต่รอบนี้ปิดช่องทดสอบเชิง integration เพิ่มในจุดเสี่ยงหลักแล้ว
+
 ## งานที่ควรทำต่อรอบถัดไป
 
 1. RBAC ใน admin web (owner/admin/moderator)

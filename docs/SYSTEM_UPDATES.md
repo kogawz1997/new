@@ -52,3 +52,45 @@
 - `test/scum-log-watcher.parse.test.js`
 - `scripts/check-text-encoding.js`
 - `package.json`
+
+---
+
+## 2026-03-06 (QA Hardening รอบเพิ่มความครบถ้วน)
+
+### เป้าหมาย
+- เพิ่มความครอบคลุม integration test ในจุดที่กระทบ production โดยตรง
+- ปิดช่องว่างการแมตช์ไอคอนสำหรับ blueprint item id ที่ลงท้าย `_C`
+
+### สิ่งที่เปลี่ยน
+- เพิ่ม test ใหม่ `test/scum-webhook.integration.test.js`
+  - ตรวจ 404/403/400 และ success path ของ `/scum-event`
+  - ตรวจว่าการ dispatch event ส่ง payload ไป service ครบ
+- เพิ่ม test ใหม่ `test/item-icon-service.test.js`
+  - ตรวจโหมดโหลดจาก `SCUM_ITEMS_INDEX_PATH`
+  - ตรวจ fallback โหมด `SCUM_ITEMS_DIR_PATH`
+  - ตรวจ alias จาก `BP_WEAPON_AK47_C` ไปไอคอน `Weapon_AK47.webp`
+- ปรับ `src/services/itemIconService.js`
+  - เพิ่ม normalization variant สำหรับ `_C` suffix
+- ปรับ `src/scumWebhookServer.js`
+  - ให้ `startScumServer()` คืนค่า `server` สำหรับใช้ใน automation test / controlled shutdown
+
+### ผลกระทบ
+- ลดความเสี่ยง event webhook ทำงานผิดเส้นทางแล้วจับไม่ได้
+- ลดความเสี่ยงไอคอนไม่ขึ้นเมื่อ game item id มาในรูป blueprint class
+- เพิ่มความเสถียรของชุดทดสอบอัตโนมัติ
+
+### วิธีทดสอบ
+- `npm run check`
+- `npm run doctor`
+
+### ผลทดสอบล่าสุด
+- `npm test`: ผ่าน 13/13
+- `npm run check`: ผ่าน
+- `npm run doctor`: ผ่าน
+
+### ไฟล์หลักที่อัปเดต
+- `src/scumWebhookServer.js`
+- `src/services/itemIconService.js`
+- `test/scum-webhook.integration.test.js`
+- `test/item-icon-service.test.js`
+- `PROJECT_REVIEW.md`

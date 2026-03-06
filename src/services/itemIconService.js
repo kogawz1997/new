@@ -29,44 +29,57 @@ function withTrailingSlash(value) {
   return base.endsWith('/') ? base : `${base}/`;
 }
 
+function pushVariant(variants, value) {
+  const normalized = normalizeKey(value);
+  if (!normalized) return;
+  variants.push(normalized);
+
+  // SCUM blueprint names often carry "_C" suffix (e.g. BP_WEAPON_AK47_C).
+  const withoutClassSuffix = normalized.replace(/_c\d*$/i, '');
+  if (withoutClassSuffix && withoutClassSuffix !== normalized) {
+    variants.push(withoutClassSuffix);
+  }
+}
+
 function buildVariants(rawValue) {
   const text = String(rawValue || '').trim();
   if (!text) return [];
 
   const direct = normalizeKey(text);
-  const variants = [direct];
+  const variants = [];
+  pushVariant(variants, direct);
 
   if (text.includes(':')) {
     const tail = text.split(':').pop();
-    variants.push(normalizeKey(tail));
+    pushVariant(variants, tail);
   }
 
   if (text.includes('/')) {
     const tail = text.split('/').pop();
-    variants.push(normalizeKey(tail));
+    pushVariant(variants, tail);
   }
 
   if (direct.startsWith('bp_')) {
-    variants.push(direct.replace(/^bp_+/, ''));
+    pushVariant(variants, direct.replace(/^bp_+/, ''));
   }
 
   if (direct.startsWith('item_')) {
-    variants.push(direct.replace(/^item_+/, ''));
+    pushVariant(variants, direct.replace(/^item_+/, ''));
   }
 
   if (direct.startsWith('weapon_')) {
-    variants.push(direct.replace(/^weapon_+/, ''));
+    pushVariant(variants, direct.replace(/^weapon_+/, ''));
   } else {
-    variants.push(`weapon_${direct}`);
+    pushVariant(variants, `weapon_${direct}`);
   }
 
   if (direct.startsWith('ammo_')) {
-    variants.push(direct.replace(/^ammo_+/, ''));
+    pushVariant(variants, direct.replace(/^ammo_+/, ''));
   } else {
-    variants.push(`ammo_${direct}`);
+    pushVariant(variants, `ammo_${direct}`);
   }
 
-  variants.push(direct.replace(/_/g, ''));
+  pushVariant(variants, direct.replace(/_/g, ''));
   return unique(variants);
 }
 

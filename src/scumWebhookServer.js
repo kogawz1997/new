@@ -87,6 +87,8 @@ function startScumServer(client) {
   server.listen(port, () => {
     console.log(`SCUM webhook server listening on port ${port}`);
   });
+
+  return server;
 }
 
 module.exports = {
