@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { addCoins, getWallet } = require('../store/memoryStore');
 const { economy } = require('../config');
+const { creditCoins } = require('../services/coinService');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,12 +24,21 @@ module.exports = {
     const target = interaction.options.getUser('user', true);
     const amount = interaction.options.getInteger('amount', true);
 
-    const newBalance = await addCoins(target.id, amount);
-    const wallet = await getWallet(target.id);
+    const result = await creditCoins({
+      userId: target.id,
+      amount,
+      reason: 'admin_addcoins_command',
+      actor: `discord:${interaction.user.id}`,
+      meta: {
+        source: '/addcoins',
+      },
+    });
+    if (!result.ok) {
+      return interaction.reply('เติมเหรียญไม่สำเร็จ');
+    }
 
     await interaction.reply(
-      `เพิ่ม ${economy.currencySymbol} **${amount.toLocaleString()}** ให้กับ ${target} แล้ว\nยอดใหม่: ${economy.currencySymbol} **${wallet.balance.toLocaleString()}**`,
+      `เพิ่ม ${economy.currencySymbol} **${amount.toLocaleString()}** ให้กับ ${target} แล้ว\nยอดใหม่: ${economy.currencySymbol} **${Number(result.balance || 0).toLocaleString()}**`,
     );
   },
 };
-

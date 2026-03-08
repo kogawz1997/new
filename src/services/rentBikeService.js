@@ -310,14 +310,14 @@ async function processSingleOrder(orderId) {
       throw new Error('Cannot detect new vehicle instance id from #ListSpawnedVehicles');
     }
 
+    const today = getDateKey(settings.timezone);
+    await markDailyRentUsed(order.userKey, today);
+
     await setRentalOrderStatus(orderId, 'delivered', {
       vehicleInstanceId: selected.id,
       attemptCount,
       lastError: null,
     });
-
-    const today = getDateKey(settings.timezone);
-    await markDailyRentUsed(order.userKey, today);
 
     await sendRentLog(
       order.guildId || null,

@@ -14,7 +14,7 @@ const {
   getParticipants,
 } = require('../store/eventStore');
 const { economy } = require('../config');
-const { addCoins } = require('../store/memoryStore');
+const { creditCoins } = require('../services/coinService');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -206,7 +206,16 @@ async function handleEnd(interaction) {
   const participants = getParticipants(id);
 
   if (winner && coins && coins > 0) {
-    addCoins(winner.id, coins);
+    await creditCoins({
+      userId: winner.id,
+      amount: coins,
+      reason: 'event_reward',
+      actor: `discord:${interaction.user.id}`,
+      meta: {
+        eventId: ev.id,
+        eventName: ev.name,
+      },
+    });
   }
 
   const lines = [
@@ -223,4 +232,3 @@ async function handleEnd(interaction) {
 
   await interaction.reply(lines.join('\n'));
 }
-

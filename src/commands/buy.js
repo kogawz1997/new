@@ -114,7 +114,15 @@ module.exports = {
       });
     }
 
-    await removeCoins(userId, item.price);
+    await removeCoins(userId, item.price, {
+      reason: 'purchase_debit',
+      actor: `discord:${interaction.user.id}`,
+      meta: {
+        source: 'slash-buy',
+        itemId: item.id,
+        itemName: item.name,
+      },
+    });
     const purchase = await createPurchase(userId, item);
     const delivery = await enqueuePurchaseDelivery(purchase, {
       guildId: interaction.guildId || null,

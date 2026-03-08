@@ -79,12 +79,12 @@ function getDeliveryStatusText(result) {
     return 'เข้าคิวแล้ว';
   }
   if (result?.reason === 'item-not-configured') {
-    return 'ยังไม่ตั้งคำสั่ง RCON';
+    return 'ยังไม่ได้ตั้งค่า RCON สำหรับไอเทมนี้';
   }
   if (result?.reason === 'delivery-disabled') {
-    return 'ปิดระบบส่งของอัตโนมัติ';
+    return 'ระบบส่งของอัตโนมัติถูกปิด';
   }
-  return result?.reason || 'ทำด้วยแอดมิน';
+  return result?.reason || 'รอแอดมินจัดการ';
 }
 
 async function getResolvedCart(userId) {
@@ -140,7 +140,15 @@ async function checkoutCart(userId, options = {}) {
     };
   }
 
-  await removeCoins(userId, resolved.totalPrice);
+  await removeCoins(userId, resolved.totalPrice, {
+    reason: 'cart_checkout_debit',
+    actor: `discord:${userId}`,
+    meta: {
+      source: 'cart-checkout',
+      units: resolved.totalUnits,
+      rows: resolved.rows.length,
+    },
+  });
 
   const purchases = [];
   const failures = [];
@@ -184,4 +192,3 @@ module.exports = {
   getResolvedCart,
   checkoutCart,
 };
-

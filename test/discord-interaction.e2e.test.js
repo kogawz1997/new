@@ -1,12 +1,22 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const {
+  setLink,
+  unlinkByUserId,
+  flushLinkStoreWrites,
+} = require('../src/store/linkStore');
 
 const botPath = path.resolve(__dirname, '../src/bot.js');
 
 function freshBotModule() {
   delete require.cache[botPath];
   return require(botPath);
+}
+
+function randomSteamId() {
+  const suffix = String(Math.floor(Math.random() * 1e10)).padStart(10, '0');
+  return `7656119${suffix}`;
 }
 
 function createMockInteraction() {
@@ -97,7 +107,41 @@ test('interaction e2e: modal verify rejects invalid steam id', async () => {
   await handleInteractionCreate(interaction);
 
   assert.equal(calls.reply.length, 1);
-  assert.match(String(calls.reply[0]?.content || ''), /SteamID ไม่ถูกต้อง/i);
+  assert.match(String(calls.reply[0]?.content || ''), /SteamID.+ไม่ถูกต้อง/i);
+});
+
+test('interaction e2e: modal verify rejects steam relink for already linked user', async () => {
+  process.env.DISCORD_TOKEN = process.env.DISCORD_TOKEN || 'test-token';
+  const { handleInteractionCreate } = freshBotModule();
+  const { interaction, calls } = createMockInteraction();
+  const userId = 'u-e2e-lock';
+  const firstSteamId = randomSteamId();
+  const nextSteamId = randomSteamId();
+
+  try {
+    unlinkByUserId(userId);
+    await flushLinkStoreWrites();
+
+    setLink({
+      steamId: firstSteamId,
+      userId,
+      inGameName: null,
+    });
+    await flushLinkStoreWrites();
+
+    interaction.user.id = userId;
+    interaction.isModalSubmit = () => true;
+    interaction.customId = 'panel-verify-modal';
+    interaction.fields.getTextInputValue = () => nextSteamId;
+
+    await handleInteractionCreate(interaction);
+
+    assert.equal(calls.reply.length, 1);
+    assert.match(String(calls.reply[0]?.content || ''), /ติดต่อแอดมิน/i);
+  } finally {
+    unlinkByUserId(userId);
+    await flushLinkStoreWrites();
+  }
 });
 
 test('interaction e2e: slash command dispatch executes command and replies', async () => {

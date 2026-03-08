@@ -52,9 +52,11 @@ const {
 const {
   normalizeSteamId,
   setLink,
+  getLinkByUserId,
   getLinkBySteamId,
   initLinkStore,
 } = require('./store/linkStore');
+const { upsertPlayerAccount } = require('./store/playerAccountStore');
 const { initBountyStore } = require('./store/bountyStore');
 const { initStatsStore } = require('./store/statsStore');
 const { createTicket, tickets } = require('./store/ticketStore');
@@ -62,6 +64,19 @@ const { createTicket, tickets } = require('./store/ticketStore');
 assertBotEnv();
 const token = process.env.DISCORD_TOKEN;
 let opsAlertRouteBound = false;
+
+function envFlag(name, fallback = true) {
+  const raw = String(process.env[name] || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+const START_SCUM_WEBHOOK = envFlag('BOT_ENABLE_SCUM_WEBHOOK', true);
+const START_RESTART_SCHEDULER = envFlag('BOT_ENABLE_RESTART_SCHEDULER', true);
+const START_ADMIN_WEB = envFlag('BOT_ENABLE_ADMIN_WEB', true);
+const START_RENT_BIKE_SERVICE = envFlag('BOT_ENABLE_RENTBIKE_SERVICE', true);
+const START_DELIVERY_WORKER = envFlag('BOT_ENABLE_DELIVERY_WORKER', true);
+const START_OPS_ALERT_ROUTE = envFlag('BOT_ENABLE_OPS_ALERT_ROUTE', true);
 
 const client = new Client({
   intents: [
@@ -104,19 +119,43 @@ client.once(Events.ClientReady, async (c) => {
     console.error('[boot] store warmup failed:', warmup.reason?.message || warmup.reason);
   }
 
-  // เริ่มเซิร์ฟเวอร์ webhook สำหรับอีเวนต์จาก SCUM
-  startScumServer(client);
+  if (START_SCUM_WEBHOOK) {
+    startScumServer(client);
+  } else {
+    console.log('[boot] skip SCUM webhook (BOT_ENABLE_SCUM_WEBHOOK=false)');
+  }
 
-  // เริ่มตัวแจ้งเตือนตารางรีสตาร์ท (จาก config)
-  startRestartScheduler(client);
+  if (START_RESTART_SCHEDULER) {
+    startRestartScheduler(client);
+  } else {
+    console.log('[boot] skip restart scheduler (BOT_ENABLE_RESTART_SCHEDULER=false)');
+  }
 
-  // เริ่มเว็บแอดมินแบบรวมศูนย์
-  startAdminWebServer(client);
-  startRentBikeService(client).catch((error) => {
-    console.error('[rent-bike] failed to start service:', error.message);
-  });
-  startRconDeliveryWorker(client);
-  bindOpsAlertRoute(client);
+  if (START_ADMIN_WEB) {
+    startAdminWebServer(client);
+  } else {
+    console.log('[boot] skip admin web (BOT_ENABLE_ADMIN_WEB=false)');
+  }
+
+  if (START_RENT_BIKE_SERVICE) {
+    startRentBikeService(client).catch((error) => {
+      console.error('[rent-bike] failed to start service:', error.message);
+    });
+  } else {
+    console.log('[boot] skip rent bike service (BOT_ENABLE_RENTBIKE_SERVICE=false)');
+  }
+
+  if (START_DELIVERY_WORKER) {
+    startRconDeliveryWorker(client);
+  } else {
+    console.log('[boot] skip delivery worker (BOT_ENABLE_DELIVERY_WORKER=false)');
+  }
+
+  if (START_OPS_ALERT_ROUTE) {
+    bindOpsAlertRoute(client);
+  } else {
+    console.log('[boot] skip ops alert route (BOT_ENABLE_OPS_ALERT_ROUTE=false)');
+  }
 
   // งานย่อยสำหรับถอดยศ VIP ที่หมดอายุ
   setInterval(async () => {
@@ -334,6 +373,26 @@ async function openTicketFromPanel(interaction) {
 
 async function handleInteractionCreate(interaction) {
   try {
+  if (interaction?.user?.id) {
+    const avatarUrl =
+      typeof interaction.user.displayAvatarURL === 'function'
+        ? interaction.user.displayAvatarURL({
+            extension: 'png',
+            size: 128,
+          })
+        : null;
+    void upsertPlayerAccount({
+      discordId: interaction.user.id,
+      username: interaction.user.username,
+      displayName:
+        interaction.user.globalName
+        || interaction.member?.displayName
+        || interaction.user.username,
+      avatarUrl,
+      isActive: true,
+    }).catch(() => null);
+  }
+
   if (interaction.isModalSubmit?.() && interaction.customId === 'panel-verify-modal') {
     const steamIdRaw = interaction.fields.getTextInputValue('steamid');
     const steamId = normalizeSteamId(steamIdRaw);
@@ -349,6 +408,23 @@ async function handleInteractionCreate(interaction) {
     if (existing && existing.userId !== interaction.user.id) {
       return interaction.reply({
         content: 'SteamID นี้ถูกลิงก์กับบัญชีอื่นแล้ว กรุณาติดต่อแอดมิน',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    const currentUserLink = getLinkByUserId(interaction.user.id);
+    if (
+      currentUserLink?.steamId
+      && currentUserLink.steamId !== steamId
+    ) {
+      return interaction.reply({
+        content:
+          'บัญชีนี้ผูก SteamID ไปแล้ว หากต้องการเปลี่ยนกรุณาติดต่อแอดมิน',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    if (currentUserLink?.steamId && currentUserLink.steamId === steamId) {
+      return interaction.reply({
+        content: `คุณผูก SteamID นี้ไว้แล้ว: \`${steamId}\``,
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -433,7 +509,13 @@ async function handleInteractionCreate(interaction) {
         });
       }
       claimWelcomePack(interaction.user.id);
-      await addCoins(interaction.user.id, 1500);
+      await addCoins(interaction.user.id, 1500, {
+        reason: 'welcome_pack_claim',
+        actor: `discord:${interaction.user.id}`,
+        meta: {
+          source: 'panel-welcome-claim',
+        },
+      });
       queueLeaderboardRefreshForGuild(
         interaction.client,
         interaction.guildId,
@@ -491,7 +573,15 @@ async function handleInteractionCreate(interaction) {
         });
       }
 
-      await removeCoins(interaction.user.id, item.price);
+      await removeCoins(interaction.user.id, item.price, {
+        reason: 'purchase_debit',
+        actor: `discord:${interaction.user.id}`,
+        meta: {
+          source: 'panel-shop-buy',
+          itemId: item.id,
+          itemName: item.name,
+        },
+      });
       queueLeaderboardRefreshForGuild(
         interaction.client,
         interaction.guildId,

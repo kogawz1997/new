@@ -5,6 +5,7 @@ const {
   isSnowflake,
   getMissingEnv,
   getProductionSecurityErrors,
+  getWorkerRuntimeErrors,
 } = require('../src/utils/env');
 
 test('isSnowflake validates numeric Discord IDs', () => {
@@ -49,4 +50,18 @@ test('getProductionSecurityErrors passes strong production config', () => {
     ADMIN_WEB_ALLOWED_ORIGINS: 'https://admin.example.com',
   });
   assert.deepEqual(errors, []);
+});
+
+test('getWorkerRuntimeErrors validates worker toggles', () => {
+  const invalid = getWorkerRuntimeErrors({
+    WORKER_ENABLE_RENTBIKE: 'false',
+    WORKER_ENABLE_DELIVERY: 'false',
+  });
+  assert.equal(invalid.length > 0, true);
+
+  const valid = getWorkerRuntimeErrors({
+    WORKER_ENABLE_RENTBIKE: 'true',
+    WORKER_ENABLE_DELIVERY: 'false',
+  });
+  assert.deepEqual(valid, []);
 });

@@ -4,7 +4,13 @@
   "description": "SCUM Discord server bot (economy, shop, tickets, stats)",
   "main": "src/bot.js",
   "scripts": {
+    "setup:easy": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup-easy.ps1",
     "start": "node src/bot.js",
+    "start:bot": "node src/bot.js",
+    "start:worker": "node src/worker.js",
+    "start:web-standalone": "node apps/web-portal-standalone/server.js",
+    "doctor:web-standalone": "node apps/web-portal-standalone/scripts/doctor.js",
+    "doctor:web-standalone:prod": "node apps/web-portal-standalone/scripts/doctor.js --production",
     "register-commands": "node src/register-commands.js",
     "watch-scum": "node scum-log-watcher.js",
     "test": "node --test --test-concurrency=1",

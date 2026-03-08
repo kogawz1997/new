@@ -1,0 +1,13 @@
+{
+  "name": "web-portal-standalone",
+  "private": true,
+  "type": "commonjs",
+  "prisma": {
+    "schema": "../../prisma/schema.prisma"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "prisma:generate": "node scripts/prisma-root.js generate",
+    "prisma:migrate:deploy": "node scripts/prisma-root.js migrate deploy"
+  }
+}

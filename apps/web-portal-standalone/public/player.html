@@ -1,0 +1,3268 @@
+﻿<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCUM Player Portal</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Teko:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-1: #070b12;
+      --bg-2: #0d1420;
+      --bg-3: #141d2a;
+      --surface: #111927d8;
+      --surface-alt: #0d1522e0;
+      --line: #9eb5cf33;
+      --line-strong: #d0deed55;
+      --ink: #eff4fb;
+      --muted: #b5c2d2;
+      --rust: #d89b45;
+      --rust-dark: #ad6f23;
+      --gold: #ffd48c;
+      --ok: #8bd2a9;
+      --warn: #e7c06a;
+      --err: #f08e79;
+      --shadow: #0000008a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      color: var(--ink);
+      font-family: "Rajdhani", sans-serif;
+      background:
+        radial-gradient(1200px 580px at 85% 16%, #7ba3d21b, transparent 58%),
+        radial-gradient(880px 600px at 12% 0%, #d9aa5f11, transparent 66%),
+        repeating-linear-gradient(
+          120deg,
+          rgba(255, 255, 255, .01) 0px,
+          rgba(255, 255, 255, .01) 2px,
+          rgba(0, 0, 0, 0) 2px,
+          rgba(0, 0, 0, 0) 8px
+        ),
+        linear-gradient(155deg, var(--bg-1), var(--bg-2) 48%, var(--bg-3));
+      background-attachment: fixed;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        linear-gradient(180deg, transparent, #00000070 92%),
+        radial-gradient(circle at 30% 84%, #d89b4511 0 18%, transparent 45%);
+      z-index: -1;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: block;
+    }
+
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 130;
+      width: 320px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: stretch;
+      padding: 12px 10px;
+      border-right: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, #060c16f5, #0d1725f2 62%, #101b2bf0),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 255, 255, .012) 0px,
+          rgba(255, 255, 255, .012) 1px,
+          rgba(0, 0, 0, 0) 1px,
+          rgba(0, 0, 0, 0) 6px
+        );
+      box-shadow: 10px 0 26px var(--shadow);
+      backdrop-filter: blur(3px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      transition: width .2s ease, padding .2s ease;
+    }
+
+    .sidebar > .brand {
+      align-self: stretch;
+    }
+
+    .sidebar > .profile-card {
+      min-width: 0;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-areas:
+        "head"
+        "discord"
+        "status"
+        "actions";
+      gap: 6px;
+      padding: 10px;
+    }
+
+    .sidebar > #menu {
+      flex: 1;
+      min-height: 0;
+    }
+
+    .sidebar::after {
+      content: "";
+      position: fixed;
+      left: 319px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: linear-gradient(180deg, transparent, #5f89c2, var(--rust), transparent);
+      opacity: .85;
+      pointer-events: none;
+      transition: left .2s ease;
+    }
+
+    .brand-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .sidebar-toggle {
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      padding: 0;
+      font-size: 20px;
+      line-height: 1;
+      border: 1px solid #ffffff3a;
+      background: linear-gradient(180deg, #24384fb8, #162536ca);
+      color: #e7f0fc;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 #ffffff2c;
+    }
+
+    .sidebar-toggle:hover {
+      filter: brightness(1.07);
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: linear-gradient(180deg, #1b2433cf, #0f1724df);
+      padding: 10px 12px;
+      min-width: 0;
+      overflow: hidden;
+      box-shadow: inset 0 1px 0 #ffffff20;
+    }
+
+    .brand {
+      border-color: transparent;
+      background: transparent;
+      padding: 0;
+      box-shadow: none;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-family: "Teko", sans-serif;
+      font-size: 50px;
+      line-height: .75;
+      letter-spacing: 1.2px;
+      color: #f4f8fe;
+      text-shadow: 0 2px 10px #000;
+    }
+
+    .brand h1 br {
+      display: none;
+    }
+
+    .brand h1::after {
+      content: " OFFICIAL PORTAL";
+      display: block;
+      margin-top: 2px;
+      font-size: .38em;
+      color: #d0dae8;
+      letter-spacing: 1.2px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .brand .muted {
+      margin-top: 3px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .45px;
+      color: #b8c6d8;
+    }
+
+    .profile-card .profile-head {
+      grid-area: head;
+      min-width: 0;
+      width: 100%;
+      grid-template-columns: 52px minmax(0, 1fr);
+      gap: 10px;
+    }
+
+    .profile-card .avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 9px;
+      border-color: #ffffff48;
+    }
+
+    .profile-card .name {
+      font-size: 25px;
+      line-height: .95;
+    }
+
+    .profile-card #profileSteam,
+    .profile-card #profileGameName {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      color: #d4e0ef;
+    }
+
+    .profile-card #profileDiscord {
+      grid-area: discord;
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+      color: #d8e4f3;
+    }
+
+    .profile-card #profileStatus {
+      grid-area: status;
+      display: block;
+      margin-top: 3px;
+      font-size: 12px;
+      color: #a9dca2;
+    }
+
+    .profile-actions {
+      grid-area: actions;
+      display: flex;
+      align-items: center;
+      justify-content: stretch;
+      gap: 6px;
+      min-width: 0;
+      margin-top: 4px;
+    }
+
+    .profile-actions .btn {
+      flex: 1 1 0;
+      min-width: 0;
+      white-space: nowrap;
+      padding: 7px 10px;
+      font-size: 13px;
+    }
+
+    .profile-head {
+      display: grid;
+      grid-template-columns: 52px 1fr;
+      gap: 9px;
+      align-items: center;
+    }
+
+    .avatar {
+      width: 52px;
+      height: 52px;
+      border-radius: 6px;
+      object-fit: cover;
+      border: 1px solid #ffffff42;
+      box-shadow: 0 3px 8px #00000085;
+      background: #0d0b08;
+    }
+
+    .name {
+      font-size: 25px;
+      line-height: .86;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #ffffff3a;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .45px;
+      color: #ffe2b6;
+      background: #6d401d8f;
+    }
+
+    .small {
+      font-size: 13px;
+      color: #d1dced;
+    }
+
+    .sidebar .small {
+      color: #d7e2f0;
+      overflow: hidden;
+      white-space: normal;
+      text-overflow: ellipsis;
+    }
+
+    .menu {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      align-items: stretch;
+      justify-content: stretch;
+      min-width: 0;
+      overflow: auto;
+      padding: 9px;
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #0a121dd4;
+    }
+
+    .menu button,
+    .btn,
+    input,
+    select,
+    textarea {
+      font: inherit;
+      color: var(--ink);
+      border: 1px solid #ffffff2e;
+      border-radius: 8px;
+      padding: 9px 12px;
+      background: #ffffff09;
+      font-weight: 700;
+    }
+
+    input,
+    select,
+    textarea {
+      width: 100%;
+      min-width: 0;
+      border-radius: 8px;
+      background:
+        linear-gradient(180deg, #1f2b3ca6, #121b2bb8),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 255, 255, .01) 0px,
+          rgba(255, 255, 255, .01) 1px,
+          rgba(0, 0, 0, 0) 1px,
+          rgba(0, 0, 0, 0) 6px
+        );
+      box-shadow: inset 0 1px 0 #ffffff1a;
+    }
+
+    select option {
+      background: #121b28;
+      color: #edf2fa;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: #a8b6ca;
+    }
+
+    input:focus-visible,
+    select:focus-visible,
+    textarea:focus-visible,
+    .btn:focus-visible,
+    .menu button:focus-visible {
+      outline: none;
+      border-color: var(--line-strong);
+      box-shadow: 0 0 0 2px #74a4df4d;
+    }
+
+    .menu button {
+      cursor: pointer;
+      white-space: nowrap;
+      width: 100%;
+      min-width: 0;
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-start;
+      text-align: left;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 8px 12px 8px 14px;
+      color: #ced8e5;
+      background: #ffffff03;
+      font-family: "Rajdhani", sans-serif;
+      font-size: 14px;
+      letter-spacing: .25px;
+      transition: background .16s ease, color .16s ease, border-color .16s ease;
+    }
+
+    .menu button:hover {
+      background: #ffffff0d;
+      border-color: #ffffff2b;
+      color: #f4f8ff;
+    }
+
+    .menu button.active {
+      background: linear-gradient(180deg, #284971bf, #1b3351c7);
+      border-color: #8db2df88;
+      color: #f8fbff;
+    }
+
+    .btn {
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      border-color: #00000070;
+      background: linear-gradient(180deg, var(--rust), var(--rust-dark));
+      color: #fff5e5;
+      text-shadow: 0 1px 0 #000;
+      box-shadow: inset 0 1px 0 #ffffff2b, 0 3px 8px #00000050;
+      transition: transform .12s ease, filter .12s ease;
+    }
+
+    .btn:hover {
+      filter: brightness(1.08);
+      transform: translateY(-1px);
+    }
+
+    .btn:active {
+      transform: translateY(0);
+      filter: brightness(.95);
+    }
+
+    .btn.secondary {
+      background: linear-gradient(180deg, #31455fb8, #1f2c3ec7);
+      border-color: #ffffff2f;
+      color: #ebf1fa;
+    }
+
+    .btn.warn {
+      background: linear-gradient(180deg, #5e8f3a, #45692a);
+      color: #f2ffdf;
+    }
+
+    .btn.danger {
+      background: linear-gradient(180deg, #9f3f30, #6d2920);
+      color: #ffe9e5;
+    }
+
+    .main {
+      width: min(1520px, calc(100vw - 356px));
+      margin-left: 336px;
+      margin-right: 20px;
+      padding: 18px 18px 26px;
+      display: grid;
+      gap: 12px;
+      align-content: start;
+      transition: margin-left .2s ease, width .2s ease;
+    }
+
+    .topbar {
+      position: relative;
+      min-height: 218px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 20px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      flex-wrap: wrap;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, #1c293b8c, #101926de),
+        radial-gradient(980px 340px at 18% 12%, #ffffff14, transparent 62%),
+        radial-gradient(720px 280px at 88% 46%, #d89b4515, transparent 74%),
+        linear-gradient(135deg, #24354a, #1b2838 50%, #182435);
+      box-shadow: 0 14px 30px var(--shadow);
+    }
+
+    .topbar::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(
+          0deg,
+          rgba(255, 255, 255, .015) 0px,
+          rgba(255, 255, 255, .015) 1px,
+          rgba(0, 0, 0, 0) 1px,
+          rgba(0, 0, 0, 0) 6px
+        ),
+        linear-gradient(120deg, #0000003f 18%, transparent 58%);
+      pointer-events: none;
+    }
+
+    .topbar > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .topbar h2 {
+      margin: 0;
+      font-family: "Teko", sans-serif;
+      font-size: clamp(52px, 4.8vw, 76px);
+      line-height: .8;
+      letter-spacing: .9px;
+      color: #f4f8ff;
+      text-shadow: 0 2px 10px #000;
+    }
+
+    .topbar .muted {
+      max-width: 760px;
+      margin-top: 6px;
+      font-size: 19px;
+      color: #d4deeb;
+    }
+
+    .chips {
+      display: grid;
+      gap: 7px;
+      align-content: start;
+      min-width: 240px;
+    }
+
+    .chip {
+      border: 1px solid #ffffff35;
+      border-radius: 7px;
+      background: #0d1522d1;
+      padding: 7px 11px;
+      font-size: 14px;
+      color: #e4edf8;
+      box-shadow: inset 0 1px 0 #ffffff14;
+    }
+
+    .status {
+      min-height: 74px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      background:
+        linear-gradient(180deg, #21211c9a, #151510dc),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 255, 255, .013) 0px,
+          rgba(255, 255, 255, .013) 2px,
+          rgba(0, 0, 0, 0) 2px,
+          rgba(0, 0, 0, 0) 8px
+        );
+      box-shadow: inset 0 1px 0 #ffffff20, 0 4px 12px #0000005f;
+      font-size: clamp(22px, 2.3vw, 30px);
+      font-weight: 700;
+      line-height: 1.05;
+      color: #f0e7d9;
+      text-shadow: 0 1px 0 #000;
+    }
+
+    .status.ok {
+      color: var(--ok);
+    }
+
+    .status.warn {
+      color: var(--warn);
+    }
+
+    .status.err {
+      color: var(--err);
+    }
+
+    .tab {
+      display: none;
+      gap: 10px;
+    }
+
+    .tab.active {
+      display: grid;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .span-3 {
+      grid-column: span 3;
+    }
+
+    .span-4 {
+      grid-column: span 4;
+    }
+
+    .span-5 {
+      grid-column: span 5;
+    }
+
+    .span-6 {
+      grid-column: span 6;
+    }
+
+    .span-7 {
+      grid-column: span 7;
+    }
+
+    .span-8 {
+      grid-column: span 8;
+    }
+
+    .span-9 {
+      grid-column: span 9;
+    }
+
+    .span-12 {
+      grid-column: span 12;
+    }
+
+    .section {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      background:
+        linear-gradient(180deg, #152132d4, #0c1624e2),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 255, 255, .01) 0px,
+          rgba(255, 255, 255, .01) 1px,
+          rgba(0, 0, 0, 0) 1px,
+          rgba(0, 0, 0, 0) 6px
+        );
+      box-shadow: inset 0 1px 0 #ffffff1a, 0 6px 16px #0000006a;
+    }
+
+    .section h3 {
+      margin: 0 0 10px 0;
+      padding-left: 10px;
+      border-left: 4px solid var(--rust);
+      font-family: "Rajdhani", sans-serif;
+      font-size: 31px;
+      line-height: .95;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      color: #f7efe4;
+      text-shadow: 0 1px 8px #000;
+    }
+
+    .kpis {
+      display: grid;
+      gap: 8px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .kpi {
+      border: 1px solid #ffffff26;
+      border-radius: 8px;
+      padding: 9px;
+      background: #08101ba8;
+    }
+
+    .kpi .label {
+      font-size: 12px;
+      color: #bfcee2;
+      text-transform: uppercase;
+      letter-spacing: .45px;
+    }
+
+    .kpi .value {
+      margin-top: 2px;
+      font-size: 31px;
+      font-weight: 700;
+      line-height: 1;
+      color: #f2f6fc;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+      gap: 7px;
+    }
+
+    .row > * {
+      min-width: 0;
+    }
+
+    .row .btn {
+      width: 100%;
+    }
+
+    .table-wrap {
+      border: 1px solid #ffffff24;
+      border-radius: 8px;
+      overflow: auto;
+      max-height: 420px;
+      background: #070f1acd;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 700px;
+    }
+
+    th,
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #ffffff18;
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #172335;
+      color: #d9e5f5;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: .5px;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    .empty {
+      border: 1px dashed #ffffff2f;
+      border-radius: 8px;
+      color: #c9d7e7;
+      text-align: center;
+      padding: 14px;
+      background: #0a121da1;
+    }
+
+    .shop-grid {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: repeat(auto-fill, minmax(226px, 1fr));
+      max-height: 660px;
+      overflow: auto;
+    }
+
+    .item-card {
+      border: 1px solid #ffffff2b;
+      border-radius: 10px;
+      background: linear-gradient(180deg, #1e2d41d6, #111c2cde);
+      padding: 9px;
+      display: grid;
+      gap: 7px;
+    }
+
+    .item-card img {
+      width: 100%;
+      aspect-ratio: 1.45 / 1;
+      object-fit: contain;
+      border-radius: 7px;
+      border: 1px solid #ffffff20;
+      background: #0a121dcf;
+    }
+
+    .item-name {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.05;
+    }
+
+    .item-meta {
+      font-size: 12px;
+      color: #c4d4ea;
+    }
+
+    .item-price {
+      font-size: 27px;
+      font-weight: 700;
+      color: var(--gold);
+      text-shadow: 0 1px 0 #000;
+    }
+
+    .item-action {
+      display: grid;
+      grid-template-columns: 64px 1fr 1fr;
+      gap: 5px;
+    }
+
+    .item-action .btn {
+      width: 100%;
+    }
+
+    .danger-zone {
+      border-color: #d07a5e91;
+      background:
+        linear-gradient(180deg, #352018cf, #1a110ce8),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 255, 255, .01) 0px,
+          rgba(255, 255, 255, .01) 1px,
+          rgba(0, 0, 0, 0) 1px,
+          rgba(0, 0, 0, 0) 5px
+        );
+    }
+
+    .wheel-stage {
+      display: grid;
+      grid-template-columns: minmax(220px, 260px) 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .wheel-shell {
+      position: relative;
+      width: 240px;
+      height: 240px;
+      margin: 0 auto;
+    }
+
+    .wheel-pointer {
+      position: absolute;
+      left: 50%;
+      top: -8px;
+      width: 0;
+      height: 0;
+      border-left: 12px solid transparent;
+      border-right: 12px solid transparent;
+      border-top: 22px solid #f4c87f;
+      transform: translateX(-50%);
+      filter: drop-shadow(0 2px 3px #000);
+      z-index: 3;
+    }
+
+    .wheel-disc {
+      position: relative;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid #ffffff50;
+      box-shadow: inset 0 0 0 2px #00000060, 0 8px 20px #00000080;
+      background:
+        conic-gradient(
+          #c98335 0deg 45deg,
+          #2c4f7e 45deg 90deg,
+          #a54f34 90deg 135deg,
+          #3d6e2f 135deg 180deg,
+          #8f7430 180deg 225deg,
+          #484075 225deg 270deg,
+          #833845 270deg 315deg,
+          #2c6770 315deg 360deg
+        );
+      transition: transform 3.2s cubic-bezier(.11, .71, .2, 1);
+      transform: rotate(0deg);
+    }
+
+    .wheel-segment {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 86px;
+      display: grid;
+      justify-items: center;
+      gap: 4px;
+      pointer-events: none;
+      text-shadow: 0 1px 3px #000;
+    }
+
+    .wheel-segment-icon {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid #ffffff55;
+      background: #0a1320dd;
+      object-fit: cover;
+      box-shadow: 0 2px 6px #00000066;
+    }
+
+    .wheel-segment-fallback {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      border: 1px solid #ffffff55;
+      display: grid;
+      place-items: center;
+      background: #0a1320dd;
+      font-size: 16px;
+      box-shadow: 0 2px 6px #00000066;
+    }
+
+    .wheel-segment-label {
+      max-width: 84px;
+      font-size: 10px;
+      line-height: 1.05;
+      text-align: center;
+      color: #f4f8ff;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      letter-spacing: .2px;
+    }
+
+    .wheel-center {
+      position: absolute;
+      inset: 50%;
+      transform: translate(-50%, -50%);
+      width: 102px;
+      height: 102px;
+      border-radius: 50%;
+      border: 1px solid #ffffff66;
+      background: linear-gradient(180deg, #122033, #0a141f);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffd8a4;
+      padding: 6px;
+      z-index: 2;
+    }
+
+    .wheel-meta {
+      display: grid;
+      gap: 8px;
+    }
+
+    .list-block {
+      border: 1px solid #ffffff2a;
+      border-radius: 8px;
+      padding: 9px 10px;
+      background: #0a121ea8;
+    }
+
+    .list-block ul {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 5px;
+      color: #d6e3f3;
+      font-size: 14px;
+    }
+
+    .reward-chip {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      border: 1px solid #ffffff3a;
+      padding: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #f4e0c1;
+      background: #0a121ec7;
+    }
+
+    .reward-label-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-width: 0;
+    }
+
+    .reward-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      border: 1px solid #ffffff49;
+      object-fit: cover;
+      background: #0d1522;
+      flex: 0 0 auto;
+    }
+
+    .reward-fallback {
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      border: 1px solid #ffffff49;
+      display: inline-grid;
+      place-items: center;
+      background: #0d1522;
+      flex: 0 0 auto;
+      font-size: 14px;
+    }
+
+    .map-frame-wrap {
+      border: 1px solid #ffffff2e;
+      border-radius: 10px;
+      overflow: hidden;
+      background: #0b1220;
+      box-shadow: inset 0 1px 0 #ffffff1a;
+    }
+
+    .map-frame {
+      width: 100%;
+      min-height: 72vh;
+      border: 0;
+      display: block;
+      background: #0b1220;
+    }
+
+    .party-layout {
+      display: grid;
+      grid-template-columns: minmax(250px, 320px) 1fr;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .party-panel {
+      border: 1px solid #ffffff24;
+      border-radius: 10px;
+      background:
+        linear-gradient(180deg, #172236cc, #0d1624db),
+        repeating-linear-gradient(
+          90deg,
+          rgba(255, 255, 255, .01) 0px,
+          rgba(255, 255, 255, .01) 1px,
+          rgba(0, 0, 0, 0) 1px,
+          rgba(0, 0, 0, 0) 6px
+        );
+      box-shadow: inset 0 1px 0 #ffffff1a;
+    }
+
+    .party-members {
+      max-height: 480px;
+      overflow: auto;
+      display: grid;
+      gap: 6px;
+      padding: 10px;
+    }
+
+    .party-member {
+      border: 1px solid #ffffff29;
+      border-radius: 8px;
+      padding: 7px 9px;
+      background: #0a121dd0;
+      font-size: 13px;
+      line-height: 1.2;
+    }
+
+    .party-member .name {
+      font-size: 16px;
+      line-height: 1;
+      margin-bottom: 3px;
+    }
+
+    .party-member.self {
+      border-color: #95b7de8f;
+      background: linear-gradient(180deg, #1a2b40c9, #0d1726da);
+    }
+
+    .party-chat-wrap {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-height: 480px;
+    }
+
+    .party-chat-body {
+      padding: 10px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .party-chat-item {
+      border: 1px solid #ffffff27;
+      border-radius: 8px;
+      padding: 7px 9px;
+      background: #0b1320cf;
+    }
+
+    .party-chat-item.me {
+      border-color: #8bb07f9d;
+      background: #0d1b14cf;
+    }
+
+    .party-chat-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 12px;
+      color: #c8d7ea;
+      margin-bottom: 2px;
+    }
+
+    .party-chat-msg {
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #edf3fb;
+      font-size: 14px;
+    }
+
+    .party-chat-form {
+      border-top: 1px solid #ffffff1f;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr 100px;
+      gap: 8px;
+    }
+
+    body.sidebar-collapsed .sidebar {
+      width: 84px;
+      padding: 12px 8px;
+    }
+
+    body.sidebar-collapsed .sidebar::after {
+      left: 83px;
+    }
+
+    body.sidebar-collapsed .brand .muted,
+    body.sidebar-collapsed .profile-card,
+    body.sidebar-collapsed #menu {
+      display: none;
+    }
+
+    body.sidebar-collapsed .brand h1 {
+      font-size: 44px;
+      line-height: .78;
+    }
+
+    body.sidebar-collapsed .brand h1::after {
+      content: "";
+      display: none;
+    }
+
+    body.sidebar-collapsed .brand-head {
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+
+    body.sidebar-collapsed .sidebar-toggle {
+      width: 40px;
+      height: 40px;
+      font-size: 22px;
+    }
+
+    body.sidebar-collapsed .main {
+      width: min(1520px, calc(100vw - 120px));
+      margin-left: 98px;
+    }
+
+    @media (max-width: 1320px) {
+      .sidebar {
+        width: 286px;
+      }
+
+      .sidebar::after {
+        left: 285px;
+      }
+
+      .main {
+        width: min(1440px, calc(100vw - 316px));
+        margin-left: 296px;
+      }
+    }
+
+    @media (max-width: 1080px) {
+      .sidebar {
+        position: static;
+        inset: auto;
+        width: 100%;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+        box-shadow: 0 8px 18px #0000005e;
+        overflow: visible;
+        display: grid;
+        gap: 10px;
+        padding: 12px;
+      }
+
+      .sidebar::after {
+        display: none;
+      }
+
+      .brand-head {
+        align-items: center;
+      }
+
+      .sidebar-toggle {
+        display: none;
+      }
+
+      .sidebar > .profile-card {
+        max-width: none;
+      }
+
+      .profile-actions {
+        justify-content: flex-start;
+      }
+
+      .menu {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        overflow: visible;
+      }
+
+      .menu button {
+        justify-content: center;
+        text-align: center;
+      }
+
+      .main {
+        width: auto;
+        margin: 0;
+        padding: 12px;
+      }
+
+      body.sidebar-collapsed .sidebar {
+        width: 100%;
+        padding: 12px;
+      }
+
+      body.sidebar-collapsed .brand .muted,
+      body.sidebar-collapsed .profile-card {
+        display: block;
+      }
+
+      body.sidebar-collapsed .profile-card {
+        display: grid;
+      }
+
+      body.sidebar-collapsed #menu {
+        display: grid;
+      }
+
+      body.sidebar-collapsed .main {
+        width: auto;
+        margin: 0;
+      }
+
+      .span-3,
+      .span-4,
+      .span-5,
+      .span-6,
+      .span-7,
+      .span-8,
+      .span-9 {
+        grid-column: span 12;
+      }
+
+      .topbar {
+        min-height: 190px;
+        padding: 16px 14px;
+      }
+
+      .wheel-stage {
+        grid-template-columns: 1fr;
+      }
+
+      .party-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .party-chat-wrap,
+      .party-members {
+        max-height: 420px;
+      }
+    }
+
+    @media (max-width: 760px) {
+      .brand h1 {
+        font-size: 44px;
+      }
+
+      .topbar h2 {
+        font-size: 52px;
+      }
+
+      .chips {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .profile-actions .btn {
+        width: 100%;
+      }
+
+      .menu button {
+        font-size: 14px;
+      }
+
+      .status {
+        font-size: 21px;
+        min-height: 68px;
+      }
+
+      .section h3 {
+        font-size: 27px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <aside class="sidebar">
+      <section class="card brand">
+        <div class="brand-head">
+          <h1>SCUM TH</h1>
+          <button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="ยุบแถบเมนู" title="ยุบ/ขยายเมนู">☰</button>
+        </div>
+        <div class="muted">ศูนย์บริการผู้เล่นอย่างเป็นทางการ เชื่อม Discord + SCUM ในหน้าเดียว</div>
+      </section>
+
+      <section class="card profile-card">
+        <div class="profile-head">
+          <img id="profileAvatar" class="avatar" src="" alt="avatar">
+          <div>
+            <div id="profileName" class="name">-</div>
+            <span id="profileRole" class="badge">PLAYER</span>
+          </div>
+        </div>
+        <div class="small" id="profileDiscord" style="margin-top:8px">Discord: -</div>
+        <div class="small" id="profileSteam">SteamID: -</div>
+        <div class="small" id="profileGameName">ชื่อในเกม: -</div>
+        <div class="small" id="profileStatus">สถานะบัญชี: -</div>
+        <div class="profile-actions">
+          <button class="btn secondary" id="refreshBtn" type="button">รีเฟรชข้อมูล</button>
+          <button class="btn danger" id="logoutBtn" type="button">ออกจากระบบ</button>
+        </div>
+      </section>
+
+      <nav class="menu" id="menu">
+        <button type="button" class="active" data-tab="overview">ภาพรวม</button>
+        <button type="button" data-tab="map">แผนที่</button>
+        <button type="button" data-tab="wallet">กระเป๋าเงิน</button>
+        <button type="button" data-tab="shop">ร้านค้า</button>
+        <button type="button" data-tab="orders">คำสั่งซื้อ</button>
+        <button type="button" data-tab="redeem">โค้ด / Redeem</button>
+        <button type="button" data-tab="vehicle">เช่ารถ</button>
+        <button type="button" data-tab="party">ปาร์ตี้ / แชท</button>
+        <button type="button" data-tab="mission">ภารกิจ</button>
+        <button type="button" data-tab="wheel">วงล้อ / คำแนะนำ</button>
+        <button type="button" data-tab="pvp">อันดับ / ค่าหัว</button>
+        <button type="button" data-tab="notify">การแจ้งเตือน</button>
+        <button type="button" data-tab="profile">โปรไฟล์ / Steam</button>
+        <button type="button" data-tab="market">ตลาด</button>
+      </nav>
+    </aside>
+
+    <section class="main">
+      <section class="topbar">
+        <div>
+          <h2 id="serverName">SCUM TH OFFICIAL</h2>
+          <div id="serverDesc" class="muted">กำลังโหลดข้อมูลเซิร์ฟเวอร์...</div>
+        </div>
+        <div class="chips">
+          <span class="chip" id="chipOnline">ออนไลน์: -</span>
+          <span class="chip" id="chipMap">แผนที่: -</span>
+          <span class="chip" id="chipEvent">เหตุการณ์ล่าสุด: -</span>
+          <span class="chip" id="chipVersion">สถานะ: -</span>
+        </div>
+      </section>
+
+      <section class="status" id="status">กำลังโหลดข้อมูล...</section>
+
+      <section class="tab active" id="tab-overview">
+        <div class="grid">
+          <article class="section span-5">
+            <h3>สรุปสถานะผู้เล่น</h3>
+            <div class="kpis">
+              <div class="kpi"><div class="label">Coin คงเหลือ</div><div class="value" id="kBalance">0</div></div>
+              <div class="kpi"><div class="label">สถานะ VIP</div><div class="value" id="kVip">NO</div></div>
+              <div class="kpi"><div class="label">Kills</div><div class="value" id="kKills">0</div></div>
+              <div class="kpi"><div class="label">Deaths</div><div class="value" id="kDeaths">0</div></div>
+              <div class="kpi"><div class="label">ออเดอร์รอส่ง</div><div class="value" id="kPending">0</div></div>
+              <div class="kpi"><div class="label">ออเดอร์ส่งแล้ว</div><div class="value" id="kDelivered">0</div></div>
+            </div>
+          </article>
+
+          <article class="section span-7">
+            <h3>คำสั่งด่วน</h3>
+            <div class="row">
+              <button class="btn span-3" id="btnDaily" type="button">รับรางวัลรายวัน</button>
+              <button class="btn span-3" id="btnWeekly" type="button">รับรางวัลรายสัปดาห์</button>
+              <button class="btn warn span-3" id="btnRentBike" type="button">เช่ามอไซ</button>
+              <button class="btn secondary span-3" id="btnWheelSpinQuick" type="button">หมุนวงล้อ</button>
+            </div>
+            <form id="quickRedeemForm" class="row" style="margin-top:7px">
+              <input class="span-8" id="quickRedeemInput" type="text" placeholder="กรอกโค้ด Redeem">
+              <button class="btn span-4" type="submit">ใช้โค้ด</button>
+            </form>
+            <div id="economyText" class="small" style="margin-top:8px">กำลังโหลดราคาเศรษฐกิจ...</div>
+
+            <div style="margin-top:10px" class="small">
+              ภารกิจวันนี้: <b id="quickMissionDaily">-</b><br>
+              ภารกิจสัปดาห์นี้: <b id="quickMissionWeekly">-</b><br>
+              รถเช่าปัจจุบัน: <b id="quickRent">-</b><br>
+              ออเดอร์ล่าสุด: <b id="quickOrder">-</b>
+            </div>
+          </article>
+
+          <article class="section span-12">
+            <h3>ประกาศเซิร์ฟเวอร์</h3>
+            <div id="announceList" class="small">-</div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-map">
+        <div class="grid">
+          <article class="section span-12">
+            <h3>แผนที่ SCUM</h3>
+            <div class="row" style="margin-bottom:8px">
+              <div class="span-9 small" id="mapHint">
+                ใช้แผนที่สำหรับดูบังเกอร์, Killbox และจุดสำคัญของเซิร์ฟเวอร์
+              </div>
+              <div class="span-3" style="text-align:right">
+                <a class="btn secondary" id="mapOpenExternal" target="_blank" rel="noopener noreferrer" href="https://scum-map.com/th/map/bunkers_and_killboxes">เปิดแผนที่ในแท็บใหม่</a>
+              </div>
+            </div>
+            <div class="map-frame-wrap">
+              <iframe
+                id="mapFrame"
+                class="map-frame"
+                loading="lazy"
+                referrerpolicy="strict-origin-when-cross-origin"
+                src="about:blank"
+                title="SCUM Interactive Map"
+              ></iframe>
+            </div>
+            <div class="small" style="margin-top:8px" id="mapFallbackNote">
+              หากไม่แสดงแผนที่ในหน้าเว็บ ให้กดปุ่ม “เปิดแผนที่ในแท็บใหม่”
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-wallet">
+        <div class="grid">
+          <article class="section span-4">
+            <h3>สรุปกระเป๋าเงิน</h3>
+            <div class="kpis">
+              <div class="kpi"><div class="label">ยอดคงเหลือ</div><div class="value" id="walletBalance">0</div></div>
+              <div class="kpi"><div class="label">รายการเข้า</div><div class="value" id="walletIn">0</div></div>
+              <div class="kpi"><div class="label">รายการออก</div><div class="value" id="walletOut">0</div></div>
+              <div class="kpi"><div class="label">จำนวนธุรกรรม</div><div class="value" id="walletCount">0</div></div>
+            </div>
+            <div class="small" style="margin-top:8px">หน้า Wallet มีไว้กันดราม่า: ตรวจย้อนหลังรายรับ/รายจ่าย, ซื้อ, redeem, reward, refund ได้</div>
+          </article>
+
+          <article class="section span-8">
+            <h3>ประวัติธุรกรรม</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>เวลา</th>
+                    <th>ประเภท</th>
+                    <th>เข้า/ออก</th>
+                    <th>ยอดก่อน</th>
+                    <th>ยอดหลัง</th>
+                    <th>อ้างอิง</th>
+                  </tr>
+                </thead>
+                <tbody id="walletBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+      <section class="tab" id="tab-shop">
+        <div class="grid">
+          <article class="section span-8">
+            <h3>ร้านค้าผู้เล่น</h3>
+            <div class="row">
+              <input class="span-6" id="shopQuery" type="text" placeholder="ค้นหาสินค้า / item id">
+              <select class="span-3" id="shopKind">
+                <option value="all">ทุกหมวด</option>
+                <option value="item">ไอเทมในเกม</option>
+                <option value="vip">VIP</option>
+              </select>
+              <button class="btn span-3" id="shopSearchBtn" type="button">ค้นหา</button>
+            </div>
+            <div id="shopGrid" class="shop-grid" style="margin-top:8px"></div>
+          </article>
+
+          <article class="section span-4">
+            <h3>เงื่อนไขการซื้อ</h3>
+            <div class="small">
+              1) สินค้าประเภทไอเทมในเกม ต้องผูก SteamID ก่อนซื้อ<br>
+              2) สินค้า VIP ไม่จำเป็นต้องผูก SteamID<br>
+              3) หากของเป็น bundle ระบบจะใส่เข้าคิวส่งของอัตโนมัติ
+            </div>
+            <div style="margin-top:10px" class="small">
+              SteamID ปัจจุบัน: <b id="shopSteamState">-</b>
+            </div>
+
+            <div style="margin-top:12px" class="danger-zone section">
+              <h3 style="font-size:24px;margin-bottom:6px">ตะกร้า</h3>
+              <div class="kpis">
+                <div class="kpi"><div class="label">รายการ</div><div class="value" id="cRows">0</div></div>
+                <div class="kpi"><div class="label">ชิ้นรวม</div><div class="value" id="cUnits">0</div></div>
+                <div class="kpi"><div class="label">ยอดรวม</div><div class="value" id="cTotal">0</div></div>
+                <div class="kpi"><div class="label">เงินคงเหลือ</div><div class="value" id="cWallet">0</div></div>
+              </div>
+              <button class="btn" id="checkoutBtn" type="button" style="margin-top:8px">ชำระตะกร้า</button>
+              <button class="btn secondary" id="clearCartBtn" type="button" style="margin-top:6px">ล้างตะกร้า</button>
+            </div>
+          </article>
+
+          <article class="section span-12">
+            <h3>รายละเอียดตะกร้า</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>สินค้า</th>
+                    <th>หมวด</th>
+                    <th>ราคา</th>
+                    <th>จำนวน</th>
+                    <th>รวม</th>
+                    <th>จัดการ</th>
+                  </tr>
+                </thead>
+                <tbody id="cartBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-orders">
+        <div class="grid">
+          <article class="section span-12">
+            <h3>ประวัติคำสั่งซื้อ</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>เลขออเดอร์</th>
+                    <th>สินค้า</th>
+                    <th>ราคา</th>
+                    <th>สถานะ</th>
+                    <th>อัปเดตล่าสุด</th>
+                    <th>เวลาสั่ง</th>
+                  </tr>
+                </thead>
+                <tbody id="orderBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-redeem">
+        <div class="grid">
+          <article class="section span-5">
+            <h3>โค้ด / Redeem</h3>
+            <form id="redeemForm" class="row">
+              <input class="span-8" id="redeemInput" type="text" placeholder="กรอกโค้ดที่ต้องการใช้">
+              <button class="btn span-4" type="submit">ใช้โค้ด</button>
+            </form>
+            <div class="row" style="margin-top:7px">
+              <button class="btn span-6" id="btnDaily2" type="button">รับรายวัน</button>
+              <button class="btn span-6" id="btnWeekly2" type="button">รับรายสัปดาห์</button>
+            </div>
+            <div class="small" style="margin-top:8px">ระบบจะแจ้งผลทันทีว่าโค้ดใช้สำเร็จหรือไม่สำเร็จ</div>
+          </article>
+
+          <article class="section span-7">
+            <h3>โค้ดที่ใช้แล้ว</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>โค้ด</th>
+                    <th>ประเภท</th>
+                    <th>จำนวน/ไอเทม</th>
+                    <th>เวลาใช้</th>
+                  </tr>
+                </thead>
+                <tbody id="redeemBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-vehicle">
+        <div class="grid">
+          <article class="section span-4">
+            <h3>ระบบเช่ารถ</h3>
+            <div class="small">
+              รถเช่าที่รองรับตอนนี้: มอเตอร์ไซค์<br>
+              จำกัด: 1 ครั้ง/วัน/คน (รีเซ็ตเที่ยงคืนตาม timezone ระบบ)
+            </div>
+            <button class="btn warn" id="btnRentBike2" type="button" style="margin-top:8px">เช่ามอไซตอนนี้</button>
+            <div style="margin-top:8px" class="small">
+              สถานะผูก Steam: <b id="rentSteam">-</b><br>
+              โควต้าวันนี้: <b id="rentQuota">-</b><br>
+              เวลารีเซ็ต: <b id="rentReset">-</b><br>
+              รถเช่าปัจจุบัน: <b id="rentCurrent">-</b>
+            </div>
+          </article>
+
+          <article class="section span-8">
+            <h3>ประวัติการเช่า</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Order ID</th>
+                    <th>Vehicle ID</th>
+                    <th>สถานะ</th>
+                    <th>เริ่ม</th>
+                    <th>อัปเดต</th>
+                    <th>Error ล่าสุด</th>
+                  </tr>
+                </thead>
+                <tbody id="rentBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-party">
+        <div class="grid">
+          <article class="section span-12">
+            <h3>ระบบปาร์ตี้ + แชทกลุ่ม</h3>
+            <div class="row" style="margin-bottom:8px">
+              <div class="span-9 small" id="partyMetaText">กำลังโหลดข้อมูลปาร์ตี้...</div>
+              <div class="span-3" style="text-align:right">
+                <button class="btn secondary" id="partyRefreshBtn" type="button">รีเฟรชปาร์ตี้</button>
+              </div>
+            </div>
+
+            <div class="party-layout">
+              <div class="party-panel">
+                <div class="small" style="padding:10px 10px 0">สมาชิกปาร์ตี้</div>
+                <div id="partyMemberList" class="party-members"></div>
+              </div>
+              <div class="party-panel party-chat-wrap">
+                <div id="partyChatBody" class="party-chat-body"></div>
+                <form id="partyChatForm" class="party-chat-form">
+                  <input id="partyChatInput" type="text" placeholder="พิมพ์ข้อความถึงสมาชิกในปาร์ตี้..." maxlength="280">
+                  <button class="btn" id="partyChatSendBtn" type="submit">ส่ง</button>
+                </form>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-mission">
+        <div class="grid">
+          <article class="section span-12">
+            <h3>ภารกิจรายวัน / รายสัปดาห์</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ภารกิจ</th>
+                    <th>หมวด</th>
+                    <th>ความคืบหน้า</th>
+                    <th>สถานะรับรางวัล</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="missionBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-wheel">
+        <div class="grid">
+          <article class="section span-8">
+            <h3>วงล้อสุ่มรางวัล</h3>
+            <div class="wheel-stage">
+              <div class="wheel-shell">
+                <div class="wheel-pointer"></div>
+                <div class="wheel-disc" id="wheelDisc"></div>
+                <div class="wheel-center">
+                  <div id="wheelCenterText">พร้อมหมุน</div>
+                </div>
+              </div>
+
+              <div class="wheel-meta">
+                <div>สถานะ: <span class="reward-chip" id="wheelEnabled">-</span></div>
+                <div>คูลดาวน์: <b id="wheelCooldownMs">-</b></div>
+                <div>หมุนได้อีกใน: <b id="wheelRemaining">-</b></div>
+                <div>หมุนครั้งล่าสุด: <b id="wheelLastSpinAt">-</b></div>
+                <div>จำนวนครั้งทั้งหมด: <b id="wheelTotalSpins">0</b></div>
+                <button class="btn" id="btnWheelSpin" type="button">หมุนวงล้อ</button>
+                <div class="small" id="wheelLastResult">รอการหมุน</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="section span-4">
+            <h3>กฎ + คำแนะนำ</h3>
+            <div class="list-block">
+              <div class="small" style="margin-bottom:5px">กฎเซิร์ฟเวอร์</div>
+              <ul id="rulesList"></ul>
+            </div>
+            <div class="list-block" style="margin-top:8px">
+              <div class="small" style="margin-bottom:5px">คำแนะนำผู้เล่น</div>
+              <ul id="tipsList"></ul>
+            </div>
+          </article>
+
+          <article class="section span-6">
+            <h3>รายการรางวัลที่เป็นไปได้</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>รางวัล</th>
+                    <th>ประเภท</th>
+                    <th>จำนวน</th>
+                    <th>โอกาส</th>
+                  </tr>
+                </thead>
+                <tbody id="wheelRewardBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="section span-6">
+            <h3>ประวัติการหมุนล่าสุด</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>เวลา</th>
+                    <th>รางวัล</th>
+                    <th>ประเภท</th>
+                    <th>จำนวน</th>
+                  </tr>
+                </thead>
+                <tbody id="wheelHistoryBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-pvp">
+        <div class="grid">
+          <article class="section span-4">
+            <h3>ตั้งค่าหัว</h3>
+            <form id="bountyForm" class="row">
+              <input class="span-12" id="bountyTargetInput" type="text" placeholder="ชื่อเป้าหมายในเกม">
+              <input class="span-12" id="bountyAmountInput" type="number" min="1" step="1" placeholder="จำนวนค่าหัว">
+              <button class="btn span-12" type="submit">สร้างค่าหัว</button>
+            </form>
+          </article>
+
+          <article class="section span-8">
+            <h3>ค่าหัวที่เปิดอยู่</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>เป้าหมาย</th>
+                    <th>จำนวน</th>
+                    <th>ผู้ตั้ง</th>
+                    <th>สถานะ</th>
+                  </tr>
+                </thead>
+                <tbody id="bountyBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="section span-12">
+            <h3>อันดับผู้เล่น / สถิติ</h3>
+            <div class="row">
+              <select class="span-4" id="leaderType">
+                <option value="economy">คนรวยสุด (Coin)</option>
+                <option value="kills">ฆ่าเยอะสุด</option>
+                <option value="kd">KD สูงสุด</option>
+                <option value="playtime">ออนไลน์นานสุด</option>
+              </select>
+              <select class="span-4" id="leaderLimit">
+                <option value="10">Top 10</option>
+                <option value="20">Top 20</option>
+                <option value="30">Top 30</option>
+                <option value="50">Top 50</option>
+              </select>
+              <button class="btn span-4" id="leaderRefreshBtn" type="button">รีเฟรชอันดับ</button>
+            </div>
+            <div class="table-wrap" style="margin-top:8px">
+              <table>
+                <thead id="leaderHead"></thead>
+                <tbody id="leaderBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-notify">
+        <div class="grid">
+          <article class="section span-12">
+            <h3>ศูนย์การแจ้งเตือน</h3>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>เวลา</th>
+                    <th>ประเภท</th>
+                    <th>หัวข้อ</th>
+                    <th>รายละเอียด</th>
+                  </tr>
+                </thead>
+                <tbody id="notifyBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-profile">
+        <div class="grid">
+          <article class="section span-6">
+            <h3>ผูก SteamID</h3>
+            <form id="steamForm" class="row">
+              <input class="span-12" id="steamIdInput" type="text" placeholder="SteamID64 (15-25 หลัก)">
+              <button class="btn span-12" id="saveSteamBtn" type="submit">ผูก SteamID</button>
+            </form>
+            <div class="row" style="margin-top:7px">
+              <button class="btn secondary span-12" id="verifySteamBtn" type="button">ตรวจสอบ SteamID</button>
+            </div>
+            <div class="small" style="margin-top:8px">
+              ผูกได้ 1 ครั้งต่อบัญชีเท่านั้น ชื่อในเกมจะดึงอัตโนมัติจากข้อมูล SCUM log ไม่ต้องกรอกเอง
+            </div>
+            <div class="small">
+              หากต้องการเปลี่ยน SteamID ต้องติดต่อแอดมินเท่านั้น
+            </div>
+          </article>
+
+          <article class="section span-6">
+            <h3>สถานะบัญชีและการผูก</h3>
+            <div>Discord: <b id="steamInfoDiscord">-</b></div>
+            <div>SteamID: <b id="steamInfoId">-</b></div>
+            <div>ชื่อในเกม: <b id="steamInfoName">-</b></div>
+            <div>ผูกเมื่อ: <b id="steamInfoAt">-</b></div>
+            <div>สถานะ: <span class="badge" id="steamInfoStatus">NOT LINKED</span></div>
+            <div style="margin-top:8px">ประวัติการ bind ล่าสุด:</div>
+            <div class="table-wrap" style="margin-top:6px;max-height:180px">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Action</th>
+                    <th>SteamID</th>
+                    <th>ชื่อในเกม</th>
+                    <th>เวลา</th>
+                  </tr>
+                </thead>
+                <tbody id="steamHistoryBody"></tbody>
+              </table>
+            </div>
+          </article>
+
+          <article class="section span-12">
+            <h3>ข้อมูลเซิร์ฟเวอร์</h3>
+            <div class="row">
+              <div class="span-4">IP: <b id="serverIp">-</b></div>
+              <div class="span-4">Port: <b id="serverPort">-</b></div>
+              <div class="span-4">Max Players: <b id="serverMax">-</b></div>
+            </div>
+            <div class="small" style="margin-top:8px">Raid Time: <span id="raidTimes">-</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="tab" id="tab-market">
+        <div class="grid">
+          <article class="section span-12">
+            <h3>ตลาดผู้เล่น (กำลังพัฒนา)</h3>
+            <div class="empty">
+              ฟีเจอร์ตลาดผู้เล่นกำลังพัฒนา<br>
+              แผนงาน: ตั้งขาย / ค้นหา / ซื้อจากผู้เล่น / ภาษีตลาด / รายการขายของตัวเอง
+            </div>
+          </article>
+        </div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const money = new Intl.NumberFormat('en-US');
+    const dtf = new Intl.DateTimeFormat('th-TH', { dateStyle: 'short', timeStyle: 'medium' });
+    const API_TIMEOUT_MS = 12000;
+    const state = {
+      me: null,
+      profile: null,
+      server: null,
+      prices: null,
+      dashboard: null,
+      shop: [],
+      cart: null,
+      purchases: [],
+      wallet: null,
+      redeemHistory: [],
+      rent: null,
+      missions: [],
+      wheel: null,
+      party: null,
+      partyChat: [],
+      bounties: [],
+      leader: null,
+      notifications: [],
+      steamHistory: [],
+    };
+
+    const $ = (id) => document.getElementById(id);
+    const text = (v, fallback = '-') => {
+      const s = String(v ?? '').trim();
+      return s || fallback;
+    };
+    const numberOr = (v, fallback = 0) => {
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const fmt = (v) => money.format(numberOr(v, 0));
+    const dateText = (v) => {
+      if (!v) return '-';
+      const d = new Date(v);
+      return Number.isNaN(d.getTime()) ? '-' : dtf.format(d);
+    };
+    const durationText = (ms) => {
+      const value = Math.max(0, numberOr(ms, 0));
+      if (value <= 0) return 'พร้อมหมุน';
+      const totalMinutes = Math.ceil(value / 60000);
+      const days = Math.floor(totalMinutes / (24 * 60));
+      const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+      const minutes = totalMinutes % 60;
+      if (days > 0) return `${days} วัน ${hours} ชม.`;
+      if (hours > 0) return `${hours} ชม. ${minutes} นาที`;
+      return `${minutes} นาที`;
+    };
+    const escapeHtml = (v) => String(v ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+    const wheelTypeLabel = (type) => {
+      const key = String(type || '').trim().toLowerCase();
+      if (key === 'coins') return 'เหรียญ';
+      if (key === 'item') return 'ไอเทม';
+      if (key === 'none') return 'พลาดรางวัล';
+      return key || '-';
+    };
+    const rewardAmountText = (row = {}) => {
+      const type = String(row.type || '').trim().toLowerCase();
+      if (type === 'coins') return `${fmt(row.amount || 0)} Coins`;
+      if (type === 'item') return `x${fmt(row.quantity || 1)}`;
+      return '-';
+    };
+    const rewardFallbackEmoji = (row = {}) => {
+      const type = String(row.type || '').trim().toLowerCase();
+      if (type === 'coins') return '💰';
+      if (type === 'item') return '📦';
+      return '❌';
+    };
+    const rewardIconHtml = (row = {}, kind = 'reward-icon') => {
+      const iconUrl = text(row.iconUrl, '');
+      if (iconUrl && iconUrl !== '-') {
+        return `<img class="${kind}" src="${escapeHtml(iconUrl)}" alt="icon">`;
+      }
+      return `<span class="${kind === 'wheel-segment-icon' ? 'wheel-segment-fallback' : 'reward-fallback'}">${escapeHtml(rewardFallbackEmoji(row))}</span>`;
+    };
+
+    let wheelRotation = 0;
+    let wheelSpinning = false;
+    const SIDEBAR_COLLAPSED_KEY = 'scum.portal.sidebar.collapsed';
+
+    function getSidebarCollapsedPref() {
+      try {
+        return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1';
+      } catch {
+        return false;
+      }
+    }
+
+    function setSidebarCollapsedPref(collapsed) {
+      try {
+        localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? '1' : '0');
+      } catch {
+        // ignore storage errors
+      }
+    }
+
+    function applySidebarCollapsed(collapsed) {
+      const mobile = window.matchMedia('(max-width: 1080px)').matches;
+      const effective = mobile ? false : Boolean(collapsed);
+      document.body.classList.toggle('sidebar-collapsed', effective);
+      const toggle = $('sidebarToggle');
+      if (!toggle) return;
+      toggle.textContent = effective ? '▶' : '◀';
+      toggle.setAttribute('aria-label', effective ? 'ขยายแถบเมนู' : 'ยุบแถบเมนู');
+      toggle.setAttribute('title', effective ? 'ขยายเมนู' : 'ยุบเมนู');
+    }
+
+    function setStatus(message, kind = '') {
+      const el = $('status');
+      el.className = `status ${kind}`.trim();
+      el.textContent = message;
+    }
+
+    function errorMessage(error, fallback) {
+      const msg = String(error?.message || '').trim();
+      if (msg && !msg.startsWith('HTTP')) return msg;
+      return fallback;
+    }
+
+    async function api(path, options = {}) {
+      const method = options.method || 'GET';
+      const body = options.body;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+      let response;
+      try {
+        response = await fetch(path, {
+          method,
+          credentials: 'same-origin',
+          headers: body ? { 'content-type': 'application/json' } : {},
+          body: body ? JSON.stringify(body) : undefined,
+          signal: controller.signal,
+        });
+      } catch (error) {
+        if (error?.name === 'AbortError') {
+          throw new Error(`Request timeout (${API_TIMEOUT_MS}ms): ${path}`);
+        }
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      const payload = await response.json().catch(() => ({}));
+
+      if (response.status === 401) {
+        window.location.href = '/player/login';
+        throw new Error('Unauthorized');
+      }
+
+      if (!response.ok || payload.ok === false) {
+        const err = new Error(payload.error || `HTTP ${response.status}`);
+        err.data = payload.data || null;
+        throw err;
+      }
+
+      return payload.data;
+    }
+
+    function activateTab(tabName) {
+      for (const btn of document.querySelectorAll('#menu button[data-tab]')) {
+        btn.classList.toggle('active', btn.dataset.tab === tabName);
+      }
+      for (const tab of document.querySelectorAll('.tab')) {
+        tab.classList.toggle('active', tab.id === `tab-${tabName}`);
+      }
+    }
+
+    function fallbackAvatar() {
+      return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120"><rect width="120" height="120" fill="#0f160f"/><circle cx="60" cy="46" r="20" fill="#96aa8f"/><rect x="26" y="72" width="68" height="28" rx="14" fill="#96aa8f"/></svg>',
+      );
+    }
+
+    function renderIdentity() {
+      const me = state.me || {};
+      const profile = state.profile || {};
+      const steam = profile.steamLink || {};
+      const steamName = steam.linked
+        ? text(steam.inGameName, 'รอระบบดึงชื่อในเกมจาก SCUM log')
+        : '-';
+
+      $('profileAvatar').src = text(profile.avatarUrl || me.avatarUrl, fallbackAvatar());
+      $('profileName').textContent = text(profile.displayName || me.user, 'Unknown');
+      $('profileRole').textContent = text(me.role, 'player').toUpperCase();
+      $('profileDiscord').textContent = `Discord: ${text(me.discordId)}`;
+      $('profileSteam').textContent = `SteamID: ${text(steam.steamId)}`;
+      $('profileGameName').textContent = `ชื่อในเกม: ${steamName}`;
+      $('profileStatus').textContent = `สถานะบัญชี: ${text(profile.accountStatus || me.accountStatus, 'active')}`;
+
+      $('steamInfoDiscord').textContent = text(me.discordId);
+      $('steamInfoId').textContent = text(steam.steamId);
+      $('steamInfoName').textContent = steamName;
+      $('steamInfoAt').textContent = dateText(steam.linkedAt);
+      $('steamInfoStatus').textContent = steam.linked ? 'LINKED (LOCKED)' : 'NOT LINKED';
+
+      const linked = Boolean(steam.linked);
+      $('steamIdInput').disabled = linked;
+      $('saveSteamBtn').disabled = linked;
+      $('verifySteamBtn').disabled = linked;
+      if (linked) {
+        $('steamIdInput').value = text(steam.steamId, '');
+      }
+
+      $('shopSteamState').textContent = steam.linked ? `เชื่อมแล้ว (${steam.steamId})` : 'ยังไม่เชื่อม SteamID';
+      $('rentSteam').textContent = steam.linked ? 'เชื่อมแล้ว' : 'ยังไม่เชื่อม';
+    }
+
+    function renderServer() {
+      const payload = state.server || {};
+      const info = payload.serverInfo || {};
+      const status = payload.status || {};
+
+      $('serverName').textContent = text(info.name, 'SCUM SERVER');
+      $('serverDesc').textContent = text(info.description, '-');
+      $('chipOnline').textContent = `ออนไลน์: ${fmt(status.onlinePlayers)}/${fmt(status.maxPlayers || info.maxPlayers || 0)}`;
+      $('chipMap').textContent = `แผนที่: ${text(status.mapName, 'SCUM')}`;
+      $('chipEvent').textContent = `เหตุการณ์ล่าสุด: ${text(status.lastEventType || status.lastEventMessage, '-')}`;
+      $('chipVersion').textContent = `สถานะ: ${status.lastUpdated ? 'Realtime' : 'Waiting'}`;
+
+      $('serverIp').textContent = text(info.ip);
+      $('serverPort').textContent = text(info.port);
+      $('serverMax').textContent = fmt(info.maxPlayers || 0);
+
+      const raids = Array.isArray(payload.raidTimes) ? payload.raidTimes : [];
+      $('raidTimes').textContent = raids.length ? raids.join(' | ') : '-';
+      renderRulesAndTips();
+      renderMapPortal();
+    }
+
+    function renderMapPortal() {
+      const payload = state.server || {};
+      const mapPortal = payload.mapPortal || {};
+      const externalUrl = text(mapPortal.externalUrl, 'https://scum-map.com/th/map/bunkers_and_killboxes');
+      const embedEnabled = Boolean(mapPortal.embedEnabled);
+      const embedUrl = embedEnabled ? text(mapPortal.embedUrl, externalUrl) : '';
+
+      const mapOpen = $('mapOpenExternal');
+      const mapFrame = $('mapFrame');
+      const mapHint = $('mapHint');
+      mapOpen.href = externalUrl;
+      if (embedEnabled && embedUrl && embedUrl !== '-') {
+        mapFrame.src = embedUrl;
+        mapHint.textContent = 'แผนที่ฝังในหน้าเว็บแล้ว (ซูม/เลื่อนตำแหน่งได้ทันที)';
+      } else {
+        mapFrame.src = 'about:blank';
+        mapHint.textContent = 'โหมดฝังแผนที่ถูกปิดไว้ ให้เปิดในแท็บใหม่แทน';
+      }
+    }
+
+    function renderRulesAndTips() {
+      const payload = state.server || {};
+      const rules = Array.isArray(payload.serverInfo?.rulesShort)
+        ? payload.serverInfo.rulesShort
+        : [];
+      const tips = Array.isArray(payload.tips) ? payload.tips : [];
+
+      const rulesList = $('rulesList');
+      const tipsList = $('tipsList');
+      rulesList.innerHTML = rules.length
+        ? rules.map((line) => `<li>${escapeHtml(text(line))}</li>`).join('')
+        : '<li>ยังไม่ได้ตั้งค่ากฎย่อ</li>';
+      tipsList.innerHTML = tips.length
+        ? tips.map((line) => `<li>${escapeHtml(text(line))}</li>`).join('')
+        : '<li>ยังไม่มีคำแนะนำเพิ่มเติม</li>';
+    }
+
+    function buildWheelSegments(rewards) {
+      const disc = $('wheelDisc');
+      if (!disc) return;
+      const rows = Array.isArray(rewards) ? rewards : [];
+      disc.innerHTML = '';
+      if (!rows.length) return;
+
+      const step = 360 / rows.length;
+      const radius = 86;
+      rows.forEach((row, index) => {
+        const angle = step * index + step / 2 - 90;
+        const segment = document.createElement('div');
+        segment.className = 'wheel-segment';
+        segment.style.transform = `translate(-50%, -50%) rotate(${angle}deg) translate(0, ${-radius}px) rotate(${-angle}deg)`;
+        segment.innerHTML = `
+          ${rewardIconHtml(row, 'wheel-segment-icon')}
+          <div class="wheel-segment-label">${escapeHtml(text(row.label, row.id))}</div>
+        `;
+        disc.appendChild(segment);
+      });
+    }
+
+    function animateWheelSpin(targetRewardId = null, rewards = []) {
+      const disc = $('wheelDisc');
+      if (!disc) return;
+      const rows = Array.isArray(rewards) ? rewards : [];
+      const index = rows.findIndex((row) => String(row.id) === String(targetRewardId || ''));
+      const step = rows.length > 0 ? 360 / rows.length : 45;
+      const targetCenterDeg = index >= 0
+        ? index * step + step / 2
+        : Math.floor(Math.random() * 360);
+      const extraTurns = 5 + Math.floor(Math.random() * 3);
+      const finalDeg = extraTurns * 360 + (360 - targetCenterDeg);
+      wheelRotation += finalDeg;
+      disc.style.transform = `rotate(${wheelRotation}deg)`;
+    }
+
+    function renderWheel() {
+      const wheel = state.wheel || {};
+      const rewards = Array.isArray(wheel.rewards) ? wheel.rewards : [];
+      const history = Array.isArray(wheel.history) ? wheel.history : [];
+      const canSpin = Boolean(wheel.enabled) && Boolean(wheel.canSpin);
+
+      $('wheelEnabled').textContent = wheel.enabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน';
+      $('wheelCooldownMs').textContent = durationText(wheel.cooldownMs);
+      $('wheelRemaining').textContent = canSpin
+        ? 'พร้อมหมุน'
+        : durationText(wheel.remainingMs);
+      $('wheelLastSpinAt').textContent = dateText(wheel.lastSpinAt);
+      $('wheelTotalSpins').textContent = fmt(wheel.totalSpins || 0);
+      $('btnWheelSpin').disabled = !canSpin || wheelSpinning;
+      $('btnWheelSpinQuick').disabled = !canSpin || wheelSpinning;
+      if (!wheelSpinning) {
+        $('wheelCenterText').textContent = canSpin ? 'SPIN' : 'COOLDOWN';
+        if (!wheel.enabled) {
+          $('wheelLastResult').textContent = 'วงล้อถูกปิดใช้งานชั่วคราว';
+        } else if (history.length > 0) {
+          const latest = history[0];
+          $('wheelLastResult').textContent =
+            `ล่าสุด: ${text(latest.label, latest.id)} (${dateText(latest.at)})`;
+        } else {
+          $('wheelLastResult').textContent = 'รอการหมุน';
+        }
+      }
+
+      buildWheelSegments(rewards);
+
+      const rewardBody = $('wheelRewardBody');
+      rewardBody.innerHTML = '';
+      if (!rewards.length) {
+        rewardBody.innerHTML = '<tr><td colspan="4"><div class="empty">ยังไม่ตั้งค่ารางวัล</div></td></tr>';
+      } else {
+        const totalWeight = rewards.reduce((sum, row) => sum + numberOr(row.weight, 0), 0) || 1;
+        rewardBody.innerHTML = rewards.map((row) => {
+          const chance = ((numberOr(row.weight, 0) / totalWeight) * 100).toFixed(1);
+          return `
+            <tr>
+              <td>
+                <span class="reward-label-wrap">
+                  ${rewardIconHtml(row, 'reward-icon')}
+                  <span>${escapeHtml(text(row.label, row.id))}</span>
+                </span>
+              </td>
+              <td>${escapeHtml(wheelTypeLabel(row.type))}</td>
+              <td>${escapeHtml(rewardAmountText(row))}</td>
+              <td>${escapeHtml(chance)}%</td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      const historyBody = $('wheelHistoryBody');
+      historyBody.innerHTML = '';
+      if (!history.length) {
+        historyBody.innerHTML = '<tr><td colspan="4"><div class="empty">ยังไม่มีประวัติการหมุน</div></td></tr>';
+      } else {
+        historyBody.innerHTML = history.map((row) => `
+          <tr>
+            <td>${escapeHtml(dateText(row.at))}</td>
+            <td>
+              <span class="reward-label-wrap">
+                ${rewardIconHtml(row, 'reward-icon')}
+                <span>${escapeHtml(text(row.label, row.id))}</span>
+              </span>
+            </td>
+            <td>${escapeHtml(wheelTypeLabel(row.type))}</td>
+            <td>${escapeHtml(rewardAmountText(row))}</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    function renderParty() {
+      const party = state.party || {};
+      const members = Array.isArray(party.members) ? party.members : [];
+      const chatEnabled = Boolean(party.chatEnabled && party.partyKey);
+      const title = text(party.title, 'ยังไม่เข้าปาร์ตี้');
+      const source = text(party.source, '-');
+      $('partyMetaText').textContent =
+        `กลุ่ม: ${title} | สมาชิก: ${fmt(party.memberCount || members.length)} คน | source: ${source}`;
+
+      const memberList = $('partyMemberList');
+      if (!members.length) {
+        memberList.innerHTML = '<div class="empty">ยังไม่พบสมาชิกปาร์ตี้</div>';
+      } else {
+        memberList.innerHTML = members.map((row) => `
+          <div class="party-member ${row.isSelf ? 'self' : ''}">
+            <div class="name">${escapeHtml(text(row.displayName, row.discordId))}${row.isSelf ? ' (คุณ)' : ''}</div>
+            <div class="small">Discord: ${escapeHtml(text(row.discordId))}</div>
+            <div class="small">Steam: ${escapeHtml(text(row.steamId))}</div>
+            <div class="small">ชื่อในเกม: ${escapeHtml(text(row.inGameName))}</div>
+          </div>
+        `).join('');
+      }
+
+      $('partyChatInput').disabled = !chatEnabled;
+      $('partyChatSendBtn').disabled = !chatEnabled;
+      if (!chatEnabled) {
+        $('partyChatInput').placeholder = 'ยังไม่พบปาร์ตี้ (ต้องมี squad ก่อน)';
+      } else {
+        $('partyChatInput').placeholder = 'พิมพ์ข้อความถึงสมาชิกในปาร์ตี้...';
+      }
+    }
+
+    function renderPartyChat() {
+      const body = $('partyChatBody');
+      const rows = Array.isArray(state.partyChat) ? state.partyChat : [];
+      const party = state.party || {};
+      if (!party.chatEnabled || !party.partyKey) {
+        body.innerHTML = '<div class="empty">ระบบแชทกลุ่มพร้อมใช้งานเมื่อบัญชีคุณมีปาร์ตี้ (squad)</div>';
+        return;
+      }
+      if (!rows.length) {
+        body.innerHTML = '<div class="empty">ยังไม่มีข้อความในกลุ่ม</div>';
+        return;
+      }
+      body.innerHTML = rows.map((row) => {
+        const me = String(row.userId || '') === String(state.me?.discordId || '');
+        return `
+          <article class="party-chat-item ${me ? 'me' : ''}">
+            <div class="party-chat-head">
+              <b>${escapeHtml(text(row.displayName, row.userId))}</b>
+              <span>${escapeHtml(dateText(row.createdAt))}</span>
+            </div>
+            <div class="party-chat-msg">${escapeHtml(text(row.message, '-'))}</div>
+          </article>
+        `;
+      }).join('');
+      body.scrollTop = body.scrollHeight;
+    }
+
+    function renderDashboard() {
+      const d = state.dashboard || {};
+      const wallet = d.wallet || {};
+      const stats = d.stats || {};
+      const counters = d.counters || {};
+      const vip = d.vip;
+      const missions = d.missionsSummary || {};
+
+      $('kBalance').textContent = fmt(wallet.balance);
+      $('kVip').textContent = vip ? 'YES' : 'NO';
+      $('kKills').textContent = fmt(stats.kills);
+      $('kDeaths').textContent = fmt(stats.deaths);
+      $('kPending').textContent = fmt(counters.purchasesPending);
+      $('kDelivered').textContent = fmt(counters.purchasesDelivered);
+
+      $('cWallet').textContent = fmt(wallet.balance);
+      $('walletBalance').textContent = fmt(wallet.balance);
+
+      $('quickMissionDaily').textContent = missions.dailyClaimable ? 'พร้อมรับ' : 'ติดคูลดาวน์';
+      $('quickMissionWeekly').textContent = missions.weeklyClaimable ? 'พร้อมรับ' : 'ติดคูลดาวน์';
+
+      const rent = d.rent || {};
+      if (rent.current) {
+        $('quickRent').textContent = `${text(rent.current.status)} / order ${text(rent.current.orderId)}`;
+      } else if (rent.linked) {
+        $('quickRent').textContent = 'ไม่มีรถเช่าปัจจุบัน';
+      } else {
+        $('quickRent').textContent = 'ยังไม่ผูก SteamID';
+      }
+
+      const latest = d.latestOrder || null;
+      $('quickOrder').textContent = latest
+        ? `${text(latest.code)} (${text(latest.status)})`
+        : 'ยังไม่มีคำสั่งซื้อ';
+
+      const announcements = Array.isArray(d.announcements) ? d.announcements : [];
+      $('announceList').innerHTML = announcements.length
+        ? announcements.map((line) => `<div>• ${escapeHtml(text(line))}</div>`).join('')
+        : '<div class="empty">ไม่มีประกาศ</div>';
+    }
+
+    function renderEconomy() {
+      const price = state.prices || {};
+      if (!price.currencySymbol) {
+        $('economyText').textContent = 'ยังโหลดข้อมูลเศรษฐกิจไม่สำเร็จ';
+        return;
+      }
+      $('economyText').textContent =
+        `สกุลเงิน: ${price.currencySymbol} | รายวัน: ${fmt(price.dailyReward)} | รายสัปดาห์: ${fmt(price.weeklyReward)}`;
+    }
+
+    function renderWallet() {
+      const data = state.wallet || { items: [] };
+      const rows = Array.isArray(data.items) ? data.items : [];
+      const body = $('walletBody');
+      const currentBalance = numberOr(data.wallet?.balance, 0);
+
+      let totalIn = 0;
+      let totalOut = 0;
+
+      body.innerHTML = '';
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty">ยังไม่มีธุรกรรม</div></td></tr>';
+      } else {
+        for (const row of rows) {
+          const delta = numberOr(row.delta, 0);
+          if (delta >= 0) totalIn += delta;
+          else totalOut += Math.abs(delta);
+
+          body.insertAdjacentHTML('beforeend',
+            `<tr>
+              <td>${escapeHtml(dateText(row.createdAt))}</td>
+              <td>${escapeHtml(text(row.reasonLabel || row.reason))}</td>
+              <td>${escapeHtml(delta >= 0 ? '+' : '-')}${escapeHtml(fmt(Math.abs(delta)))}</td>
+              <td>${escapeHtml(fmt(row.balanceBefore))}</td>
+              <td>${escapeHtml(fmt(row.balanceAfter))}</td>
+              <td>${escapeHtml(text(row.reference || row.actor || '-'))}</td>
+            </tr>`,
+          );
+        }
+      }
+
+      $('walletIn').textContent = fmt(totalIn);
+      $('walletOut').textContent = fmt(totalOut);
+      $('walletCount').textContent = fmt(rows.length);
+      $('walletBalance').textContent = fmt(currentBalance);
+      // fallback: keep balance widgets in sync even if dashboard API is delayed/failed
+      $('kBalance').textContent = fmt(currentBalance);
+      $('cWallet').textContent = fmt(currentBalance);
+    }
+
+    function itemCardHtml(item) {
+      const icon = item.iconUrl
+        ? item.iconUrl
+        : 'data:image/svg+xml;utf8,' + encodeURIComponent(
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 160"><rect width="240" height="160" fill="#111"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="#8fa18a" font-size="20">NO ICON</text></svg>',
+        );
+
+      const steamLinked = Boolean(state.profile?.steamLink?.linked);
+      const needSteam = Boolean(item.requiresSteamLink);
+      const locked = needSteam && !steamLinked;
+      const stockText = item.stock == null ? 'ไม่จำกัด' : String(item.stock);
+
+      return `<article class="item-card">
+        <img src="${icon}" alt="item">
+        <div class="item-name">${escapeHtml(text(item.name, item.id))}</div>
+        <div class="item-meta">${escapeHtml(text(item.kind).toUpperCase())} • ${escapeHtml(text(item.id))}</div>
+        <div class="item-meta">Stock: ${escapeHtml(stockText)}${needSteam ? ' • ต้องผูก SteamID' : ''}</div>
+        <div class="item-price">${escapeHtml(fmt(item.price))} Coins</div>
+        <div class="item-action">
+          <input type="number" min="1" max="99" value="1" data-role="qty">
+          <button class="btn secondary" data-action="add" data-id="${escapeHtml(text(item.id))}" ${locked ? 'disabled' : ''}>ใส่ตะกร้า</button>
+          <button class="btn" data-action="buy" data-id="${escapeHtml(text(item.id))}" ${locked ? 'disabled' : ''}>ซื้อทันที</button>
+        </div>
+      </article>`;
+    }
+
+    function renderShop() {
+      const grid = $('shopGrid');
+      const items = Array.isArray(state.shop) ? state.shop : [];
+      if (!items.length) {
+        grid.innerHTML = '<div class="empty">ไม่พบสินค้า</div>';
+        return;
+      }
+      grid.innerHTML = items.map(itemCardHtml).join('');
+    }
+
+    function renderCart() {
+      const data = state.cart || { rows: [], totalUnits: 0, totalPrice: 0 };
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      const body = $('cartBody');
+      body.innerHTML = '';
+
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty">ตะกร้าว่าง</div></td></tr>';
+      } else {
+        for (const row of rows) {
+          body.insertAdjacentHTML('beforeend',
+            `<tr>
+              <td>${escapeHtml(text(row.item?.name, row.itemId))}<br><span class="small">${escapeHtml(text(row.itemId))}</span></td>
+              <td>${escapeHtml(text(row.item?.kind, '-'))}</td>
+              <td>${escapeHtml(fmt(row.item?.price || 0))}</td>
+              <td>${escapeHtml(fmt(row.quantity))}</td>
+              <td>${escapeHtml(fmt(row.lineTotal))}</td>
+              <td>
+                <button class="btn secondary" data-action="rm1" data-id="${escapeHtml(text(row.itemId))}">ลบ 1</button>
+                <button class="btn warn" data-action="rmall" data-id="${escapeHtml(text(row.itemId))}">ลบทั้งหมด</button>
+              </td>
+            </tr>`,
+          );
+        }
+      }
+
+      $('cRows').textContent = fmt(rows.length);
+      $('cUnits').textContent = fmt(data.totalUnits || 0);
+      $('cTotal').textContent = fmt(data.totalPrice || 0);
+    }
+
+    function renderOrders() {
+      const body = $('orderBody');
+      const rows = Array.isArray(state.purchases) ? state.purchases : [];
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty">ยังไม่มีคำสั่งซื้อ</div></td></tr>';
+        return;
+      }
+
+      body.innerHTML = rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(text(row.code))}</td>
+          <td>${escapeHtml(text(row.itemName, row.itemId))}</td>
+          <td>${escapeHtml(fmt(row.price || 0))}</td>
+          <td><span class="badge">${escapeHtml(text(row.statusText, row.status))}</span></td>
+          <td>${escapeHtml(dateText(row.statusUpdatedAt || row.updatedAt))}</td>
+          <td>${escapeHtml(dateText(row.createdAt))}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderRedeemHistory() {
+      const body = $('redeemBody');
+      const rows = Array.isArray(state.redeemHistory) ? state.redeemHistory : [];
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="4"><div class="empty">ยังไม่มีประวัติการใช้โค้ด</div></td></tr>';
+        return;
+      }
+
+      body.innerHTML = rows.map((row) => {
+        const payload = row.type === 'coins'
+          ? `${fmt(row.amount || 0)} Coins`
+          : text(row.itemId, '-');
+        return `
+          <tr>
+            <td>${escapeHtml(text(row.code))}</td>
+            <td>${escapeHtml(text(row.type))}</td>
+            <td>${escapeHtml(payload)}</td>
+            <td>${escapeHtml(dateText(row.usedAt))}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderRent() {
+      const rent = state.rent || { linked: false, history: [] };
+      $('rentQuota').textContent = rent.todayQuotaUsed ? 'ใช้สิทธิ์แล้ว' : 'ยังไม่ใช้สิทธิ์';
+      $('rentReset').textContent = dateText(rent.nextResetAt);
+      $('rentCurrent').textContent = rent.current
+        ? `${text(rent.current.status)} / ${text(rent.current.orderId)}`
+        : (rent.linked ? 'ไม่มีรถเช่าปัจจุบัน' : 'ต้องผูก SteamID ก่อน');
+
+      const body = $('rentBody');
+      const history = Array.isArray(rent.history) ? rent.history : [];
+      if (!history.length) {
+        body.innerHTML = '<tr><td colspan="6"><div class="empty">ยังไม่มีประวัติการเช่า</div></td></tr>';
+        return;
+      }
+
+      body.innerHTML = history.map((row) => `
+        <tr>
+          <td>${escapeHtml(text(row.orderId))}</td>
+          <td>${escapeHtml(text(row.vehicleInstanceId))}</td>
+          <td><span class="badge">${escapeHtml(text(row.status))}</span></td>
+          <td>${escapeHtml(dateText(row.createdAt))}</td>
+          <td>${escapeHtml(dateText(row.updatedAt))}</td>
+          <td>${escapeHtml(text(row.lastError))}</td>
+        </tr>
+      `).join('');
+    }
+
+    function missionActionButton(mission) {
+      if (!mission.claimable) return '<span class="small">-</span>';
+      if (mission.id === 'daily-claim') {
+        return '<button class="btn" data-action="claim-daily" type="button">รับรางวัล</button>';
+      }
+      if (mission.id === 'weekly-claim') {
+        return '<button class="btn" data-action="claim-weekly" type="button">รับรางวัล</button>';
+      }
+      if (mission.id === 'rentbike-daily') {
+        return '<button class="btn warn" data-action="rentbike" type="button">เช่ารถ</button>';
+      }
+      return '<span class="small">-</span>';
+    }
+
+    function renderMissions() {
+      const body = $('missionBody');
+      const rows = Array.isArray(state.missions) ? state.missions : [];
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="5"><div class="empty">ไม่มีข้อมูลภารกิจ</div></td></tr>';
+        return;
+      }
+
+      body.innerHTML = rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(text(row.title))}</td>
+          <td>${escapeHtml(text(row.category))}</td>
+          <td>${escapeHtml(text(row.remainingText, row.completed ? 'เสร็จแล้ว' : 'กำลังทำ'))}</td>
+          <td><span class="badge">${escapeHtml(row.completed ? 'Completed' : (row.claimable ? 'Claimable' : 'Pending'))}</span></td>
+          <td>${missionActionButton(row)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderBounties() {
+      const body = $('bountyBody');
+      const rows = Array.isArray(state.bounties) ? state.bounties : [];
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="5"><div class="empty">ไม่มีค่าหัวที่เปิดอยู่</div></td></tr>';
+        return;
+      }
+
+      body.innerHTML = rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(text(row.id))}</td>
+          <td>${escapeHtml(text(row.targetName))}</td>
+          <td>${escapeHtml(fmt(row.amount))}</td>
+          <td>${escapeHtml(text(row.createdBy))}</td>
+          <td><span class="badge">${escapeHtml(text(row.status))}</span></td>
+        </tr>
+      `).join('');
+    }
+
+    function renderLeaderboard() {
+      const data = state.leader || {};
+      const rows = Array.isArray(data.items) ? data.items : [];
+      const type = text(data.type, 'economy');
+
+      if (type === 'economy') {
+        $('leaderHead').innerHTML = '<tr><th>#</th><th>ผู้เล่น</th><th>ยอดเหรียญ</th></tr>';
+        $('leaderBody').innerHTML = rows.length
+          ? rows.map((row) => `
+              <tr>
+                <td>${escapeHtml(fmt(row.rank))}</td>
+                <td>${escapeHtml(text(row.name, row.userId))}</td>
+                <td>${escapeHtml(fmt(row.balance))}</td>
+              </tr>
+            `).join('')
+          : '<tr><td colspan="3"><div class="empty">ไม่มีข้อมูล</div></td></tr>';
+        return;
+      }
+
+      $('leaderHead').innerHTML = '<tr><th>#</th><th>ผู้เล่น</th><th>K</th><th>D</th><th>KD</th><th>ชั่วโมงออนไลน์</th></tr>';
+      $('leaderBody').innerHTML = rows.length
+        ? rows.map((row) => `
+            <tr>
+              <td>${escapeHtml(fmt(row.rank))}</td>
+              <td>${escapeHtml(text(row.name, row.userId))}</td>
+              <td>${escapeHtml(fmt(row.kills))}</td>
+              <td>${escapeHtml(fmt(row.deaths))}</td>
+              <td>${escapeHtml(text(row.kd))}</td>
+              <td>${escapeHtml(fmt(row.playtimeHours))}</td>
+            </tr>
+          `).join('')
+        : '<tr><td colspan="6"><div class="empty">ไม่มีข้อมูล</div></td></tr>';
+    }
+
+    function renderNotifications() {
+      const body = $('notifyBody');
+      const rows = Array.isArray(state.notifications) ? state.notifications : [];
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="4"><div class="empty">ยังไม่มีการแจ้งเตือน</div></td></tr>';
+        return;
+      }
+
+      body.innerHTML = rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(dateText(row.createdAt))}</td>
+          <td>${escapeHtml(text(row.type))}</td>
+          <td>${escapeHtml(text(row.title))}</td>
+          <td>${escapeHtml(text(row.message))}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderSteamHistory() {
+      const body = $('steamHistoryBody');
+      const rows = Array.isArray(state.steamHistory) ? state.steamHistory : [];
+      if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="4"><div class="empty">ยังไม่มีประวัติ</div></td></tr>';
+        return;
+      }
+
+      body.innerHTML = rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(text(row.action))}</td>
+          <td>${escapeHtml(text(row.steamId))}</td>
+          <td>${escapeHtml(text(row.inGameName))}</td>
+          <td>${escapeHtml(dateText(row.at))}</td>
+        </tr>
+      `).join('');
+    }
+
+    async function loadMe() {
+      state.me = await api('/player/api/me');
+      renderIdentity();
+    }
+
+    async function loadProfile() {
+      state.profile = await api('/player/api/profile');
+      renderIdentity();
+    }
+
+    async function loadServer() {
+      state.server = await api('/player/api/server/info');
+      renderServer();
+    }
+
+    async function loadPrices() {
+      state.prices = await api('/player/api/prices');
+      renderEconomy();
+    }
+
+    async function loadDashboard() {
+      state.dashboard = await api('/player/api/dashboard');
+      renderDashboard();
+      renderIdentity();
+    }
+
+    async function loadWallet() {
+      state.wallet = await api('/player/api/wallet/ledger?limit=120');
+      renderWallet();
+    }
+
+    async function loadShop() {
+      const query = $('shopQuery').value.trim();
+      const kind = $('shopKind').value;
+      const params = new URLSearchParams({ q: query, kind, limit: '150' });
+      const data = await api(`/player/api/shop/list?${params}`);
+      state.shop = Array.isArray(data.items) ? data.items : [];
+      renderShop();
+    }
+
+    async function loadCart() {
+      state.cart = await api('/player/api/cart');
+      renderCart();
+    }
+
+    async function loadOrders() {
+      const data = await api('/player/api/purchase/list?limit=120');
+      state.purchases = Array.isArray(data.items) ? data.items : [];
+      renderOrders();
+    }
+
+    async function loadRedeemHistory() {
+      const data = await api('/player/api/redeem/history?limit=120');
+      state.redeemHistory = Array.isArray(data.items) ? data.items : [];
+      renderRedeemHistory();
+    }
+
+    async function loadRent() {
+      state.rent = await api('/player/api/rentbike/status');
+      renderRent();
+    }
+
+    async function loadMissions() {
+      const data = await api('/player/api/missions');
+      state.missions = Array.isArray(data.missions) ? data.missions : [];
+      renderMissions();
+    }
+
+    async function loadWheel() {
+      const data = await api('/player/api/wheel/state?limit=25');
+      state.wheel = data || null;
+      renderWheel();
+    }
+
+    async function loadParty() {
+      state.party = await api('/player/api/party');
+      renderParty();
+    }
+
+    async function loadPartyChat() {
+      const data = await api('/player/api/party/chat?limit=120');
+      state.party = data.party || state.party;
+      state.partyChat = Array.isArray(data.items) ? data.items : [];
+      renderParty();
+      renderPartyChat();
+    }
+
+    async function loadBounties() {
+      const data = await api('/player/api/bounty/list');
+      state.bounties = Array.isArray(data.items) ? data.items : [];
+      renderBounties();
+    }
+
+    async function loadLeaderboard() {
+      const type = $('leaderType').value;
+      const limit = $('leaderLimit').value;
+      state.leader = await api(`/player/api/leaderboard?type=${encodeURIComponent(type)}&limit=${encodeURIComponent(limit)}`);
+      renderLeaderboard();
+    }
+
+    async function loadNotifications() {
+      const data = await api('/player/api/notifications?limit=60');
+      state.notifications = Array.isArray(data.items) ? data.items : [];
+      renderNotifications();
+    }
+
+    async function loadSteamHistory() {
+      const data = await api('/player/api/linksteam/history');
+      state.steamHistory = Array.isArray(data.items) ? data.items : [];
+      renderSteamHistory();
+    }
+
+    async function loadEverything() {
+      await loadMe();
+      const tasks = [
+        ['profile', loadProfile],
+        ['server', loadServer],
+        ['prices', loadPrices],
+        ['dashboard', loadDashboard],
+        ['wallet', loadWallet],
+        ['shop', loadShop],
+        ['cart', loadCart],
+        ['orders', loadOrders],
+        ['redeemHistory', loadRedeemHistory],
+        ['rent', loadRent],
+        ['missions', loadMissions],
+        ['wheel', loadWheel],
+        ['party', loadParty],
+        ['partyChat', loadPartyChat],
+        ['bounties', loadBounties],
+        ['leaderboard', loadLeaderboard],
+        ['notifications', loadNotifications],
+        ['steamHistory', loadSteamHistory],
+      ];
+      const settled = await Promise.allSettled(tasks.map(([, fn]) => fn()));
+      const failures = settled
+        .map((result, index) => ({ result, label: tasks[index][0] }))
+        .filter((entry) => entry.result.status === 'rejected')
+        .map((entry) => entry.label);
+      return { failures };
+    }
+
+    async function refreshRealtime() {
+      await Promise.allSettled([
+        loadDashboard(),
+        loadWallet(),
+        loadCart(),
+        loadOrders(),
+        loadRent(),
+        loadMissions(),
+        loadWheel(),
+        loadPartyChat(),
+        loadNotifications(),
+      ]);
+    }
+
+    async function claimDaily() {
+      setStatus('กำลังรับรางวัลรายวัน...', 'warn');
+      try {
+        const data = await api('/player/api/daily/claim', { method: 'POST', body: {} });
+        await Promise.all([loadDashboard(), loadWallet(), loadMissions(), loadNotifications()]);
+        setStatus(text(data.message, 'รับรายวันสำเร็จ'), 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'รับรายวันไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function claimWeekly() {
+      setStatus('กำลังรับรางวัลรายสัปดาห์...', 'warn');
+      try {
+        const data = await api('/player/api/weekly/claim', { method: 'POST', body: {} });
+        await Promise.all([loadDashboard(), loadWallet(), loadMissions(), loadNotifications()]);
+        setStatus(text(data.message, 'รับรายสัปดาห์สำเร็จ'), 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'รับรายสัปดาห์ไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function redeemCode(code) {
+      setStatus('กำลังใช้โค้ด...', 'warn');
+      try {
+        const data = await api('/player/api/redeem', { method: 'POST', body: { code } });
+        await Promise.all([loadDashboard(), loadWallet(), loadRedeemHistory(), loadNotifications()]);
+        setStatus(text(data.message, 'ใช้โค้ดสำเร็จ'), 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'ใช้โค้ดไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function requestRentBike() {
+      setStatus('กำลังส่งคำขอเช่ามอไซ...', 'warn');
+      try {
+        const data = await api('/player/api/rentbike/request', { method: 'POST', body: {} });
+        await Promise.all([loadRent(), loadMissions(), loadNotifications(), loadDashboard()]);
+        setStatus(text(data.message, 'ส่งคำขอเช่าสำเร็จ'), 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'เช่ามอไซไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function sendPartyChat(message) {
+      setStatus('กำลังส่งข้อความในแชทกลุ่ม...', 'warn');
+      try {
+        await api('/player/api/party/chat/send', {
+          method: 'POST',
+          body: { message },
+        });
+        await loadPartyChat();
+        setStatus('ส่งข้อความเรียบร้อย', 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'ส่งข้อความไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function spinWheel() {
+      if (wheelSpinning) return;
+      wheelSpinning = true;
+      $('btnWheelSpin').disabled = true;
+      $('btnWheelSpinQuick').disabled = true;
+      setStatus('กำลังหมุนวงล้อสุ่มรางวัล...', 'warn');
+      try {
+        const data = await api('/player/api/wheel/spin', { method: 'POST', body: {} });
+        animateWheelSpin(data.reward?.id, data.state?.rewards || state.wheel?.rewards || []);
+        state.wheel = data.state || state.wheel;
+        renderWheel();
+        $('wheelCenterText').textContent = text(data.reward?.label, 'WIN');
+        $('wheelLastResult').textContent = text(data.message, 'หมุนวงล้อสำเร็จ');
+
+        await Promise.allSettled([
+          loadDashboard(),
+          loadWallet(),
+          loadNotifications(),
+        ]);
+        setStatus(text(data.message, 'หมุนวงล้อสำเร็จ'), 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'หมุนวงล้อไม่สำเร็จ'), 'err');
+      } finally {
+        wheelSpinning = false;
+        renderWheel();
+      }
+    }
+
+    async function addToCart(itemId, quantity) {
+      setStatus('กำลังเพิ่มสินค้าเข้าตะกร้า...', 'warn');
+      try {
+        await api('/player/api/cart/add', {
+          method: 'POST',
+          body: { itemId, quantity },
+        });
+        await Promise.all([loadCart(), loadDashboard()]);
+        setStatus('เพิ่มสินค้าลงตะกร้าสำเร็จ', 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'เพิ่มสินค้าลงตะกร้าไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function buyNow(itemId) {
+      setStatus('กำลังซื้อสินค้า...', 'warn');
+      try {
+        const data = await api('/player/api/buy', { method: 'POST', body: { itemId } });
+        await Promise.all([
+          loadDashboard(),
+          loadWallet(),
+          loadOrders(),
+          loadCart(),
+          loadNotifications(),
+        ]);
+        setStatus(`ซื้อสำเร็จ (${text(data.purchaseCode)})`, 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'ซื้อสินค้าไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function removeCart(itemId, quantity) {
+      setStatus('กำลังอัปเดตตะกร้า...', 'warn');
+      try {
+        await api('/player/api/cart/remove', {
+          method: 'POST',
+          body: { itemId, quantity },
+        });
+        await Promise.all([loadCart(), loadDashboard()]);
+        setStatus('อัปเดตตะกร้าสำเร็จ', 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'อัปเดตตะกร้าไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function clearCart() {
+      setStatus('กำลังล้างตะกร้า...', 'warn');
+      try {
+        await api('/player/api/cart/clear', { method: 'POST', body: {} });
+        await loadCart();
+        setStatus('ล้างตะกร้าสำเร็จ', 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'ล้างตะกร้าไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function checkoutCart() {
+      setStatus('กำลังชำระตะกร้า...', 'warn');
+      try {
+        const data = await api('/player/api/cart/checkout', { method: 'POST', body: {} });
+        await Promise.all([
+          loadDashboard(),
+          loadWallet(),
+          loadCart(),
+          loadOrders(),
+          loadNotifications(),
+        ]);
+        setStatus(`ชำระสำเร็จ สร้างออเดอร์ ${numberOr(data.purchases?.length, 0)} รายการ`, 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'ชำระตะกร้าไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function createBounty(targetName, amount) {
+      setStatus('กำลังสร้างค่าหัว...', 'warn');
+      try {
+        const data = await api('/player/api/bounty/add', {
+          method: 'POST',
+          body: { targetName, amount },
+        });
+        await Promise.all([loadBounties(), loadNotifications()]);
+        setStatus(`สร้างค่าหัวสำเร็จ (ID: ${text(data.bounty?.id)})`, 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'สร้างค่าหัวไม่สำเร็จ'), 'err');
+      }
+    }
+
+    async function saveSteamLink(steamId) {
+      setStatus('กำลังบันทึกการผูก Steam...', 'warn');
+      try {
+        await api('/player/api/linksteam/set', {
+          method: 'POST',
+          body: { steamId },
+        });
+        await Promise.all([loadProfile(), loadDashboard(), loadRent(), loadMissions(), loadSteamHistory()]);
+        setStatus('บันทึกการผูก Steam สำเร็จ (ชื่อในเกมจะดึงอัตโนมัติจาก SCUM log)', 'ok');
+      } catch (error) {
+        setStatus(errorMessage(error, 'บันทึกการผูก Steam ไม่สำเร็จ'), 'err');
+      }
+    }
+
+    function validateSteamId(steamId) {
+      return /^\\d{15,25}$/.test(String(steamId || '').trim());
+    }
+
+    function bindEvents() {
+      $('sidebarToggle').addEventListener('click', () => {
+        if (window.matchMedia('(max-width: 1080px)').matches) return;
+        const collapsed = !document.body.classList.contains('sidebar-collapsed');
+        applySidebarCollapsed(collapsed);
+        setSidebarCollapsedPref(collapsed);
+      });
+
+      window.addEventListener('resize', () => {
+        applySidebarCollapsed(getSidebarCollapsedPref());
+      });
+
+      $('menu').addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-tab]');
+        if (!button) return;
+        activateTab(button.dataset.tab);
+        if (button.dataset.tab === 'party') {
+          loadPartyChat().catch(() => {});
+        }
+      });
+
+      $('refreshBtn').addEventListener('click', async () => {
+        setStatus('กำลังรีเฟรชข้อมูลทั้งหมด...', 'warn');
+        try {
+          await loadEverything();
+          setStatus('รีเฟรชสำเร็จ', 'ok');
+        } catch (error) {
+          setStatus(errorMessage(error, 'รีเฟรชไม่สำเร็จ'), 'err');
+        }
+      });
+
+      $('logoutBtn').addEventListener('click', async () => {
+        try {
+          await api('/player/api/logout', { method: 'POST', body: {} });
+        } finally {
+          window.location.href = '/player/login';
+        }
+      });
+
+      $('btnDaily').addEventListener('click', claimDaily);
+      $('btnDaily2').addEventListener('click', claimDaily);
+      $('btnWeekly').addEventListener('click', claimWeekly);
+      $('btnWeekly2').addEventListener('click', claimWeekly);
+      $('btnRentBike').addEventListener('click', requestRentBike);
+      $('btnRentBike2').addEventListener('click', requestRentBike);
+      $('btnWheelSpin').addEventListener('click', spinWheel);
+      $('btnWheelSpinQuick').addEventListener('click', spinWheel);
+      $('partyRefreshBtn').addEventListener('click', async () => {
+        setStatus('กำลังรีเฟรชข้อมูลปาร์ตี้...', 'warn');
+        try {
+          await loadPartyChat();
+          setStatus('รีเฟรชปาร์ตี้สำเร็จ', 'ok');
+        } catch (error) {
+          setStatus(errorMessage(error, 'รีเฟรชปาร์ตี้ไม่สำเร็จ'), 'err');
+        }
+      });
+
+      $('partyChatForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const input = $('partyChatInput');
+        const message = String(input.value || '').trim();
+        if (!message) {
+          setStatus('กรุณาพิมพ์ข้อความก่อนส่ง', 'warn');
+          return;
+        }
+        await sendPartyChat(message);
+        input.value = '';
+      });
+
+      $('quickRedeemForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const code = $('quickRedeemInput').value.trim();
+        if (!code) {
+          setStatus('กรุณาใส่โค้ด', 'warn');
+          return;
+        }
+        await redeemCode(code);
+        $('quickRedeemInput').value = '';
+      });
+
+      $('redeemForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const code = $('redeemInput').value.trim();
+        if (!code) {
+          setStatus('กรุณาใส่โค้ด', 'warn');
+          return;
+        }
+        await redeemCode(code);
+        $('redeemInput').value = '';
+      });
+
+      $('shopSearchBtn').addEventListener('click', async () => {
+        setStatus('กำลังโหลดร้านค้า...', 'warn');
+        try {
+          await loadShop();
+          setStatus('โหลดร้านค้าสำเร็จ', 'ok');
+        } catch (error) {
+          setStatus(errorMessage(error, 'โหลดร้านค้าไม่สำเร็จ'), 'err');
+        }
+      });
+
+      $('shopGrid').addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-action][data-id]');
+        if (!button) return;
+
+        const itemId = button.dataset.id;
+        const card = button.closest('.item-card');
+        const qtyInput = card ? card.querySelector('input[data-role="qty"]') : null;
+        const quantity = Math.max(1, Math.trunc(numberOr(qtyInput?.value, 1)));
+
+        if (button.dataset.action === 'buy') {
+          if (quantity > 1) {
+            setStatus('ซื้อทันทีรองรับ 1 ชิ้น/ครั้ง หากหลายชิ้นให้ใช้ตะกร้า', 'warn');
+            return;
+          }
+          await buyNow(itemId);
+          return;
+        }
+
+        await addToCart(itemId, quantity);
+      });
+
+      $('cartBody').addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-action][data-id]');
+        if (!button) return;
+        const itemId = button.dataset.id;
+        if (button.dataset.action === 'rm1') {
+          await removeCart(itemId, 1);
+          return;
+        }
+        if (button.dataset.action === 'rmall') {
+          await removeCart(itemId, 99999);
+        }
+      });
+
+      $('clearCartBtn').addEventListener('click', clearCart);
+      $('checkoutBtn').addEventListener('click', checkoutCart);
+
+      $('bountyForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const targetName = $('bountyTargetInput').value.trim();
+        const amount = Number($('bountyAmountInput').value);
+        if (!targetName || !Number.isFinite(amount) || amount <= 0) {
+          setStatus('กรอกชื่อเป้าหมายและจำนวนให้ถูกต้อง', 'warn');
+          return;
+        }
+        await createBounty(targetName, amount);
+        $('bountyTargetInput').value = '';
+        $('bountyAmountInput').value = '';
+      });
+
+      $('leaderRefreshBtn').addEventListener('click', async () => {
+        setStatus('กำลังโหลดอันดับ...', 'warn');
+        try {
+          await loadLeaderboard();
+          setStatus('โหลดอันดับสำเร็จ', 'ok');
+        } catch (error) {
+          setStatus(errorMessage(error, 'โหลดอันดับไม่สำเร็จ'), 'err');
+        }
+      });
+      $('leaderType').addEventListener('change', () => $('leaderRefreshBtn').click());
+      $('leaderLimit').addEventListener('change', () => $('leaderRefreshBtn').click());
+
+      $('steamForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const steamId = $('steamIdInput').value.trim();
+        if (!validateSteamId(steamId)) {
+          setStatus('SteamID ต้องเป็นตัวเลข 15-25 หลัก', 'warn');
+          return;
+        }
+        await saveSteamLink(steamId);
+      });
+
+      $('verifySteamBtn').addEventListener('click', () => {
+        const steamId = $('steamIdInput').value.trim();
+        if (!steamId) {
+          setStatus('กรุณากรอก SteamID ก่อนตรวจสอบ', 'warn');
+          return;
+        }
+        if (!validateSteamId(steamId)) {
+          setStatus('SteamID ไม่ถูกต้อง (ต้องเป็นตัวเลข 15-25 หลัก)', 'err');
+          return;
+        }
+        setStatus('SteamID รูปแบบถูกต้อง พร้อมบันทึกการเชื่อม', 'ok');
+      });
+
+      $('missionBody').addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const action = button.dataset.action;
+        if (action === 'claim-daily') {
+          await claimDaily();
+          return;
+        }
+        if (action === 'claim-weekly') {
+          await claimWeekly();
+          return;
+        }
+        if (action === 'rentbike') {
+          await requestRentBike();
+        }
+      });
+    }
+
+    async function bootstrap() {
+      applySidebarCollapsed(getSidebarCollapsedPref());
+      bindEvents();
+      setStatus('กำลังโหลดข้อมูลผู้เล่น...');
+      try {
+        const boot = await loadEverything();
+        if (Array.isArray(boot?.failures) && boot.failures.length > 0) {
+          setStatus(`พร้อมใช้งานบางส่วน (โหลดไม่ครบ: ${boot.failures.join(', ')})`, 'warn');
+        } else {
+          setStatus('พร้อมใช้งาน', 'ok');
+        }
+      } catch (error) {
+        setStatus(errorMessage(error, 'โหลดข้อมูลเริ่มต้นไม่สำเร็จ'), 'err');
+      }
+
+      setInterval(() => {
+        refreshRealtime().catch(() => {});
+      }, 15000);
+    }
+
+    void bootstrap();
+  </script>
+</body>
+</html>

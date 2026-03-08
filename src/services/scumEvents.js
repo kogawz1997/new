@@ -2,8 +2,8 @@ const { EmbedBuilder } = require('discord.js');
 const { channels, killFeed: killFeedConfig = {} } = require('../config');
 const { updateStatus } = require('../store/scumStore');
 const { listBounties, claimBounty } = require('../store/bountyStore');
-const { addCoins } = require('../store/memoryStore');
-const { getLinkBySteamId } = require('../store/linkStore');
+const { creditCoins } = require('./coinService');
+const { getLinkBySteamId, updateInGameNameBySteamId } = require('../store/linkStore');
 const { addKill, addDeath } = require('../store/statsStore');
 const { recordWeaponKill } = require('../store/weaponStatsStore');
 const { publishAdminLiveUpdate } = require('./adminLiveBus');
@@ -122,7 +122,10 @@ async function sendStatusOnline(guild, payload) {
 
 async function sendPlayerJoinLeave(guild, event) {
   const channel = findNamedChannel(guild, channels.playerJoin);
-  const { playerName, type } = event;
+  const { playerName, type, steamId } = event;
+  if (steamId && playerName) {
+    updateInGameNameBySteamId(steamId, playerName);
+  }
   const text =
     type === 'join'
       ? `✅ **${playerName}** เข้าสู่เซิร์ฟเวอร์`
@@ -152,6 +155,13 @@ async function sendKillFeed(guild, event) {
   const normalizedWeapon = normalizeWeaponName(weapon);
   const weaponImageUrl = getWeaponImageUrl(normalizedWeapon);
   const resolvedHitZone = normalizeHitZone(hitZone);
+
+  if (killerSteamId && killer) {
+    updateInGameNameBySteamId(killerSteamId, killer);
+  }
+  if (victimSteamId && victim) {
+    updateInGameNameBySteamId(victimSteamId, victim);
+  }
 
   const killerNowStreak = (killStreak.get(killer) || 0) + 1;
   const victimBeforeStreak = killStreak.get(victim) || 0;
@@ -236,7 +246,17 @@ async function sendKillFeed(guild, event) {
       const killerDiscordId = killerLink?.userId || null;
 
       if (killerDiscordId) {
-        addCoins(killerDiscordId, amount);
+        await creditCoins({
+          userId: killerDiscordId,
+          amount,
+          reason: 'bounty_claim',
+          actor: 'system:scum-events',
+          meta: {
+            bountyId: match.id,
+            targetName: victim,
+            killerName: killer,
+          },
+        });
       }
 
       if (bountyChannel) {

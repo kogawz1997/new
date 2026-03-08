@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { removeCoins, getWallet } = require('../store/memoryStore');
 const { economy } = require('../config');
+const { debitCoins } = require('../services/coinService');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,12 +24,26 @@ module.exports = {
     const target = interaction.options.getUser('user', true);
     const amount = interaction.options.getInteger('amount', true);
 
-    await removeCoins(target.id, amount);
-    const wallet = await getWallet(target.id);
+    const result = await debitCoins({
+      userId: target.id,
+      amount,
+      reason: 'admin_removecoins_command',
+      actor: `discord:${interaction.user.id}`,
+      meta: {
+        source: '/removecoins',
+      },
+    });
+    if (!result.ok) {
+      if (result.reason === 'insufficient-balance') {
+        return interaction.reply(
+          `หักไม่สำเร็จ: เหรียญไม่พอ (ยอดปัจจุบัน ${economy.currencySymbol} **${Number(result.balance || 0).toLocaleString()}**)`,
+        );
+      }
+      return interaction.reply('หักเหรียญไม่สำเร็จ');
+    }
 
     await interaction.reply(
-      `หัก ${economy.currencySymbol} **${amount.toLocaleString()}** จาก ${target} แล้ว\nยอดใหม่: ${economy.currencySymbol} **${wallet.balance.toLocaleString()}**`,
+      `หัก ${economy.currencySymbol} **${amount.toLocaleString()}** จาก ${target} แล้ว\nยอดใหม่: ${economy.currencySymbol} **${Number(result.balance || 0).toLocaleString()}**`,
     );
   },
 };
-

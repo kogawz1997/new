@@ -8,10 +8,11 @@ datasource db {
 }
 
 model UserWallet {
-  userId      String  @id
-  balance     Int     @default(0)
+  userId      String         @id
+  balance     Int            @default(0)
   lastDaily   BigInt? // ms since epoch
   lastWeekly  BigInt? // ms since epoch
+  ledgers     WalletLedger[]
 }
 
 model ShopItem {
@@ -27,13 +28,191 @@ model ShopItem {
 }
 
 model Purchase {
-  id        Int      @id @default(autoincrement())
-  code      String   @unique
+  id              Int                     @id @default(autoincrement())
+  code            String                  @unique
+  userId          String
+  itemId          String
+  price           Int
+  status          String                  @default("pending")
+  statusUpdatedAt DateTime                @default(now())
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @default(now()) @updatedAt
+  statusHistory   PurchaseStatusHistory[]
+}
+
+model CartEntry {
   userId    String
   itemId    String
-  price     Int
-  status    String   @default("pending")
+  quantity  Int      @default(1)
   createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@id([userId, itemId])
+  @@index([userId, updatedAt])
+  @@index([updatedAt])
+}
+
+model WalletLedger {
+  id            Int       @id @default(autoincrement())
+  userId        String
+  delta         Int
+  balanceBefore Int
+  balanceAfter  Int
+  reason        String
+  reference     String?
+  actor         String?
+  metaJson      String?
+  createdAt     DateTime  @default(now())
+  wallet        UserWallet @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([reason, createdAt])
+}
+
+model PurchaseStatusHistory {
+  id           Int      @id @default(autoincrement())
+  purchaseCode String
+  fromStatus   String?
+  toStatus     String
+  reason       String?
+  actor        String?
+  metaJson     String?
+  createdAt    DateTime @default(now())
+  purchase     Purchase @relation(fields: [purchaseCode], references: [code], onDelete: Cascade)
+
+  @@index([purchaseCode, createdAt])
+  @@index([toStatus, createdAt])
+}
+
+model PlayerAccount {
+  discordId   String   @id
+  username    String?
+  displayName String?
+  avatarUrl   String?
+  steamId     String?  @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @default(now()) @updatedAt
+}
+
+model GuildEvent {
+  id           Int                    @id
+  name         String
+  time         String
+  reward       String
+  status       String                 @default("scheduled")
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @default(now()) @updatedAt
+  participants GuildEventParticipant[]
+
+  @@index([status, updatedAt])
+}
+
+model GuildEventParticipant {
+  eventId  Int
+  userId   String
+  joinedAt DateTime   @default(now())
+  event    GuildEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@id([eventId, userId])
+  @@index([userId, joinedAt])
+}
+
+model TicketRecord {
+  channelId String   @id
+  id        Int
+  guildId   String?
+  userId    String?
+  category  String?
+  reason    String?
+  status    String   @default("open")
+  claimedBy String?
+  createdAt DateTime @default(now())
+  closedAt  DateTime?
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([guildId, status])
+}
+
+model WeaponStat {
+  weapon          String   @id
+  kills           Int      @default(0)
+  longestDistance Float    @default(0)
+  recordHolder    String?
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  @@index([kills])
+  @@index([updatedAt])
+}
+
+model WelcomeClaim {
+  userId    String   @id
+  claimedAt DateTime @default(now())
+}
+
+model Punishment {
+  id              Int      @id @default(autoincrement())
+  userId          String
+  type            String
+  reason          String
+  staffId         String
+  durationMinutes Int?
+  createdAt       DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+model Giveaway {
+  messageId    String          @id
+  channelId    String
+  guildId      String
+  prize        String
+  winnersCount Int             @default(1)
+  endsAt       DateTime
+  entrants     GiveawayEntrant[]
+
+  @@index([guildId, endsAt])
+}
+
+model GiveawayEntrant {
+  messageId String
+  userId    String
+  joinedAt  DateTime @default(now())
+  giveaway  Giveaway @relation(fields: [messageId], references: [messageId], onDelete: Cascade)
+
+  @@id([messageId, userId])
+  @@index([userId, joinedAt])
+}
+
+model TopPanelMessage {
+  guildId   String
+  panelType String
+  channelId String
+  messageId String
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@id([guildId, panelType])
+  @@index([guildId, updatedAt])
+}
+
+model DeliveryAudit {
+  id           String   @id
+  createdAt    DateTime @default(now())
+  level        String
+  action       String
+  purchaseCode String?
+  itemId       String?
+  userId       String?
+  steamId      String?
+  attempt      Int?
+  message      String
+  metaJson     String?
+
+  @@index([createdAt])
+  @@index([level, createdAt])
+  @@index([action, createdAt])
 }
 
 model RedeemCode {
@@ -82,4 +261,49 @@ model ScumStatus {
   pingMs        Int?
   uptimeMinutes Int      @default(0)
   lastUpdated   DateTime?
+}
+
+model BotConfig {
+  id        Int      @id
+  configJson String
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model DeliveryQueueJob {
+  purchaseCode     String   @id
+  userId           String
+  itemId           String
+  itemName         String?
+  iconUrl          String?
+  gameItemId       String?
+  quantity         Int      @default(1)
+  deliveryItemsJson String?
+  itemKind         String?
+  guildId          String?
+  attempts         Int      @default(0)
+  nextAttemptAt    DateTime
+  lastError        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@index([nextAttemptAt])
+  @@index([updatedAt])
+}
+
+model DeliveryDeadLetter {
+  purchaseCode     String   @id
+  userId           String?
+  itemId           String?
+  itemName         String?
+  guildId          String?
+  attempts         Int      @default(0)
+  reason           String
+  lastError        String?
+  deliveryItemsJson String?
+  metaJson         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@index([createdAt])
+  @@index([updatedAt])
 }

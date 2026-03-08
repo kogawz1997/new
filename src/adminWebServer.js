@@ -12,11 +12,20 @@ const {
   removeCoins,
   setCoins,
   listShopItems,
+  listUserPurchases,
   addShopItem,
   deleteShopItem,
   setShopItemPrice,
   setPurchaseStatusByCode,
+  findPurchaseByCode,
+  listKnownPurchaseStatuses,
+  listPurchaseStatusHistory,
 } = require('./store/memoryStore');
+const {
+  normalizePurchaseStatus,
+  listAllowedPurchaseTransitions,
+  validatePurchaseStatusTransition,
+} = require('./services/purchaseStateMachine');
 const {
   tickets,
   claimTicket,
@@ -37,6 +46,13 @@ const { listClaimed, revokeClaim, clearClaims, replaceClaims } = require('./stor
 const { listDailyRents, listRentalVehicles } = require('./store/rentBikeStore');
 const { listTopPanels, replaceTopPanels } = require('./store/topPanelStore');
 const { listAllCarts, replaceCarts } = require('./store/cartStore');
+const {
+  upsertPlayerAccount,
+  bindPlayerSteamId,
+  unbindPlayerSteamId,
+  getPlayerDashboard,
+  listPlayerAccounts,
+} = require('./store/playerAccountStore');
 const {
   getRentBikeRuntime,
   runRentBikeMidnightReset,
@@ -67,6 +83,12 @@ const {
   listItemIconCatalog,
   resolveItemIconUrl,
 } = require('./services/itemIconService');
+const {
+  redeemCodeForUser,
+  requestRentBikeForUser,
+  createBountyForUser,
+  listActiveBountiesForUser,
+} = require('./services/playerOpsService');
 const { DATA_DIR, getPersistenceStatus } = require('./store/_persist');
 const { getWebhookMetricsSnapshot } = require('./scumWebhookServer');
 
@@ -1030,6 +1052,76 @@ function ensureRole(req, urlObj, minRole, res) {
   return auth;
 }
 
+function getForwardedDiscordId(req) {
+  const value = String(req.headers['x-forwarded-discord-id'] || '').trim();
+  if (!/^\d{15,25}$/.test(value)) return '';
+  return value;
+}
+
+function ensurePortalTokenAuth(req, urlObj, res) {
+  const auth = getAuthContext(req, urlObj);
+  if (!auth) {
+    sendJson(res, 401, { ok: false, error: 'Unauthorized' });
+    return null;
+  }
+  if (auth.mode !== 'token') {
+    sendJson(res, 403, {
+      ok: false,
+      error: 'Portal endpoint requires token auth',
+    });
+    return null;
+  }
+  const discordId = getForwardedDiscordId(req);
+  if (!discordId) {
+    sendJson(res, 400, {
+      ok: false,
+      error: 'Missing x-forwarded-discord-id header',
+    });
+    return null;
+  }
+  return {
+    auth,
+    discordId,
+    forwardedUser: String(req.headers['x-forwarded-user'] || '').trim() || 'portal',
+  };
+}
+
+function filterShopItems(rows, options = {}) {
+  const kindFilter = String(options.kind || '').trim().toLowerCase();
+  const query = String(options.q || '').trim().toLowerCase();
+  const limit = Math.max(
+    1,
+    Math.min(1000, Number(options.limit || 200)),
+  );
+  const out = [];
+
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const kind = String(row?.kind || 'item').trim().toLowerCase() === 'vip'
+      ? 'vip'
+      : 'item';
+    if (kindFilter && kindFilter !== 'all' && kind !== kindFilter) continue;
+
+    const haystack = [
+      row?.id,
+      row?.name,
+      row?.description,
+      row?.gameItemId,
+    ]
+      .map((value) => String(value || '').toLowerCase())
+      .join(' ');
+    if (query && !haystack.includes(query)) continue;
+
+    out.push({
+      ...row,
+      kind,
+      iconUrl: row?.iconUrl || resolveItemIconUrl(row),
+    });
+    if (out.length >= limit) break;
+  }
+
+  return out;
+}
+
 function requiredRoleForPostPath(pathname) {
   const ownerOnly = new Set([
     '/admin/api/config/set',
@@ -1322,8 +1414,20 @@ async function replacePrismaTablesFromSnapshot(snapshot = {}) {
   const wallets = Array.isArray(snapshot.wallets) ? snapshot.wallets : [];
   const shopItems = Array.isArray(snapshot.shopItems) ? snapshot.shopItems : [];
   const purchases = Array.isArray(snapshot.purchases) ? snapshot.purchases : [];
+  const walletLedgers = Array.isArray(snapshot.walletLedgers)
+    ? snapshot.walletLedgers
+    : [];
+  const purchaseStatusHistory = Array.isArray(snapshot.purchaseStatusHistory)
+    ? snapshot.purchaseStatusHistory
+    : [];
+  const playerAccounts = Array.isArray(snapshot.playerAccounts)
+    ? snapshot.playerAccounts
+    : [];
 
   await prisma.$transaction([
+    prisma.walletLedger.deleteMany({}),
+    prisma.purchaseStatusHistory.deleteMany({}),
+    prisma.playerAccount.deleteMany({}),
     prisma.userWallet.deleteMany({}),
     prisma.purchase.deleteMany({}),
     prisma.shopItem.deleteMany({}),
@@ -1402,6 +1506,66 @@ async function replacePrismaTablesFromSnapshot(snapshot = {}) {
         price: Number(row.price || 0),
         status: String(row.status || 'pending'),
         createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        statusUpdatedAt: row.statusUpdatedAt
+          ? new Date(row.statusUpdatedAt)
+          : row.createdAt
+            ? new Date(row.createdAt)
+            : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of walletLedgers) {
+    if (!row || typeof row !== 'object') continue;
+    const userId = String(row.userId || '').trim();
+    if (!userId) continue;
+    await prisma.walletLedger.create({
+      data: {
+        userId,
+        delta: Number(row.delta || 0),
+        balanceBefore: Number(row.balanceBefore || 0),
+        balanceAfter: Number(row.balanceAfter || 0),
+        reason: String(row.reason || 'restore'),
+        reference: row.reference ? String(row.reference) : null,
+        actor: row.actor ? String(row.actor) : null,
+        metaJson: row.metaJson ? String(row.metaJson) : null,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of purchaseStatusHistory) {
+    if (!row || typeof row !== 'object') continue;
+    const purchaseCode = String(row.purchaseCode || '').trim();
+    if (!purchaseCode) continue;
+    await prisma.purchaseStatusHistory.create({
+      data: {
+        purchaseCode,
+        fromStatus: row.fromStatus ? String(row.fromStatus) : null,
+        toStatus: String(row.toStatus || 'pending'),
+        reason: row.reason ? String(row.reason) : null,
+        actor: row.actor ? String(row.actor) : null,
+        metaJson: row.metaJson ? String(row.metaJson) : null,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of playerAccounts) {
+    if (!row || typeof row !== 'object') continue;
+    const discordId = String(row.discordId || '').trim();
+    if (!discordId) continue;
+    await prisma.playerAccount.create({
+      data: {
+        discordId,
+        username: row.username ? String(row.username) : null,
+        displayName: row.displayName ? String(row.displayName) : null,
+        avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
+        steamId: row.steamId ? String(row.steamId) : null,
+        isActive: row.isActive !== false,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
       },
     });
   }
@@ -1477,7 +1641,16 @@ function buildObservabilitySnapshot(options = {}) {
 }
 
 async function buildSnapshot(client) {
-  const [shopItems, wallets, purchases, dailyRents, rentalVehicles] = await Promise.all([
+  const [
+    shopItems,
+    wallets,
+    purchases,
+    walletLedgers,
+    purchaseStatusHistory,
+    playerAccounts,
+    dailyRents,
+    rentalVehicles,
+  ] = await Promise.all([
     listShopItems(),
     prisma.userWallet.findMany({
       orderBy: { balance: 'desc' },
@@ -1486,6 +1659,18 @@ async function buildSnapshot(client) {
     prisma.purchase.findMany({
       orderBy: { createdAt: 'desc' },
       take: 500,
+    }),
+    prisma.walletLedger.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 2000,
+    }),
+    prisma.purchaseStatusHistory.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 2000,
+    }),
+    prisma.playerAccount.findMany({
+      orderBy: { updatedAt: 'desc' },
+      take: 1000,
     }),
     listDailyRents(1000),
     listRentalVehicles(1000),
@@ -1510,8 +1695,11 @@ async function buildSnapshot(client) {
     status: getStatus(),
     persistence: getPersistenceStatus(),
     wallets: wallets.map(normalizeWallet),
+    walletLedgers,
     shopItems: shopItemsWithIcon,
     purchases,
+    purchaseStatusHistory,
+    playerAccounts,
     tickets: normalizeTickets(),
     bounties: listBounties(),
     events: normalizeEvents(),
@@ -1581,7 +1769,13 @@ async function handlePostAction(client, pathname, body, res, auth) {
     const userId = requiredString(body, 'userId');
     const balance = asInt(body.balance);
     if (!userId || balance == null) return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
-    const newBalance = await setCoins(userId, balance);
+    const newBalance = await setCoins(userId, balance, {
+      reason: 'admin_wallet_set',
+      actor: `admin-web:${auth?.user || 'unknown'}`,
+      meta: {
+        role: auth?.role || 'unknown',
+      },
+    });
     queueLeaderboardRefreshForAllGuilds(client, 'admin-wallet-set');
     return sendJson(res, 200, { ok: true, data: { userId, balance: newBalance } });
   }
@@ -1590,7 +1784,13 @@ async function handlePostAction(client, pathname, body, res, auth) {
     const userId = requiredString(body, 'userId');
     const amount = asInt(body.amount);
     if (!userId || amount == null) return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
-    const newBalance = await addCoins(userId, amount);
+    const newBalance = await addCoins(userId, amount, {
+      reason: 'admin_wallet_add',
+      actor: `admin-web:${auth?.user || 'unknown'}`,
+      meta: {
+        role: auth?.role || 'unknown',
+      },
+    });
     queueLeaderboardRefreshForAllGuilds(client, 'admin-wallet-add');
     return sendJson(res, 200, { ok: true, data: { userId, balance: newBalance } });
   }
@@ -1599,7 +1799,13 @@ async function handlePostAction(client, pathname, body, res, auth) {
     const userId = requiredString(body, 'userId');
     const amount = asInt(body.amount);
     if (!userId || amount == null) return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
-    const newBalance = await removeCoins(userId, amount);
+    const newBalance = await removeCoins(userId, amount, {
+      reason: 'admin_wallet_remove',
+      actor: `admin-web:${auth?.user || 'unknown'}`,
+      meta: {
+        role: auth?.role || 'unknown',
+      },
+    });
     queueLeaderboardRefreshForAllGuilds(client, 'admin-wallet-remove');
     return sendJson(res, 200, { ok: true, data: { userId, balance: newBalance } });
   }
@@ -1668,9 +1874,48 @@ async function handlePostAction(client, pathname, body, res, auth) {
     const code = requiredString(body, 'code');
     const status = requiredString(body, 'status');
     if (!code || !status) return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
-    const updated = await setPurchaseStatusByCode(code, status);
+    const purchase = await findPurchaseByCode(code);
+    if (!purchase) return sendJson(res, 404, { ok: false, error: 'Resource not found' });
+
+    const targetStatus = normalizePurchaseStatus(status);
+    const currentStatus = normalizePurchaseStatus(purchase.status);
+    const validation = validatePurchaseStatusTransition(currentStatus, targetStatus, {
+      force: body?.force === true,
+    });
+    if (!validation.ok) {
+      return sendJson(res, 400, {
+        ok: false,
+        error: 'Invalid purchase status transition',
+        data: {
+          code,
+          currentStatus,
+          targetStatus,
+          reason: validation.reason,
+          allowedTransitions: listAllowedPurchaseTransitions(currentStatus),
+          knownStatuses: listKnownPurchaseStatuses(),
+        },
+      });
+    }
+
+    const updated = await setPurchaseStatusByCode(code, targetStatus, {
+      force: body?.force === true,
+      actor: `admin-web:${auth?.user || 'unknown'}`,
+      reason: requiredString(body, 'reason') || 'admin-manual-status-update',
+      meta: {
+        role: auth?.role || 'unknown',
+      },
+      recordIfSame: body?.recordIfSame === true,
+    });
     if (!updated) return sendJson(res, 404, { ok: false, error: 'Resource not found' });
-    return sendJson(res, 200, { ok: true, data: updated });
+
+    const history = await listPurchaseStatusHistory(updated.code, 20);
+    return sendJson(res, 200, {
+      ok: true,
+      data: {
+        purchase: updated,
+        history,
+      },
+    });
   }
 
   if (pathname === '/admin/api/ticket/claim') {
@@ -1766,6 +2011,50 @@ async function handlePostAction(client, pathname, body, res, auth) {
     const removed = steamId ? unlinkBySteamId(steamId) : unlinkByUserId(userId);
     if (!removed) return sendJson(res, 404, { ok: false, error: 'Resource not found' });
     return sendJson(res, 200, { ok: true, data: removed });
+  }
+
+  if (pathname === '/admin/api/player/account/upsert') {
+    const userId = requiredString(body, 'userId');
+    if (!userId) {
+      return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
+    }
+    const result = await upsertPlayerAccount({
+      discordId: userId,
+      username: requiredString(body, 'username'),
+      displayName: requiredString(body, 'displayName'),
+      avatarUrl: requiredString(body, 'avatarUrl'),
+      steamId: requiredString(body, 'steamId'),
+      isActive: body?.isActive !== false,
+    });
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'Request failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.data });
+  }
+
+  if (pathname === '/admin/api/player/steam/bind') {
+    const userId = requiredString(body, 'userId');
+    const steamId = requiredString(body, 'steamId');
+    if (!userId || !steamId) {
+      return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
+    }
+    const result = await bindPlayerSteamId(userId, steamId);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'Request failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.data });
+  }
+
+  if (pathname === '/admin/api/player/steam/unbind') {
+    const userId = requiredString(body, 'userId');
+    if (!userId) {
+      return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
+    }
+    const result = await unbindPlayerSteamId(userId);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'Request failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.data });
   }
 
   if (pathname === '/admin/api/vip/set') {
@@ -2031,8 +2320,17 @@ async function handlePostAction(client, pathname, body, res, auth) {
           backup: loaded.file,
           counts: {
             wallets: Array.isArray(snapshot.wallets) ? snapshot.wallets.length : 0,
+            walletLedgers: Array.isArray(snapshot.walletLedgers)
+              ? snapshot.walletLedgers.length
+              : 0,
             shopItems: Array.isArray(snapshot.shopItems) ? snapshot.shopItems.length : 0,
             purchases: Array.isArray(snapshot.purchases) ? snapshot.purchases.length : 0,
+            purchaseStatusHistory: Array.isArray(snapshot.purchaseStatusHistory)
+              ? snapshot.purchaseStatusHistory.length
+              : 0,
+            playerAccounts: Array.isArray(snapshot.playerAccounts)
+              ? snapshot.playerAccounts.length
+              : 0,
             tickets: Array.isArray(snapshot.tickets) ? snapshot.tickets.length : 0,
             bounties: Array.isArray(snapshot.bounties) ? snapshot.bounties.length : 0,
             events: Array.isArray(snapshot.events) ? snapshot.events.length : 0,
@@ -2432,6 +2730,127 @@ function startAdminWebServer(client) {
           });
         }
 
+        if (req.method === 'GET' && pathname === '/admin/api/shop/list') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const q = String(urlObj.searchParams.get('q') || '').trim();
+          const kind = String(urlObj.searchParams.get('kind') || 'all').trim();
+          const limit = asInt(urlObj.searchParams.get('limit'), 200) || 200;
+          const rows = await listShopItems();
+          const items = filterShopItems(rows, { q, kind, limit });
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              query: q,
+              kind,
+              total: items.length,
+              items,
+            },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/purchase/list') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const userId = requiredString(urlObj.searchParams.get('userId'));
+          if (!userId) {
+            return sendJson(res, 400, {
+              ok: false,
+              error: 'Invalid request payload',
+            });
+          }
+          const limit = Math.max(
+            1,
+            Math.min(1000, asInt(urlObj.searchParams.get('limit'), 100) || 100),
+          );
+          const statusFilter = normalizePurchaseStatus(
+            String(urlObj.searchParams.get('status') || ''),
+          );
+          const rows = await listUserPurchases(userId);
+          const items = rows
+            .filter((row) => !statusFilter || normalizePurchaseStatus(row.status) === statusFilter)
+            .slice(0, limit);
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              userId,
+              total: items.length,
+              items,
+            },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/portal/player/dashboard') {
+          const portal = ensurePortalTokenAuth(req, urlObj, res);
+          if (!portal) return undefined;
+          const dashboard = await getPlayerDashboard(portal.discordId);
+          if (!dashboard.ok) {
+            return sendJson(res, 400, {
+              ok: false,
+              error: dashboard.reason || 'Cannot build player dashboard',
+            });
+          }
+          return sendJson(res, 200, {
+            ok: true,
+            data: dashboard.data,
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/portal/shop/list') {
+          const portal = ensurePortalTokenAuth(req, urlObj, res);
+          if (!portal) return undefined;
+          const q = String(urlObj.searchParams.get('q') || '').trim();
+          const kind = String(urlObj.searchParams.get('kind') || 'all').trim();
+          const limit = asInt(urlObj.searchParams.get('limit'), 120) || 120;
+          const rows = await listShopItems();
+          const items = filterShopItems(rows, { q, kind, limit });
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              query: q,
+              kind,
+              total: items.length,
+              items,
+            },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/portal/purchase/list') {
+          const portal = ensurePortalTokenAuth(req, urlObj, res);
+          if (!portal) return undefined;
+          const limit = Math.max(
+            1,
+            Math.min(200, asInt(urlObj.searchParams.get('limit'), 40) || 40),
+          );
+          const statusFilter = normalizePurchaseStatus(
+            String(urlObj.searchParams.get('status') || ''),
+          );
+          const rows = await listUserPurchases(portal.discordId);
+          const items = rows
+            .filter((row) => !statusFilter || normalizePurchaseStatus(row.status) === statusFilter)
+            .slice(0, limit);
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              userId: portal.discordId,
+              total: items.length,
+              items,
+            },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/portal/bounty/list') {
+          const portal = ensurePortalTokenAuth(req, urlObj, res);
+          if (!portal) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              total: listActiveBountiesForUser().length,
+              items: listActiveBountiesForUser(),
+            },
+          });
+        }
+
         if (req.method === 'GET' && pathname === '/admin/api/delivery/dead-letter') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
@@ -2439,6 +2858,58 @@ function startAdminWebServer(client) {
           return sendJson(res, 200, {
             ok: true,
             data: listDeliveryDeadLetters(limit),
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/purchase/statuses') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const current = normalizePurchaseStatus(
+            String(urlObj.searchParams.get('current') || ''),
+          );
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              knownStatuses: listKnownPurchaseStatuses(),
+              currentStatus: current || null,
+              allowedTransitions: current
+                ? listAllowedPurchaseTransitions(current)
+                : [],
+            },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/player/accounts') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const limit = asInt(urlObj.searchParams.get('limit'), 200) || 200;
+          const rows = await listPlayerAccounts(limit);
+          return sendJson(res, 200, {
+            ok: true,
+            data: rows,
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/player/dashboard') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const userId = requiredString(urlObj.searchParams.get('userId'));
+          if (!userId) {
+            return sendJson(res, 400, {
+              ok: false,
+              error: 'Invalid request payload',
+            });
+          }
+          const dashboard = await getPlayerDashboard(userId);
+          if (!dashboard.ok) {
+            return sendJson(res, 400, {
+              ok: false,
+              error: dashboard.reason || 'Cannot build player dashboard',
+            });
+          }
+          return sendJson(res, 200, {
+            ok: true,
+            data: dashboard.data,
           });
         }
 
@@ -2455,6 +2926,91 @@ function startAdminWebServer(client) {
           return sendJson(res, 200, {
             ok: true,
             data: listBackupFiles(),
+          });
+        }
+
+        if (req.method === 'POST' && pathname === '/admin/api/portal/redeem') {
+          const portal = ensurePortalTokenAuth(req, urlObj, res);
+          if (!portal) return undefined;
+          const body = await readJsonBody(req);
+          const code = requiredString(body, 'code');
+          if (!code) {
+            return sendJson(res, 400, {
+              ok: false,
+              error: 'Invalid request payload',
+            });
+          }
+
+          const result = await redeemCodeForUser({
+            userId: portal.discordId,
+            code,
+            actor: `portal:${portal.forwardedUser}`,
+            source: 'player-portal',
+          });
+          if (!result.ok) {
+            const status =
+              result.reason === 'code-not-found' || result.reason === 'code-already-used'
+                ? 400
+                : 500;
+            return sendJson(res, status, {
+              ok: false,
+              error: result.reason,
+              data: result,
+            });
+          }
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              ...result,
+              message:
+                result.type === 'coins'
+                  ? `ใช้โค้ดสำเร็จ ได้รับ ${result.amount} เหรียญ`
+                  : 'ใช้โค้ดสำเร็จ',
+            },
+          });
+        }
+
+        if (req.method === 'POST' && pathname === '/admin/api/portal/rentbike/request') {
+          const portal = ensurePortalTokenAuth(req, urlObj, res);
+          if (!portal) return undefined;
+          const body = await readJsonBody(req).catch(() => ({}));
+          const result = await requestRentBikeForUser({
+            discordUserId: portal.discordId,
+            guildId: requiredString(body, 'guildId') || null,
+          });
+          if (!result.ok) {
+            return sendJson(res, 400, {
+              ok: false,
+              error: result.reason || 'rentbike-failed',
+              data: result,
+            });
+          }
+          return sendJson(res, 200, {
+            ok: true,
+            data: result,
+          });
+        }
+
+        if (req.method === 'POST' && pathname === '/admin/api/portal/bounty/add') {
+          const portal = ensurePortalTokenAuth(req, urlObj, res);
+          if (!portal) return undefined;
+          const body = await readJsonBody(req);
+          const targetName = requiredString(body, 'targetName');
+          const amount = Number(body?.amount);
+          const result = createBountyForUser({
+            createdBy: portal.discordId,
+            targetName,
+            amount,
+          });
+          if (!result.ok) {
+            return sendJson(res, 400, {
+              ok: false,
+              error: result.reason || 'bounty-create-failed',
+            });
+          }
+          return sendJson(res, 200, {
+            ok: true,
+            data: result,
           });
         }
 

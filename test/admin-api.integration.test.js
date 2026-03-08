@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { once } = require('node:events');
+const { createPurchase, listShopItems } = require('../src/store/memoryStore');
 
 const adminWebServerPath = path.resolve(__dirname, '../src/adminWebServer.js');
 
@@ -161,6 +162,43 @@ test('admin API auth + validation integration flow', async (t) => {
   assert.equal(deadLetterList.res.status, 200);
   assert.equal(deadLetterList.data.ok, true);
   assert.ok(Array.isArray(deadLetterList.data.data));
+
+  const purchaseStatuses = await request('/admin/api/purchase/statuses', 'GET', null, cookie);
+  assert.equal(purchaseStatuses.res.status, 200);
+  assert.equal(purchaseStatuses.data.ok, true);
+  assert.ok(Array.isArray(purchaseStatuses.data.data.knownStatuses));
+  assert.ok(purchaseStatuses.data.data.knownStatuses.includes('pending'));
+
+  const initialShopItems = await listShopItems();
+  assert.ok(initialShopItems.length > 0);
+  const purchaseForTransition = await createPurchase(
+    'admin-api-transition-user',
+    initialShopItems[0],
+  );
+
+  const statusDelivered = await request('/admin/api/purchase/status', 'POST', {
+    code: purchaseForTransition.code,
+    status: 'delivered',
+    reason: 'integration-test-transition',
+  }, cookie);
+  assert.equal(statusDelivered.res.status, 200);
+  assert.equal(statusDelivered.data.ok, true);
+  assert.equal(
+    String(statusDelivered.data.data?.purchase?.status || ''),
+    'delivered',
+  );
+
+  const invalidTransition = await request('/admin/api/purchase/status', 'POST', {
+    code: purchaseForTransition.code,
+    status: 'pending',
+    reason: 'integration-test-invalid-transition',
+  }, cookie);
+  assert.equal(invalidTransition.res.status, 400);
+  assert.equal(invalidTransition.data.ok, false);
+  assert.equal(
+    String(invalidTransition.data?.data?.reason || ''),
+    'transition-not-allowed',
+  );
 
   const probeUserId = '999999999999999991';
   const walletSetA = await request('/admin/api/wallet/set', 'POST', {

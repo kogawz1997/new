@@ -7,6 +7,7 @@ const rconDeliveryPath = path.join(rootDir, 'src', 'services', 'rconDelivery.js'
 const depPaths = {
   config: path.join(rootDir, 'src', 'config.js'),
   persist: path.join(rootDir, 'src', 'store', '_persist.js'),
+  prisma: path.join(rootDir, 'src', 'prisma.js'),
   linkStore: path.join(rootDir, 'src', 'store', 'linkStore.js'),
   deliveryAuditStore: path.join(rootDir, 'src', 'store', 'deliveryAuditStore.js'),
   memoryStore: path.join(rootDir, 'src', 'store', 'memoryStore.js'),
@@ -28,6 +29,7 @@ function loadRconDeliveryWithMocks(mocks) {
   delete require.cache[rconDeliveryPath];
   installMock(depPaths.config, mocks.config);
   installMock(depPaths.persist, mocks.persist);
+  installMock(depPaths.prisma, mocks.prisma);
   installMock(depPaths.linkStore, mocks.linkStore);
   installMock(depPaths.deliveryAuditStore, mocks.deliveryAuditStore);
   installMock(depPaths.memoryStore, mocks.memoryStore);
@@ -71,6 +73,22 @@ function makeTestContext(overrides = {}) {
     persist: {
       loadJson: () => null,
       saveJsonDebounced: () => () => {},
+    },
+    prisma: {
+      prisma: {
+        deliveryQueueJob: {
+          findMany: async () => [],
+          upsert: async () => null,
+          create: async () => null,
+          deleteMany: async () => ({ count: 0 }),
+        },
+        deliveryDeadLetter: {
+          findMany: async () => [],
+          upsert: async () => null,
+          create: async () => null,
+          deleteMany: async () => ({ count: 0 }),
+        },
+      },
     },
     linkStore: {
       getLinkByUserId: (userId) => links.get(String(userId)) || null,

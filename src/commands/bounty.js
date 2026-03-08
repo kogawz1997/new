@@ -4,8 +4,12 @@ const {
   EmbedBuilder,
   MessageFlags,
 } = require('discord.js');
-const { createBounty, listBounties, cancelBounty } = require('../store/bountyStore');
 const { economy } = require('../config');
+const {
+  createBountyForUser,
+  listActiveBountiesForUser,
+  cancelBountyForUser,
+} = require('../services/playerOpsService');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -54,33 +58,39 @@ module.exports = {
 };
 
 async function handleAdd(interaction) {
-  const target = interaction.options.getString('target', true);
+  const targetName = interaction.options.getString('target', true);
   const amount = interaction.options.getInteger('amount', true);
 
-  const b = createBounty({
-    targetName: target,
+  const result = createBountyForUser({
+    targetName,
     amount,
     createdBy: interaction.user.id,
   });
+  if (!result.ok) {
+    return interaction.reply({
+      content: 'ข้อมูลค่าหัวไม่ถูกต้อง',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
   await interaction.reply(
-    `ตั้งค่าหัวให้ **${target}** จำนวน ${economy.currencySymbol} **${amount.toLocaleString()}** แล้ว (ID: **${b.id}**)`,
+    `ตั้งค่าหัวให้ **${targetName}** จำนวน ${economy.currencySymbol} **${amount.toLocaleString()}** แล้ว (ID: **${result.bounty.id}**)`,
   );
 }
 
 async function handleList(interaction) {
-  const list = listBounties().filter((b) => b.status === 'active');
+  const list = listActiveBountiesForUser();
   if (list.length === 0) {
     return interaction.reply('ตอนนี้ยังไม่มีค่าหัวที่เปิดใช้งาน');
   }
 
   const lines = list.map(
-    (b) =>
-      `รหัส: **${b.id}** | เป้าหมาย: **${b.targetName}** | ค่าหัว: ${economy.currencySymbol} **${b.amount.toLocaleString()}**`,
+    (bounty) =>
+      `รหัส: **${bounty.id}** | เป้าหมาย: **${bounty.targetName}** | ค่าหัว: ${economy.currencySymbol} **${Number(bounty.amount || 0).toLocaleString()}**`,
   );
 
   const embed = new EmbedBuilder()
-    .setTitle('🎯 ค่าหัวทั้งหมด')
+    .setTitle('ค่าหัวทั้งหมด')
     .setDescription(lines.join('\n'))
     .setColor(0xff4500);
 
@@ -92,24 +102,33 @@ async function handleCancel(interaction) {
   const isStaff = interaction.memberPermissions.has(
     PermissionFlagsBits.ManageGuild,
   );
-  const res = cancelBounty(id, interaction.user.id, isStaff);
 
-  if (!res.ok) {
-    if (res.reason === 'not-found') {
+  const result = cancelBountyForUser({
+    id,
+    requesterId: interaction.user.id,
+    isStaff,
+  });
+
+  if (!result.ok) {
+    if (result.reason === 'not-found') {
       return interaction.reply({
         content: 'ไม่พบค่าหัวที่ต้องการ',
         flags: MessageFlags.Ephemeral,
       });
     }
-    if (res.reason === 'forbidden') {
+    if (result.reason === 'forbidden') {
       return interaction.reply({
         content: 'คุณไม่มีสิทธิ์ยกเลิกค่าหัวนี้ (ต้องเป็นคนตั้งหรือทีมงาน)',
         flags: MessageFlags.Ephemeral,
       });
     }
+    return interaction.reply({
+      content: 'ยกเลิกค่าหัวไม่สำเร็จ',
+      flags: MessageFlags.Ephemeral,
+    });
   }
 
   await interaction.reply(
-    `ยกเลิกค่าหัวรหัส **${id}** เรียบร้อยแล้ว (เป้าหมาย: **${res.bounty.targetName}**)`,
+    `ยกเลิกค่าหัวรหัส **${id}** เรียบร้อยแล้ว (เป้าหมาย: **${result.bounty.targetName}**)`,
   );
 }

@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
-const { setCoins, getWallet } = require('../store/memoryStore');
 const { economy } = require('../config');
+const { setCoinsExact } = require('../services/coinService');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,12 +24,21 @@ module.exports = {
     const target = interaction.options.getUser('user', true);
     const amount = interaction.options.getInteger('amount', true);
 
-    await setCoins(target.id, amount);
-    const wallet = await getWallet(target.id);
+    const result = await setCoinsExact({
+      userId: target.id,
+      amount,
+      reason: 'admin_setcoins_command',
+      actor: `discord:${interaction.user.id}`,
+      meta: {
+        source: '/setcoins',
+      },
+    });
+    if (!result.ok) {
+      return interaction.reply('ตั้งยอดเหรียญไม่สำเร็จ');
+    }
 
     await interaction.reply(
-      `ตั้งยอดเหรียญของ ${target} เป็น ${economy.currencySymbol} **${wallet.balance.toLocaleString()}** แล้ว`,
+      `ตั้งยอดเหรียญของ ${target} เป็น ${economy.currencySymbol} **${Number(result.balance || 0).toLocaleString()}** แล้ว`,
     );
   },
 };
-

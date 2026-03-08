@@ -1,10 +1,10 @@
 const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const {
   findPurchaseByCode,
-  addCoins,
   setPurchaseStatusByCode,
 } = require('../store/memoryStore');
 const { economy } = require('../config');
+const { creditCoins } = require('../services/coinService');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -42,8 +42,36 @@ module.exports = {
       });
     }
 
-    await setPurchaseStatusByCode(code, 'refunded');
-    await addCoins(purchase.userId, purchase.price);
+    try {
+      await setPurchaseStatusByCode(code, 'refunded', {
+        actor: `discord:${interaction.user.id}`,
+        reason: 'refund-command',
+        meta: {
+          purchaseCode: purchase.code,
+        },
+      });
+    } catch (error) {
+      return interaction.reply({
+        content: `ไม่สามารถเปลี่ยนสถานะได้: ${error.message}`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
+    const refundResult = await creditCoins({
+      userId: purchase.userId,
+      amount: purchase.price,
+      reason: 'refund_credit',
+      reference: purchase.code,
+      actor: `discord:${interaction.user.id}`,
+      meta: {
+        source: 'refund-command',
+      },
+    });
+    if (!refundResult.ok) {
+      return interaction.reply({
+        content: 'คืนเหรียญไม่สำเร็จ แม้เปลี่ยนสถานะรายการเป็น refunded แล้ว กรุณาตรวจสอบ ledger และเติมเหรียญด้วยมือ',
+        flags: MessageFlags.Ephemeral,
+      });
+    }
 
     await interaction.reply(
       `คืนเงินรายการ \`${purchase.code}\` เรียบร้อยแล้ว เป็นจำนวน ${economy.currencySymbol} **${purchase.price.toLocaleString()}**`,

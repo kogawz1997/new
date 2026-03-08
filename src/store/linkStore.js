@@ -24,6 +24,14 @@ function normalizeSteamId(steamId) {
   return s;
 }
 
+function normalizeInGameName(value) {
+  const text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!text) return null;
+  return text.slice(0, 64);
+}
+
 function normalizeLinkRow(row) {
   const steamId = normalizeSteamId(row?.steamId);
   const userId = String(row?.userId || '').trim();
@@ -31,7 +39,7 @@ function normalizeLinkRow(row) {
   return {
     steamId,
     userId,
-    inGameName: row?.inGameName ? String(row.inGameName) : null,
+    inGameName: normalizeInGameName(row?.inGameName),
     linkedAt: row?.linkedAt ? new Date(row.linkedAt) : new Date(),
   };
 }
@@ -170,6 +178,7 @@ function setLink({ steamId, userId, inGameName }) {
   if (!s) return { ok: false, reason: 'invalid-steamid' };
   const u = String(userId || '').trim();
   if (!u) return { ok: false, reason: 'invalid-userid' };
+  const normalizedInGameName = normalizeInGameName(inGameName);
 
   mutationVersion += 1;
 
@@ -185,7 +194,7 @@ function setLink({ steamId, userId, inGameName }) {
   const linkedAt = new Date();
   links.set(s, {
     userId: u,
-    inGameName: inGameName ? String(inGameName) : null,
+    inGameName: normalizedInGameName,
     linkedAt,
   });
   scheduleSave();
@@ -199,14 +208,26 @@ function setLink({ steamId, userId, inGameName }) {
         where: { steamId: s },
         update: {
           userId: u,
-          inGameName: inGameName ? String(inGameName) : null,
+          inGameName: normalizedInGameName,
           linkedAt,
         },
         create: {
           steamId: s,
           userId: u,
-          inGameName: inGameName ? String(inGameName) : null,
+          inGameName: normalizedInGameName,
           linkedAt,
+        },
+      });
+      await prisma.playerAccount.upsert({
+        where: { discordId: u },
+        update: {
+          steamId: s,
+          isActive: true,
+        },
+        create: {
+          discordId: u,
+          steamId: s,
+          isActive: true,
         },
       });
     },
@@ -214,6 +235,54 @@ function setLink({ steamId, userId, inGameName }) {
   );
 
   return { ok: true, steamId: s, userId: u };
+}
+
+function updateInGameNameBySteamId(steamId, inGameName) {
+  const s = normalizeSteamId(steamId);
+  const normalizedInGameName = normalizeInGameName(inGameName);
+  if (!s || !normalizedInGameName) {
+    return { ok: false, reason: 'invalid-input' };
+  }
+
+  const existing = links.get(s);
+  if (!existing) {
+    return { ok: false, reason: 'link-not-found' };
+  }
+
+  if (existing.inGameName === normalizedInGameName) {
+    return {
+      ok: true,
+      steamId: s,
+      inGameName: normalizedInGameName,
+      changed: false,
+    };
+  }
+
+  mutationVersion += 1;
+  links.set(s, {
+    ...existing,
+    inGameName: normalizedInGameName,
+  });
+  scheduleSave();
+
+  queueDbWrite(
+    async () => {
+      await prisma.link.updateMany({
+        where: { steamId: s },
+        data: {
+          inGameName: normalizedInGameName,
+        },
+      });
+    },
+    'update-in-game-name',
+  );
+
+  return {
+    ok: true,
+    steamId: s,
+    inGameName: normalizedInGameName,
+    changed: true,
+  };
 }
 
 function unlinkByUserId(userId) {
@@ -233,6 +302,18 @@ function unlinkByUserId(userId) {
   queueDbWrite(
     async () => {
       await prisma.link.deleteMany({ where: { steamId: removed.steamId } });
+      await prisma.playerAccount.upsert({
+        where: { discordId: removed.userId },
+        update: {
+          steamId: null,
+          isActive: true,
+        },
+        create: {
+          discordId: removed.userId,
+          steamId: null,
+          isActive: true,
+        },
+      });
     },
     'unlink-user',
   );
@@ -251,6 +332,18 @@ function unlinkBySteamId(steamId) {
   queueDbWrite(
     async () => {
       await prisma.link.deleteMany({ where: { steamId: s } });
+      await prisma.playerAccount.upsert({
+        where: { discordId: value.userId },
+        update: {
+          steamId: null,
+          isActive: true,
+        },
+        create: {
+          discordId: value.userId,
+          steamId: null,
+          isActive: true,
+        },
+      });
     },
     'unlink-steam',
   );
@@ -282,6 +375,11 @@ function replaceLinks(nextLinks = []) {
   queueDbWrite(
     async () => {
       await prisma.link.deleteMany();
+      await prisma.playerAccount.updateMany({
+        data: {
+          steamId: null,
+        },
+      });
       for (const [steamId, value] of links.entries()) {
         await prisma.link.create({
           data: {
@@ -289,6 +387,18 @@ function replaceLinks(nextLinks = []) {
             userId: value.userId,
             inGameName: value.inGameName || null,
             linkedAt: value.linkedAt || new Date(),
+          },
+        });
+        await prisma.playerAccount.upsert({
+          where: { discordId: value.userId },
+          update: {
+            steamId,
+            isActive: true,
+          },
+          create: {
+            discordId: value.userId,
+            steamId,
+            isActive: true,
           },
         });
       }
@@ -305,6 +415,7 @@ module.exports = {
   getLinkBySteamId,
   getLinkByUserId,
   setLink,
+  updateInGameNameBySteamId,
   unlinkByUserId,
   unlinkBySteamId,
   listLinks,

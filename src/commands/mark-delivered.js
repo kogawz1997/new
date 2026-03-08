@@ -30,11 +30,23 @@ module.exports = {
       });
     }
 
-    await setPurchaseStatusByCode(code, 'delivered');
+    try {
+      await setPurchaseStatusByCode(code, 'delivered', {
+        actor: `discord:${interaction.user.id}`,
+        reason: 'mark-delivered-command',
+        meta: {
+          purchaseCode: purchase.code,
+        },
+      });
+    } catch (error) {
+      return interaction.reply({
+        content: `ไม่สามารถเปลี่ยนสถานะได้: ${error.message}`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
 
     await interaction.reply(
       `ตั้งสถานะรายการ \`${purchase.code}\` เป็น **แจกแล้ว (delivered)** เรียบร้อย`,
     );
   },
 };
-

@@ -1,6 +1,11 @@
 ﻿const crypto = require('node:crypto');
 const { economy, shop } = require('../config');
 const { prisma } = require('../prisma');
+const {
+  normalizePurchaseStatus,
+  validatePurchaseStatusTransition,
+  listKnownPurchaseStatuses,
+} = require('../services/purchaseStateMachine');
 
 function normalizeShopKind(value, fallback = 'item') {
   const raw = String(value || fallback)
@@ -14,6 +19,12 @@ function normalizeShopQuantity(value, fallback = 1) {
   const n = Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.max(1, Math.trunc(n));
+}
+
+function normalizeInteger(value, fallback = 0) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.trunc(n);
 }
 
 function normalizeOptionalText(value) {
@@ -37,6 +48,25 @@ function parseJsonArray(value) {
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
+  }
+}
+
+function toMetaJson(value) {
+  if (value == null) return null;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return JSON.stringify({ raw: String(value) });
+  }
+}
+
+function parseMetaJson(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return { raw };
   }
 }
 
@@ -132,6 +162,70 @@ function toShopItemView(rawItem) {
   };
 }
 
+function toWalletLedgerView(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    meta: parseMetaJson(row.metaJson),
+  };
+}
+
+function toPurchaseStatusHistoryView(row) {
+  if (!row) return null;
+  return {
+    ...row,
+    meta: parseMetaJson(row.metaJson),
+  };
+}
+
+async function mutateWalletWithLedger(userId, updater, options = {}) {
+  const id = String(userId || '').trim();
+  if (!id) {
+    throw new Error('userId is required');
+  }
+
+  return prisma.$transaction(async (tx) => {
+    let wallet = await tx.userWallet.findUnique({ where: { userId: id } });
+    if (!wallet) {
+      wallet = await tx.userWallet.create({
+        data: { userId: id, balance: 0, lastDaily: null, lastWeekly: null },
+      });
+    }
+
+    const before = Number(wallet.balance || 0);
+    const mutation = updater(wallet) || {};
+    const nextBalance = Math.max(0, normalizeInteger(mutation.balance, before));
+
+    const data = {
+      ...(mutation.data && typeof mutation.data === 'object' ? mutation.data : {}),
+      balance: nextBalance,
+    };
+
+    const updated = await tx.userWallet.update({
+      where: { userId: id },
+      data,
+    });
+
+    const delta = nextBalance - before;
+    if (delta !== 0 || options.recordZeroDelta === true) {
+      await tx.walletLedger.create({
+        data: {
+          userId: id,
+          delta,
+          balanceBefore: before,
+          balanceAfter: nextBalance,
+          reason: String(options.reason || 'wallet_update'),
+          reference: normalizeOptionalText(options.reference),
+          actor: normalizeOptionalText(options.actor),
+          metaJson: toMetaJson(options.meta),
+        },
+      });
+    }
+
+    return updated;
+  });
+}
+
 async function getWallet(userId) {
   const id = String(userId);
   let wallet = await prisma.userWallet.findUnique({ where: { userId: id } });
@@ -143,36 +237,57 @@ async function getWallet(userId) {
   return wallet;
 }
 
-async function addCoins(userId, amount) {
-  const id = String(userId);
-  const wallet = await getWallet(id);
-  const newBalance = wallet.balance + Number(amount || 0);
-  const updated = await prisma.userWallet.update({
-    where: { userId: id },
-    data: { balance: newBalance },
-  });
+async function addCoins(userId, amount, options = {}) {
+  const delta = Math.max(0, normalizeInteger(amount, 0));
+  const updated = await mutateWalletWithLedger(
+    userId,
+    (wallet) => ({
+      balance: Number(wallet.balance || 0) + delta,
+    }),
+    {
+      reason: options.reason || 'wallet_add',
+      reference: options.reference,
+      actor: options.actor,
+      meta: options.meta,
+      recordZeroDelta: options.recordZeroDelta,
+    },
+  );
   return updated.balance;
 }
 
-async function removeCoins(userId, amount) {
-  const id = String(userId);
-  const wallet = await getWallet(id);
-  const newBalance = Math.max(0, wallet.balance - Number(amount || 0));
-  const updated = await prisma.userWallet.update({
-    where: { userId: id },
-    data: { balance: newBalance },
-  });
+async function removeCoins(userId, amount, options = {}) {
+  const delta = Math.max(0, normalizeInteger(amount, 0));
+  const updated = await mutateWalletWithLedger(
+    userId,
+    (wallet) => ({
+      balance: Math.max(0, Number(wallet.balance || 0) - delta),
+    }),
+    {
+      reason: options.reason || 'wallet_remove',
+      reference: options.reference,
+      actor: options.actor,
+      meta: options.meta,
+      recordZeroDelta: options.recordZeroDelta,
+    },
+  );
   return updated.balance;
 }
 
-async function setCoins(userId, amount) {
-  const id = String(userId);
-  const wallet = await getWallet(id);
-  const newBalance = Math.max(0, Number(amount || 0));
-  const updated = await prisma.userWallet.update({
-    where: { userId: wallet.userId },
-    data: { balance: newBalance },
-  });
+async function setCoins(userId, amount, options = {}) {
+  const targetBalance = Math.max(0, normalizeInteger(amount, 0));
+  const updated = await mutateWalletWithLedger(
+    userId,
+    () => ({
+      balance: targetBalance,
+    }),
+    {
+      reason: options.reason || 'wallet_set',
+      reference: options.reference,
+      actor: options.actor,
+      meta: options.meta,
+      recordZeroDelta: options.recordZeroDelta,
+    },
+  );
   return updated.balance;
 }
 
@@ -187,16 +302,23 @@ async function canClaimDaily(userId) {
 }
 
 async function claimDaily(userId) {
-  const id = String(userId);
-  const wallet = await getWallet(id);
+  const reward = Math.max(0, normalizeInteger(economy.dailyReward, 0));
   const now = BigInt(Date.now());
-  const updated = await prisma.userWallet.update({
-    where: { userId: wallet.userId },
-    data: {
-      lastDaily: now,
-      balance: wallet.balance + economy.dailyReward,
+  const updated = await mutateWalletWithLedger(
+    userId,
+    (wallet) => ({
+      balance: Number(wallet.balance || 0) + reward,
+      data: {
+        lastDaily: now,
+      },
+    }),
+    {
+      reason: 'daily_claim',
+      actor: 'system',
+      meta: { reward },
+      recordZeroDelta: true,
     },
-  });
+  );
   return updated.balance;
 }
 
@@ -211,16 +333,23 @@ async function canClaimWeekly(userId) {
 }
 
 async function claimWeekly(userId) {
-  const id = String(userId);
-  const wallet = await getWallet(id);
+  const reward = Math.max(0, normalizeInteger(economy.weeklyReward, 0));
   const now = BigInt(Date.now());
-  const updated = await prisma.userWallet.update({
-    where: { userId: wallet.userId },
-    data: {
-      lastWeekly: now,
-      balance: wallet.balance + economy.weeklyReward,
+  const updated = await mutateWalletWithLedger(
+    userId,
+    (wallet) => ({
+      balance: Number(wallet.balance || 0) + reward,
+      data: {
+        lastWeekly: now,
+      },
+    }),
+    {
+      reason: 'weekly_claim',
+      actor: 'system',
+      meta: { reward },
+      recordZeroDelta: true,
     },
-  });
+  );
   return updated.balance;
 }
 
@@ -366,6 +495,7 @@ async function createPurchase(userId, item) {
     itemId: String(item.id),
     price: Number(item.price || 0),
     status: 'pending',
+    statusUpdatedAt: new Date(),
   };
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -374,11 +504,26 @@ async function createPurchase(userId, item) {
         ? `P${crypto.randomUUID()}`
         : `P${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
     try {
-      return await prisma.purchase.create({
-        data: {
-          code,
-          ...payload,
-        },
+      return await prisma.$transaction(async (tx) => {
+        const created = await tx.purchase.create({
+          data: {
+            code,
+            ...payload,
+          },
+        });
+
+        await tx.purchaseStatusHistory.create({
+          data: {
+            purchaseCode: created.code,
+            fromStatus: null,
+            toStatus: 'pending',
+            reason: 'purchase-created',
+            actor: 'system',
+            metaJson: null,
+          },
+        });
+
+        return created;
       });
     } catch (error) {
       if (error?.code !== 'P2002') throw error;
@@ -392,12 +537,51 @@ async function findPurchaseByCode(code) {
   return prisma.purchase.findUnique({ where: { code: String(code) } });
 }
 
-async function setPurchaseStatusByCode(code, status) {
+async function setPurchaseStatusByCode(code, status, options = {}) {
   const p = await findPurchaseByCode(code);
   if (!p) return null;
-  return prisma.purchase.update({
-    where: { code: p.code },
-    data: { status: String(status) },
+
+  const currentStatus = normalizePurchaseStatus(p.status);
+  const nextStatus = normalizePurchaseStatus(status);
+  const validation = validatePurchaseStatusTransition(currentStatus, nextStatus, {
+    force: options.force === true,
+  });
+
+  if (!validation.ok) {
+    const allowed = Array.isArray(validation.allowed)
+      ? validation.allowed.join(', ')
+      : 'n/a';
+    throw new Error(
+      `Invalid purchase status transition: ${currentStatus || '<empty>'} -> ${nextStatus || '<empty>'} (reason=${validation.reason}; allowed=${allowed})`,
+    );
+  }
+
+  if (currentStatus === nextStatus && options.recordIfSame !== true) {
+    return p;
+  }
+
+  const now = new Date();
+  return prisma.$transaction(async (tx) => {
+    const updated = await tx.purchase.update({
+      where: { code: p.code },
+      data: {
+        status: nextStatus,
+        statusUpdatedAt: now,
+      },
+    });
+
+    await tx.purchaseStatusHistory.create({
+      data: {
+        purchaseCode: p.code,
+        fromStatus: currentStatus || null,
+        toStatus: nextStatus,
+        reason: normalizeOptionalText(options.reason),
+        actor: normalizeOptionalText(options.actor),
+        metaJson: toMetaJson(options.meta),
+      },
+    });
+
+    return updated;
   });
 }
 
@@ -413,6 +597,26 @@ async function listTopWallets(limit = 10) {
     orderBy: { balance: 'desc' },
     take: Math.max(1, Number(limit || 10)),
   });
+}
+
+async function listWalletLedger(userId, limit = 100) {
+  const max = Math.max(1, Math.min(1000, normalizeInteger(limit, 100)));
+  const rows = await prisma.walletLedger.findMany({
+    where: { userId: String(userId) },
+    orderBy: { createdAt: 'desc' },
+    take: max,
+  });
+  return rows.map((row) => toWalletLedgerView(row));
+}
+
+async function listPurchaseStatusHistory(code, limit = 100) {
+  const max = Math.max(1, Math.min(1000, normalizeInteger(limit, 100)));
+  const rows = await prisma.purchaseStatusHistory.findMany({
+    where: { purchaseCode: String(code) },
+    orderBy: { createdAt: 'desc' },
+    take: max,
+  });
+  return rows.map((row) => toPurchaseStatusHistoryView(row));
 }
 
 module.exports = {
@@ -435,4 +639,7 @@ module.exports = {
   setPurchaseStatusByCode,
   listUserPurchases,
   listTopWallets,
+  listWalletLedger,
+  listPurchaseStatusHistory,
+  listKnownPurchaseStatuses,
 };

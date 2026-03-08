@@ -1,8 +1,13 @@
 const crypto = require('node:crypto');
 const { loadJson, saveJsonDebounced } = require('./_persist');
+const { prisma } = require('../prisma');
 
 const MAX_AUDIT_ITEMS = 3000;
 const audits = [];
+
+let mutationVersion = 0;
+let dbWriteQueue = Promise.resolve();
+let initPromise = null;
 
 function normalizeAudit(entry) {
   if (!entry || typeof entry !== 'object') return null;
@@ -26,21 +31,162 @@ function normalizeAudit(entry) {
   };
 }
 
-const persisted = loadJson('delivery-audit.json', null);
-if (persisted?.audits && Array.isArray(persisted.audits)) {
-  for (const item of persisted.audits) {
-    const normalized = normalizeAudit(item);
-    if (!normalized) continue;
-    audits.push(normalized);
-  }
-}
-
 const scheduleSave = saveJsonDebounced('delivery-audit.json', () => ({
   audits: audits.map((a) => ({
     ...a,
     createdAt: a.createdAt ? new Date(a.createdAt).toISOString() : null,
   })),
 }));
+
+function queueDbWrite(work, label) {
+  dbWriteQueue = dbWriteQueue
+    .then(async () => {
+      await work();
+    })
+    .catch((error) => {
+      console.error(`[deliveryAuditStore] prisma ${label} failed:`, error.message);
+    });
+  return dbWriteQueue;
+}
+
+async function trimOldAuditRows() {
+  const total = await prisma.deliveryAudit.count();
+  if (total <= MAX_AUDIT_ITEMS) return;
+  const overflow = total - MAX_AUDIT_ITEMS;
+  const rows = await prisma.deliveryAudit.findMany({
+    orderBy: { createdAt: 'asc' },
+    take: overflow,
+  });
+  if (rows.length === 0) return;
+  await prisma.deliveryAudit.deleteMany({
+    where: {
+      id: {
+        in: rows.map((row) => row.id),
+      },
+    },
+  });
+}
+
+async function hydrateFromPrisma() {
+  const startVersion = mutationVersion;
+  try {
+    const rows = await prisma.deliveryAudit.findMany({
+      orderBy: { createdAt: 'asc' },
+      take: MAX_AUDIT_ITEMS,
+    });
+    if (rows.length === 0) {
+      if (audits.length > 0) {
+        await queueDbWrite(
+          async () => {
+            for (const entry of audits) {
+              await prisma.deliveryAudit.upsert({
+                where: { id: entry.id },
+                update: {
+                  createdAt: entry.createdAt,
+                  level: entry.level,
+                  action: entry.action,
+                  purchaseCode: entry.purchaseCode,
+                  itemId: entry.itemId,
+                  userId: entry.userId,
+                  steamId: entry.steamId,
+                  attempt: entry.attempt,
+                  message: entry.message,
+                  metaJson: entry.meta ? JSON.stringify(entry.meta) : null,
+                },
+                create: {
+                  id: entry.id,
+                  createdAt: entry.createdAt,
+                  level: entry.level,
+                  action: entry.action,
+                  purchaseCode: entry.purchaseCode,
+                  itemId: entry.itemId,
+                  userId: entry.userId,
+                  steamId: entry.steamId,
+                  attempt: entry.attempt,
+                  message: entry.message,
+                  metaJson: entry.meta ? JSON.stringify(entry.meta) : null,
+                },
+              });
+            }
+            await trimOldAuditRows();
+          },
+          'backfill',
+        );
+      }
+      return;
+    }
+
+    const hydrated = [];
+    for (const row of rows) {
+      const parsed = normalizeAudit({
+        id: row.id,
+        createdAt: row.createdAt,
+        level: row.level,
+        action: row.action,
+        purchaseCode: row.purchaseCode,
+        itemId: row.itemId,
+        userId: row.userId,
+        steamId: row.steamId,
+        attempt: row.attempt,
+        message: row.message,
+        meta: row.metaJson ? JSON.parse(row.metaJson) : null,
+      });
+      if (!parsed) continue;
+      hydrated.push(parsed);
+    }
+
+    if (startVersion === mutationVersion) {
+      audits.length = 0;
+      for (const entry of hydrated) {
+        audits.push(entry);
+      }
+      if (audits.length > MAX_AUDIT_ITEMS) {
+        audits.splice(0, audits.length - MAX_AUDIT_ITEMS);
+      }
+      scheduleSave();
+      return;
+    }
+
+    const existingIds = new Set(audits.map((entry) => entry.id));
+    for (const entry of hydrated) {
+      if (!existingIds.has(entry.id)) {
+        audits.push(entry);
+      }
+    }
+    audits.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    if (audits.length > MAX_AUDIT_ITEMS) {
+      audits.splice(0, audits.length - MAX_AUDIT_ITEMS);
+    }
+    scheduleSave();
+  } catch (error) {
+    console.error('[deliveryAuditStore] failed to hydrate from prisma:', error.message);
+  }
+}
+
+function loadLegacySnapshot() {
+  const persisted = loadJson('delivery-audit.json', null);
+  if (!persisted?.audits || !Array.isArray(persisted.audits)) return;
+  for (const item of persisted.audits) {
+    const normalized = normalizeAudit(item);
+    if (!normalized) continue;
+    audits.push(normalized);
+  }
+  if (audits.length > MAX_AUDIT_ITEMS) {
+    audits.splice(0, audits.length - MAX_AUDIT_ITEMS);
+  }
+}
+
+function initDeliveryAuditStore() {
+  if (!initPromise) {
+    loadLegacySnapshot();
+    initPromise = hydrateFromPrisma();
+  }
+  return initPromise;
+}
+
+function flushDeliveryAuditStoreWrites() {
+  return dbWriteQueue;
+}
 
 function addDeliveryAudit(entry) {
   const normalized = normalizeAudit(entry);
@@ -49,7 +195,43 @@ function addDeliveryAudit(entry) {
   if (audits.length > MAX_AUDIT_ITEMS) {
     audits.splice(0, audits.length - MAX_AUDIT_ITEMS);
   }
+  mutationVersion += 1;
   scheduleSave();
+
+  queueDbWrite(
+    async () => {
+      await prisma.deliveryAudit.upsert({
+        where: { id: normalized.id },
+        update: {
+          createdAt: normalized.createdAt,
+          level: normalized.level,
+          action: normalized.action,
+          purchaseCode: normalized.purchaseCode,
+          itemId: normalized.itemId,
+          userId: normalized.userId,
+          steamId: normalized.steamId,
+          attempt: normalized.attempt,
+          message: normalized.message,
+          metaJson: normalized.meta ? JSON.stringify(normalized.meta) : null,
+        },
+        create: {
+          id: normalized.id,
+          createdAt: normalized.createdAt,
+          level: normalized.level,
+          action: normalized.action,
+          purchaseCode: normalized.purchaseCode,
+          itemId: normalized.itemId,
+          userId: normalized.userId,
+          steamId: normalized.steamId,
+          attempt: normalized.attempt,
+          message: normalized.message,
+          metaJson: normalized.meta ? JSON.stringify(normalized.meta) : null,
+        },
+      });
+      await trimOldAuditRows();
+    },
+    'add-delivery-audit',
+  );
   return normalized;
 }
 
@@ -64,11 +246,19 @@ function listDeliveryAudit(limit = 500) {
 
 function clearDeliveryAudit() {
   audits.length = 0;
+  mutationVersion += 1;
   scheduleSave();
+  queueDbWrite(
+    async () => {
+      await prisma.deliveryAudit.deleteMany({});
+    },
+    'clear-delivery-audit',
+  );
 }
 
 function replaceDeliveryAudit(nextAudits = []) {
   audits.length = 0;
+  mutationVersion += 1;
   for (const row of Array.isArray(nextAudits) ? nextAudits : []) {
     const normalized = normalizeAudit(row);
     if (!normalized) continue;
@@ -78,12 +268,40 @@ function replaceDeliveryAudit(nextAudits = []) {
     audits.splice(0, audits.length - MAX_AUDIT_ITEMS);
   }
   scheduleSave();
+
+  queueDbWrite(
+    async () => {
+      await prisma.deliveryAudit.deleteMany({});
+      for (const entry of audits) {
+        await prisma.deliveryAudit.create({
+          data: {
+            id: entry.id,
+            createdAt: entry.createdAt,
+            level: entry.level,
+            action: entry.action,
+            purchaseCode: entry.purchaseCode,
+            itemId: entry.itemId,
+            userId: entry.userId,
+            steamId: entry.steamId,
+            attempt: entry.attempt,
+            message: entry.message,
+            metaJson: entry.meta ? JSON.stringify(entry.meta) : null,
+          },
+        });
+      }
+    },
+    'replace-delivery-audit',
+  );
   return audits.length;
 }
+
+initDeliveryAuditStore();
 
 module.exports = {
   addDeliveryAudit,
   listDeliveryAudit,
   clearDeliveryAudit,
   replaceDeliveryAudit,
+  initDeliveryAuditStore,
+  flushDeliveryAuditStoreWrites,
 };

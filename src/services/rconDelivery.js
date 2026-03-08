@@ -2,6 +2,7 @@
 
 const config = require('../config');
 const { loadJson, saveJsonDebounced } = require('../store/_persist');
+const { prisma } = require('../prisma');
 const { getLinkByUserId } = require('../store/linkStore');
 const { addDeliveryAudit, listDeliveryAudit } = require('../store/deliveryAuditStore');
 const {
@@ -24,6 +25,9 @@ const deliveryOutcomes = []; // rolling attempt outcomes
 let lastQueuePressureAlertAt = 0;
 let lastFailRateAlertAt = 0;
 let lastQueueStuckAlertAt = 0;
+let mutationVersion = 0;
+let dbWriteQueue = Promise.resolve();
+let initPromise = null;
 
 const METRICS_WINDOW_MS = Math.max(
   60 * 1000,
@@ -317,6 +321,107 @@ function isRecentlyDelivered(purchaseCode, now = Date.now()) {
   return now - ts <= IDEMPOTENCY_SUCCESS_WINDOW_MS;
 }
 
+function queueDbWrite(work, label) {
+  dbWriteQueue = dbWriteQueue
+    .then(async () => {
+      await work();
+    })
+    .catch((error) => {
+      console.error(`[delivery] prisma ${label} failed:`, error.message);
+    });
+  return dbWriteQueue;
+}
+
+function flushDeliveryPersistenceWrites() {
+  return dbWriteQueue;
+}
+
+function parseJsonObject(raw, fallback) {
+  try {
+    if (raw == null || raw === '') return fallback;
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
+
+function toPrismaQueueJobData(job) {
+  const normalized = normalizeJob(job);
+  if (!normalized) return null;
+  return {
+    purchaseCode: normalized.purchaseCode,
+    userId: normalized.userId,
+    itemId: normalized.itemId,
+    itemName: normalized.itemName || null,
+    iconUrl: normalized.iconUrl || null,
+    gameItemId: normalized.gameItemId || null,
+    quantity: normalized.quantity,
+    deliveryItemsJson: JSON.stringify(normalized.deliveryItems || []),
+    itemKind: normalized.itemKind || null,
+    guildId: normalized.guildId || null,
+    attempts: normalized.attempts,
+    nextAttemptAt: new Date(normalized.nextAttemptAt),
+    lastError: normalized.lastError || null,
+    createdAt: normalized.createdAt ? new Date(normalized.createdAt) : new Date(),
+  };
+}
+
+function fromPrismaQueueJobRow(row) {
+  if (!row) return null;
+  return normalizeJob({
+    purchaseCode: row.purchaseCode,
+    userId: row.userId,
+    itemId: row.itemId,
+    itemName: row.itemName,
+    iconUrl: row.iconUrl,
+    gameItemId: row.gameItemId,
+    quantity: row.quantity,
+    deliveryItems: parseJsonObject(row.deliveryItemsJson, []),
+    itemKind: row.itemKind,
+    guildId: row.guildId,
+    attempts: row.attempts,
+    nextAttemptAt: row.nextAttemptAt ? new Date(row.nextAttemptAt).getTime() : Date.now(),
+    lastError: row.lastError,
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : nowIso(),
+    updatedAt: row.updatedAt ? new Date(row.updatedAt).toISOString() : nowIso(),
+  });
+}
+
+function toPrismaDeadLetterData(rowInput) {
+  const row = normalizeDeadLetter(rowInput);
+  if (!row) return null;
+  return {
+    purchaseCode: row.purchaseCode,
+    userId: row.userId || null,
+    itemId: row.itemId || null,
+    itemName: row.itemName || null,
+    guildId: row.guildId || null,
+    attempts: row.attempts,
+    reason: row.reason,
+    lastError: row.lastError || null,
+    deliveryItemsJson: JSON.stringify(row.deliveryItems || []),
+    metaJson: row.meta ? JSON.stringify(row.meta) : null,
+    createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+  };
+}
+
+function fromPrismaDeadLetterRow(row) {
+  if (!row) return null;
+  return normalizeDeadLetter({
+    purchaseCode: row.purchaseCode,
+    userId: row.userId,
+    itemId: row.itemId,
+    itemName: row.itemName,
+    guildId: row.guildId,
+    attempts: row.attempts,
+    reason: row.reason,
+    lastError: row.lastError,
+    deliveryItems: parseJsonObject(row.deliveryItemsJson, []),
+    meta: parseJsonObject(row.metaJson, null),
+    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : nowIso(),
+  });
+}
+
 const persisted = loadJson('delivery-queue.json', null);
 if (persisted?.jobs && Array.isArray(persisted.jobs)) {
   for (const rawJob of persisted.jobs) {
@@ -343,6 +448,110 @@ const scheduleDeadLetterSave = saveJsonDebounced('delivery-dead-letter.json', ()
   deadLetters: Array.from(deadLetters.values()).map((row) => ({ ...row })),
 }));
 
+async function hydrateDeliveryPersistenceFromPrisma() {
+  const startVersion = mutationVersion;
+  try {
+    const [queueRows, deadLetterRows] = await Promise.all([
+      prisma.deliveryQueueJob.findMany({
+        orderBy: [{ nextAttemptAt: 'asc' }, { createdAt: 'asc' }],
+      }),
+      prisma.deliveryDeadLetter.findMany({
+        orderBy: [{ createdAt: 'desc' }],
+      }),
+    ]);
+
+    if (queueRows.length === 0) {
+      if (jobs.size > 0) {
+        queueDbWrite(
+          async () => {
+            for (const job of jobs.values()) {
+              const data = toPrismaQueueJobData(job);
+              if (!data) continue;
+              await prisma.deliveryQueueJob.upsert({
+                where: { purchaseCode: data.purchaseCode },
+                update: data,
+                create: data,
+              });
+            }
+          },
+          'backfill-queue',
+        );
+      }
+    } else {
+      const hydratedQueue = new Map();
+      for (const row of queueRows) {
+        const normalized = fromPrismaQueueJobRow(row);
+        if (!normalized) continue;
+        hydratedQueue.set(normalized.purchaseCode, normalized);
+      }
+      if (startVersion === mutationVersion) {
+        jobs.clear();
+        for (const [purchaseCode, job] of hydratedQueue.entries()) {
+          jobs.set(purchaseCode, job);
+        }
+        scheduleQueueSave();
+      } else {
+        for (const [purchaseCode, job] of hydratedQueue.entries()) {
+          if (jobs.has(purchaseCode)) continue;
+          jobs.set(purchaseCode, job);
+        }
+      }
+    }
+
+    if (deadLetterRows.length === 0) {
+      if (deadLetters.size > 0) {
+        queueDbWrite(
+          async () => {
+            for (const row of deadLetters.values()) {
+              const data = toPrismaDeadLetterData(row);
+              if (!data) continue;
+              await prisma.deliveryDeadLetter.upsert({
+                where: { purchaseCode: data.purchaseCode },
+                update: data,
+                create: data,
+              });
+            }
+          },
+          'backfill-dead-letter',
+        );
+      }
+    } else {
+      const hydratedDeadLetters = new Map();
+      for (const row of deadLetterRows) {
+        const normalized = fromPrismaDeadLetterRow(row);
+        if (!normalized) continue;
+        hydratedDeadLetters.set(normalized.purchaseCode, normalized);
+      }
+      if (startVersion === mutationVersion) {
+        deadLetters.clear();
+        for (const [purchaseCode, row] of hydratedDeadLetters.entries()) {
+          deadLetters.set(purchaseCode, row);
+        }
+        scheduleDeadLetterSave();
+      } else {
+        for (const [purchaseCode, row] of hydratedDeadLetters.entries()) {
+          if (deadLetters.has(purchaseCode)) continue;
+          deadLetters.set(purchaseCode, row);
+        }
+      }
+    }
+    maybeAlertQueuePressure();
+    maybeAlertQueueStuck();
+    kickWorker(20);
+  } catch (error) {
+    console.error('[delivery] failed to hydrate queue/dead-letter from prisma:', error.message);
+  }
+}
+
+function initDeliveryPersistenceStore() {
+  if (!initPromise) {
+    initPromise = hydrateDeliveryPersistenceFromPrisma();
+  }
+  return initPromise;
+}
+
+initDeliveryPersistenceStore();
+
 function listDeliveryQueue(limit = 500) {
   const max = Math.max(1, Number(limit || 500));
   return Array.from(jobs.values())
@@ -353,6 +562,7 @@ function listDeliveryQueue(limit = 500) {
 }
 
 function replaceDeliveryQueue(nextJobs = []) {
+  mutationVersion += 1;
   jobs.clear();
   for (const row of Array.isArray(nextJobs) ? nextJobs : []) {
     const normalized = normalizeJob(row);
@@ -360,6 +570,17 @@ function replaceDeliveryQueue(nextJobs = []) {
     jobs.set(normalized.purchaseCode, normalized);
   }
   scheduleQueueSave();
+  queueDbWrite(
+    async () => {
+      await prisma.deliveryQueueJob.deleteMany();
+      for (const job of jobs.values()) {
+        const data = toPrismaQueueJobData(job);
+        if (!data) continue;
+        await prisma.deliveryQueueJob.create({ data });
+      }
+    },
+    'replace-queue',
+  );
   maybeAlertQueuePressure();
   maybeAlertQueueStuck();
   publishQueueLiveUpdate('restore', null);
@@ -377,6 +598,7 @@ function listDeliveryDeadLetters(limit = 500) {
 }
 
 function replaceDeliveryDeadLetters(nextRows = []) {
+  mutationVersion += 1;
   deadLetters.clear();
   for (const row of Array.isArray(nextRows) ? nextRows : []) {
     const normalized = normalizeDeadLetter(row);
@@ -384,6 +606,17 @@ function replaceDeliveryDeadLetters(nextRows = []) {
     deadLetters.set(normalized.purchaseCode, normalized);
   }
   scheduleDeadLetterSave();
+  queueDbWrite(
+    async () => {
+      await prisma.deliveryDeadLetter.deleteMany();
+      for (const row of deadLetters.values()) {
+        const data = toPrismaDeadLetterData(row);
+        if (!data) continue;
+        await prisma.deliveryDeadLetter.create({ data });
+      }
+    },
+    'replace-dead-letter',
+  );
   return deadLetters.size;
 }
 
@@ -392,8 +625,15 @@ function removeDeliveryDeadLetter(purchaseCode) {
   if (!code) return null;
   const existing = deadLetters.get(code);
   if (!existing) return null;
+  mutationVersion += 1;
   deadLetters.delete(code);
   scheduleDeadLetterSave();
+  queueDbWrite(
+    async () => {
+      await prisma.deliveryDeadLetter.deleteMany({ where: { purchaseCode: code } });
+    },
+    'delete-dead-letter',
+  );
   return { ...existing };
 }
 
@@ -415,8 +655,21 @@ function addDeliveryDeadLetter(job, reason, meta = null) {
     meta,
   });
   if (!row) return null;
+  mutationVersion += 1;
   deadLetters.set(row.purchaseCode, row);
   scheduleDeadLetterSave();
+  queueDbWrite(
+    async () => {
+      const data = toPrismaDeadLetterData(row);
+      if (!data) return;
+      await prisma.deliveryDeadLetter.upsert({
+        where: { purchaseCode: data.purchaseCode },
+        update: data,
+        create: data,
+      });
+    },
+    'upsert-dead-letter',
+  );
   publishAdminLiveUpdate('delivery-dead-letter', {
     action: 'add',
     purchaseCode: row.purchaseCode,
@@ -588,15 +841,37 @@ function queueAudit(level, action, job, message, meta = null) {
 function setJob(job) {
   const normalized = normalizeJob(job);
   if (!normalized) return;
+  mutationVersion += 1;
   jobs.set(normalized.purchaseCode, normalized);
   scheduleQueueSave();
+  queueDbWrite(
+    async () => {
+      const data = toPrismaQueueJobData(normalized);
+      if (!data) return;
+      await prisma.deliveryQueueJob.upsert({
+        where: { purchaseCode: data.purchaseCode },
+        update: data,
+        create: data,
+      });
+    },
+    'upsert-queue-job',
+  );
   maybeAlertQueuePressure();
   maybeAlertQueueStuck();
 }
 
 function removeJob(purchaseCode) {
-  jobs.delete(String(purchaseCode));
+  const code = String(purchaseCode || '').trim();
+  if (!code) return;
+  mutationVersion += 1;
+  jobs.delete(code);
   scheduleQueueSave();
+  queueDbWrite(
+    async () => {
+      await prisma.deliveryQueueJob.deleteMany({ where: { purchaseCode: code } });
+    },
+    'delete-queue-job',
+  );
 }
 
 function calcDelayMs(attempts) {
@@ -660,7 +935,14 @@ async function handleRetry(job, reason) {
       failedStatus: settings.failedStatus,
       maxRetries: settings.maxRetries,
     });
-    await setPurchaseStatusByCode(job.purchaseCode, settings.failedStatus).catch(() => null);
+    await setPurchaseStatusByCode(job.purchaseCode, settings.failedStatus, {
+      actor: 'delivery-worker',
+      reason: 'delivery-max-retries',
+      meta: {
+        maxRetries: settings.maxRetries,
+        attempts: nextAttempt,
+      },
+    }).catch(() => null);
     removeJob(job.purchaseCode);
     await trySendDiscordAudit(
       job,
@@ -737,7 +1019,10 @@ async function processJob(job) {
         job,
         `No auto-delivery command for itemId=${purchase.itemId}`,
       );
-      await setPurchaseStatusByCode(purchaseCode, 'pending').catch(() => null);
+      await setPurchaseStatusByCode(purchaseCode, 'pending', {
+        actor: 'delivery-worker',
+        reason: 'missing-item-commands',
+      }).catch(() => null);
       removeJob(purchaseCode);
       return;
     }
@@ -788,11 +1073,16 @@ async function processJob(job) {
       }
     }
 
-    await setPurchaseStatusByCode(purchaseCode, 'delivered').catch(() => null);
+    await setPurchaseStatusByCode(purchaseCode, 'delivered', {
+      actor: 'delivery-worker',
+      reason: 'delivery-success',
+      meta: {
+        deliveryItems: resolvedDeliveryItems,
+      },
+    }).catch(() => null);
     removeJob(purchaseCode);
     markRecentlyDelivered(purchaseCode);
-    deadLetters.delete(purchaseCode);
-    scheduleDeadLetterSave();
+    removeDeliveryDeadLetter(purchaseCode);
     recordDeliveryOutcome(true, { purchaseCode: purchaseCode });
     queueAudit('info', 'success', job, 'Auto delivery complete', {
       steamId: link.steamId,
@@ -911,21 +1201,36 @@ async function enqueuePurchaseDelivery(purchase, context = {}) {
     return { queued: false, reason: 'terminal-status' };
   }
   const shopItem = await getShopItemById(purchase.itemId).catch(() => null);
-  const itemName = String(shopItem?.name || purchase.itemId);
-  const deliveryItems = normalizeDeliveryItemsForJob(shopItem?.deliveryItems, {
+  const itemName = String(context.itemName || shopItem?.name || purchase.itemId);
+  const fallbackDeliveryItems = normalizeDeliveryItemsForJob(shopItem?.deliveryItems, {
     gameItemId: shopItem?.gameItemId || purchase.itemId,
     quantity: shopItem?.quantity || 1,
     iconUrl: shopItem?.iconUrl || null,
   });
-  const primary = deliveryItems[0] || {
-    gameItemId: String(shopItem?.gameItemId || purchase.itemId),
-    quantity: Math.max(1, Math.trunc(Number(shopItem?.quantity || 1))),
-    iconUrl: String(shopItem?.iconUrl || '').trim() || null,
+  const hasCustomDeliveryContext =
+    Array.isArray(context.deliveryItems)
+    || context.gameItemId != null
+    || context.quantity != null
+    || context.iconUrl != null;
+  const contextDeliveryItems = hasCustomDeliveryContext
+    ? normalizeDeliveryItemsForJob(context.deliveryItems, {
+      gameItemId: context.gameItemId || shopItem?.gameItemId || purchase.itemId,
+      quantity: context.quantity || shopItem?.quantity || 1,
+      iconUrl: context.iconUrl || shopItem?.iconUrl || null,
+    })
+    : [];
+  const resolvedDeliveryItems =
+    contextDeliveryItems.length > 0 ? contextDeliveryItems : fallbackDeliveryItems;
+  const primary = resolvedDeliveryItems[0] || {
+    gameItemId: String(context.gameItemId || shopItem?.gameItemId || purchase.itemId),
+    quantity: Math.max(1, Math.trunc(Number(context.quantity || shopItem?.quantity || 1))),
+    iconUrl: String(context.iconUrl || shopItem?.iconUrl || '').trim() || null,
   };
   const gameItemId = String(primary.gameItemId || purchase.itemId);
   const quantity = Math.max(1, Math.trunc(Number(primary.quantity || 1)));
-  const iconUrl = primary.iconUrl || resolveItemIconUrl(shopItem || purchase.itemId);
-  const itemKind = String(shopItem?.kind || 'item');
+  const iconUrl =
+    primary.iconUrl || resolveItemIconUrl(context.itemId || shopItem || purchase.itemId);
+  const itemKind = String(context.itemKind || shopItem?.kind || 'item');
 
   if (!settings.enabled) {
     addDeliveryAudit({
@@ -934,7 +1239,14 @@ async function enqueuePurchaseDelivery(purchase, context = {}) {
       purchaseCode: String(purchase.code),
       itemId: String(purchase.itemId),
       userId: String(purchase.userId),
-      meta: { itemName, iconUrl, gameItemId, quantity, itemKind, deliveryItems },
+      meta: {
+        itemName,
+        iconUrl,
+        gameItemId,
+        quantity,
+        itemKind,
+        deliveryItems: resolvedDeliveryItems,
+      },
       message: 'Auto delivery is disabled',
     });
     return { queued: false, reason: 'delivery-disabled' };
@@ -948,13 +1260,20 @@ async function enqueuePurchaseDelivery(purchase, context = {}) {
       purchaseCode: String(purchase.code),
       itemId: String(purchase.itemId),
       userId: String(purchase.userId),
-      meta: { itemName, iconUrl, gameItemId, quantity, itemKind, deliveryItems },
+      meta: {
+        itemName,
+        iconUrl,
+        gameItemId,
+        quantity,
+        itemKind,
+        deliveryItems: resolvedDeliveryItems,
+      },
       message: 'Item has no configured auto-delivery command',
     });
     return { queued: false, reason: 'item-not-configured' };
   }
 
-  if (deliveryItems.length > 1 && !commandSupportsBundleItems(commands)) {
+  if (resolvedDeliveryItems.length > 1 && !commandSupportsBundleItems(commands)) {
     addDeliveryAudit({
       level: 'warn',
       action: 'skip-invalid-template',
@@ -962,7 +1281,7 @@ async function enqueuePurchaseDelivery(purchase, context = {}) {
       itemId: String(purchase.itemId),
       userId: String(purchase.userId),
       meta: {
-        deliveryItems,
+        deliveryItems: resolvedDeliveryItems,
         itemName,
         templateRule: '{gameItemId} or {quantity}',
       },
@@ -990,7 +1309,7 @@ async function enqueuePurchaseDelivery(purchase, context = {}) {
     iconUrl,
     gameItemId,
     quantity,
-    deliveryItems,
+    deliveryItems: resolvedDeliveryItems,
     itemKind,
     guildId: context.guildId ? String(context.guildId) : null,
     attempts: 0,
@@ -1003,10 +1322,12 @@ async function enqueuePurchaseDelivery(purchase, context = {}) {
 
   setJob(job);
   if (deadLetters.has(purchaseCode)) {
-    deadLetters.delete(purchaseCode);
-    scheduleDeadLetterSave();
+    removeDeliveryDeadLetter(purchaseCode);
   }
-  await setPurchaseStatusByCode(purchaseCode, 'delivering').catch(() => null);
+  await setPurchaseStatusByCode(purchaseCode, 'delivering', {
+    actor: 'delivery-worker',
+    reason: 'delivery-enqueued',
+  }).catch(() => null);
   queueAudit('info', 'queued', job, 'Queued purchase for auto-delivery');
   kickWorker(20);
   return { queued: true, reason: 'queued' };
@@ -1048,8 +1369,7 @@ async function retryDeliveryDeadLetter(purchaseCode, context = {}) {
     return result;
   }
 
-  deadLetters.delete(code);
-  scheduleDeadLetterSave();
+  removeDeliveryDeadLetter(code);
   queueAudit('info', 'dead-letter-retry', deadLetter, 'Retry dead-letter queued');
   publishAdminLiveUpdate('delivery-dead-letter', {
     action: 'retry',
@@ -1078,6 +1398,8 @@ function startRconDeliveryWorker(client) {
 
 module.exports = {
   startRconDeliveryWorker,
+  initDeliveryPersistenceStore,
+  flushDeliveryPersistenceWrites,
   enqueuePurchaseDelivery,
   enqueuePurchaseDeliveryByCode,
   listDeliveryQueue,
@@ -1092,4 +1414,6 @@ module.exports = {
   getDeliveryMetricsSnapshot,
   processDeliveryQueueNow,
 };
+
+
 

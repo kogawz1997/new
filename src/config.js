@@ -1,8 +1,14 @@
 // ค่าคอนฟิกพื้นฐานของบอทเซิร์ฟ SCUM
 
 const { loadJson, saveJsonDebounced } = require('./store/_persist');
+const { prisma } = require('./prisma');
 
 const PERSIST_FILENAME = 'config-overrides.json';
+const CONFIG_ROW_ID = 1;
+
+let mutationVersion = 0;
+let dbWriteQueue = Promise.resolve();
+let initPromise = null;
 
 function isPlainObject(value) {
   return value != null && typeof value === 'object' && !Array.isArray(value);
@@ -98,6 +104,24 @@ const defaultConfig = {
     weeklyReward: 1500,
     dailyCooldownMs: 24 * 60 * 60 * 1000,
     weeklyCooldownMs: 7 * 24 * 60 * 60 * 1000,
+  },
+  luckyWheel: {
+    enabled: true,
+    cooldownMs: 6 * 60 * 60 * 1000,
+    rewards: [
+      { id: 'coin-100', label: '100 Coins', type: 'coins', amount: 100, weight: 30 },
+      { id: 'coin-250', label: '250 Coins', type: 'coins', amount: 250, weight: 24 },
+      { id: 'coin-500', label: '500 Coins', type: 'coins', amount: 500, weight: 16 },
+      { id: 'coin-1000', label: '1,000 Coins', type: 'coins', amount: 1000, weight: 9 },
+      { id: 'coin-2000', label: '2,000 Coins', type: 'coins', amount: 2000, weight: 4 },
+      { id: 'miss', label: 'No Reward', type: 'none', amount: 0, weight: 17 },
+    ],
+    tips: [
+      'Link SteamID before buying in-game items.',
+      'Read server rules before you play.',
+      'Do not share Discord or Steam account credentials.',
+      'If delivery fails, report your order code to admin.',
+    ],
   },
   shop: {
     // รายการเริ่มต้น (สามารถแก้ได้เอง)
@@ -299,15 +323,94 @@ const defaultConfig = {
 };
 
 const runtimeConfig = deepClone(defaultConfig);
-const persistedPatch = loadJson(PERSIST_FILENAME, null);
-if (isPlainObject(persistedPatch)) {
-  mergePatchInPlace(runtimeConfig, persistedPatch);
+const legacyConfigSnapshot = loadJson(PERSIST_FILENAME, null);
+if (isPlainObject(legacyConfigSnapshot)) {
+  mergePatchInPlace(runtimeConfig, legacyConfigSnapshot);
 }
 
 const scheduleConfigSave = saveJsonDebounced(
   PERSIST_FILENAME,
   () => getConfigSnapshot(),
 );
+
+function queueDbWrite(work, label) {
+  dbWriteQueue = dbWriteQueue
+    .then(async () => {
+      await work();
+    })
+    .catch((error) => {
+      console.error(`[config] prisma ${label} failed:`, error.message);
+    });
+  return dbWriteQueue;
+}
+
+function persistConfigToPrisma(snapshot) {
+  if (!isPlainObject(snapshot)) return;
+  const configJson = JSON.stringify(snapshot);
+  queueDbWrite(
+    async () => {
+      await prisma.botConfig.upsert({
+        where: { id: CONFIG_ROW_ID },
+        update: {
+          configJson,
+        },
+        create: {
+          id: CONFIG_ROW_ID,
+          configJson,
+        },
+      });
+    },
+    'upsert-config',
+  );
+}
+
+async function hydrateConfigFromPrisma() {
+  const startVersion = mutationVersion;
+  try {
+    const row = await prisma.botConfig.findUnique({
+      where: { id: CONFIG_ROW_ID },
+    });
+    if (!row) {
+      if (isPlainObject(legacyConfigSnapshot)) {
+        persistConfigToPrisma(getConfigSnapshot());
+      }
+      return;
+    }
+
+    let parsed = null;
+    try {
+      parsed = JSON.parse(row.configJson);
+    } catch (error) {
+      console.error('[config] invalid configJson in prisma:', error.message);
+      return;
+    }
+    if (!isPlainObject(parsed)) return;
+
+    if (startVersion !== mutationVersion) {
+      // Local runtime was updated before hydration completed; keep local state.
+      persistConfigToPrisma(getConfigSnapshot());
+      return;
+    }
+
+    const merged = deepClone(defaultConfig);
+    mergePatchInPlace(merged, parsed);
+    replaceValueInPlace(runtimeConfig, merged);
+    scheduleConfigSave();
+  } catch (error) {
+    console.error('[config] failed to hydrate from prisma:', error.message);
+  }
+}
+
+function initConfigStore() {
+  if (!initPromise) {
+    initPromise = hydrateConfigFromPrisma();
+  }
+  return initPromise;
+}
+
+function flushConfigWrites() {
+  return dbWriteQueue;
+}
 
 function getConfigSnapshot() {
   return deepClone(runtimeConfig);
@@ -317,27 +420,38 @@ function updateConfigPatch(patch) {
   if (!isPlainObject(patch)) {
     throw new Error('patch must be an object');
   }
+  mutationVersion += 1;
   mergePatchInPlace(runtimeConfig, patch);
+  const snapshot = getConfigSnapshot();
   scheduleConfigSave();
-  return getConfigSnapshot();
+  persistConfigToPrisma(snapshot);
+  return snapshot;
 }
 
 function setFullConfig(nextConfig) {
   if (!isPlainObject(nextConfig)) {
     throw new Error('config must be an object');
   }
+  mutationVersion += 1;
   const merged = deepClone(defaultConfig);
   mergePatchInPlace(merged, nextConfig);
   replaceValueInPlace(runtimeConfig, merged);
+  const snapshot = getConfigSnapshot();
   scheduleConfigSave();
-  return getConfigSnapshot();
+  persistConfigToPrisma(snapshot);
+  return snapshot;
 }
 
 function resetConfigToDefault() {
+  mutationVersion += 1;
   replaceValueInPlace(runtimeConfig, defaultConfig);
+  const snapshot = getConfigSnapshot();
   scheduleConfigSave();
-  return getConfigSnapshot();
+  persistConfigToPrisma(snapshot);
+  return snapshot;
 }
+
+initConfigStore();
 
 module.exports = runtimeConfig;
 Object.defineProperty(module.exports, 'getConfigSnapshot', {
@@ -354,5 +468,13 @@ Object.defineProperty(module.exports, 'setFullConfig', {
 });
 Object.defineProperty(module.exports, 'resetConfigToDefault', {
   value: resetConfigToDefault,
+  enumerable: false,
+});
+Object.defineProperty(module.exports, 'initConfigStore', {
+  value: initConfigStore,
+  enumerable: false,
+});
+Object.defineProperty(module.exports, 'flushConfigWrites', {
+  value: flushConfigWrites,
   enumerable: false,
 });

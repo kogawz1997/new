@@ -100,6 +100,22 @@ function getProductionSecurityErrors(env = process.env) {
   return errors;
 }
 
+function getWorkerRuntimeErrors(env = process.env) {
+  const errors = [];
+  const workerRentEnabled = isTruthy(
+    env.WORKER_ENABLE_RENTBIKE == null ? 'true' : env.WORKER_ENABLE_RENTBIKE,
+  );
+  const workerDeliveryEnabled = isTruthy(
+    env.WORKER_ENABLE_DELIVERY == null ? 'true' : env.WORKER_ENABLE_DELIVERY,
+  );
+  if (!workerRentEnabled && !workerDeliveryEnabled) {
+    errors.push(
+      'Worker requires at least one enabled service: WORKER_ENABLE_RENTBIKE or WORKER_ENABLE_DELIVERY.',
+    );
+  }
+  return errors;
+}
+
 function exitWithErrors(errors) {
   for (const error of errors) {
     console.error(error);
@@ -165,13 +181,20 @@ function assertWatcherEnv(env = process.env) {
   if (errors.length) exitWithErrors(errors);
 }
 
+function assertWorkerEnv(env = process.env) {
+  const errors = getWorkerRuntimeErrors(env);
+  if (errors.length) exitWithErrors(errors);
+}
+
 module.exports = {
   isSnowflake,
   isProduction,
   isLikelyPlaceholder,
   getMissingEnv,
   getProductionSecurityErrors,
+  getWorkerRuntimeErrors,
   assertBotEnv,
   assertRegisterEnv,
   assertWatcherEnv,
+  assertWorkerEnv,
 };

@@ -166,6 +166,7 @@ function startScumServer(client) {
         await sendPlayerJoinLeave(guild, {
           playerName: data.playerName,
           type: eventType,
+          steamId: data.steamId || null,
         });
       } else if (eventType === 'kill') {
         await sendKillFeed(guild, {

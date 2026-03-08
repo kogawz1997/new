@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, MessageFlags } = require('discord.js');
-const { getWallet, removeCoins, addCoins } = require('../store/memoryStore');
 const { economy } = require('../config');
+const { transferCoins } = require('../services/coinService');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -38,20 +38,33 @@ module.exports = {
       });
     }
 
-    const wallet = await getWallet(senderId);
-    if (wallet.balance < amount) {
+    const result = await transferCoins({
+      fromUserId: senderId,
+      toUserId: target.id,
+      amount,
+      actor: `discord:${interaction.user.id}`,
+      source: '/gift',
+      outReason: 'gift_transfer_out',
+      inReason: 'gift_transfer_in',
+      meta: {
+        guildId: interaction.guildId || null,
+      },
+    });
+    if (!result.ok) {
+      if (result.reason === 'insufficient-balance') {
+        return interaction.reply({
+          content: `ยอดเหรียญของคุณไม่พอ (คงเหลือ ${economy.currencySymbol} **${Number(result.balance || 0).toLocaleString()}**)`,
+          flags: MessageFlags.Ephemeral,
+        });
+      }
       return interaction.reply({
-        content: `ยอดเหรียญของคุณไม่พอ คุณมี ${economy.currencySymbol} **${wallet.balance.toLocaleString()}**`,
+        content: 'โอนเหรียญไม่สำเร็จ กรุณาลองใหม่',
         flags: MessageFlags.Ephemeral,
       });
     }
 
-    await removeCoins(senderId, amount);
-    await addCoins(target.id, amount);
-
     await interaction.reply(
-      `${interaction.user} ได้โอน ${economy.currencySymbol} **${amount.toLocaleString()}** ให้กับ ${target} แล้ว`,
+      `${interaction.user} โอน ${economy.currencySymbol} **${amount.toLocaleString()}** ให้กับ ${target} แล้ว\nยอดคุณคงเหลือ: ${economy.currencySymbol} **${Number(result.fromBalance || 0).toLocaleString()}**`,
     );
   },
 };
-

@@ -83,7 +83,15 @@ async function handleBuy(interaction) {
     });
   }
 
-  await removeCoins(interaction.user.id, plan.priceCoins);
+  await removeCoins(interaction.user.id, plan.priceCoins, {
+    reason: 'vip_purchase',
+    actor: `discord:${interaction.user.id}`,
+    meta: {
+      planId: plan.id,
+      planName: plan.name,
+      durationDays: plan.durationDays,
+    },
+  });
 
   const now = new Date();
   const expiresAt = new Date(

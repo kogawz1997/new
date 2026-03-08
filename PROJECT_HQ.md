@@ -3,14 +3,14 @@
 ![Node.js](https://img.shields.io/badge/Node.js-20%2B-2f7d32?style=for-the-badge&logo=node.js&logoColor=white)
 ![discord.js](https://img.shields.io/badge/discord.js-v14.25.1-5865F2?style=for-the-badge&logo=discord&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-5.22.0-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-29%2F29%20passing-15803d?style=for-the-badge)
+![Tests](https://img.shields.io/badge/tests-43%2F43%20passing-15803d?style=for-the-badge)
 ![Security](https://img.shields.io/badge/security%20check-passed-0f766e?style=for-the-badge)
 
 เอกสารนี้คือศูนย์กลางข้อมูลของโปรเจกต์ (Single Source of Truth) ใช้แทน `PROJECT_REVIEW.md` และ `docs/SYSTEM_UPDATES.md`
 
-- อัปเดตล่าสุด: **2026-03-07**
+- อัปเดตล่าสุด: **2026-03-09**
 - สถานะระบบ: **พร้อมใช้งานจริง (พร้อม checklist production)**
-- สรุปผลตรวจล่าสุด: `npm run check` ผ่าน (29/29), `npm run security:check` ผ่าน
+- สรุปผลตรวจล่าสุด: `npm run check` ผ่าน (43/43), `npm run security:check` ผ่าน
 - ไฟล์อ้างอิงหลัก: `README.md`, `src/*`, `test/*`
 
 ---
@@ -189,7 +189,7 @@ ADMIN_WEB_ALLOWED_ORIGINS=https://admin.your-domain.com
 
 ## 5) ผลทดสอบล่าสุด
 
-วันที่ยืนยันผล: **2026-03-07**
+วันที่ยืนยันผล: **2026-03-09**
 
 ### คำสั่งที่รันจริง
 
@@ -202,7 +202,7 @@ npm run security:check
 
 - `npm run check` ผ่าน
   - lint ผ่าน
-  - test ผ่าน 29/29
+  - test ผ่าน 43/43
 - `npm run security:check` ผ่าน (`SECURITY_CHECK: PASSED`)
 
 ### Integration tests ที่มีแล้ว
@@ -218,6 +218,7 @@ npm run security:check
 - webhook auth/dispatch flow
 - item icon resolver + fallback
 - persistence fallback/required-db guards
+- config + delivery non-store persistence write-through to Prisma
 
 ---
 
@@ -267,6 +268,12 @@ npm run register-commands
 - [x] P0 เสถียรภาพระบบส่งของ: idempotency + dead-letter retry/remove + watchdog
 - [x] P1 observability: filter/window + ops alert route + `/healthz`
 - [x] P1 e2e เพิ่มเติม: discord interaction full flow + rentbike full flow + restore drill
+- [x] Phase 1 (รอบนี้): wallet ledger + purchase status state machine + admin hardening
+- [x] Phase 2 (foundation): player account + steam binding sync + player dashboard API
+- [x] Phase 3 (foundation): shared coin service สำหรับ `redeem` และ `bounty`
+- [x] Phase 2 (portal): player dashboard UI ฝั่งเว็บจริง + authz แยกจาก admin (`/player`)
+- [x] Phase 2 (portal): inventory/catalog query-filter สำหรับ player portal
+- [x] Phase 3: รวม `rentbike` + `bounty` + `redeem` ผ่าน service กลาง (`playerOpsService`)
 
 ### 7.2 งานที่ยังค้าง (ต้องทำต่อ)
 
@@ -284,22 +291,125 @@ npm run register-commands
 - [x] เพิ่ม `PERSIST_REQUIRE_DB` fail-fast
 - [x] เพิ่ม persistence status ใน `/healthz` และ admin snapshot
 - [x] เพิ่ม integration tests สำหรับ fallback/required-db mode
-- [x] ย้าย `linkStore`, `bountyStore`, `statsStore` ไป Prisma (cache + startup hydration + write-through)
-- [ ] ย้าย store ที่ยังเป็น JSON ไป Prisma ต่อทีละระบบจนปิด fallback production ได้
+- [x] ย้าย `linkStore`, `bountyStore`, `statsStore`, `cartStore`, `redeemStore`, `vipStore`, `scumStore`, `eventStore`, `ticketStore`, `weaponStatsStore`, `welcomePackStore`, `moderationStore`, `giveawayStore`, `topPanelStore`, `deliveryAuditStore` ไป Prisma (cache + startup hydration + write-through)
+- [x] ย้าย store หลักที่ยังเป็น JSON ไป Prisma แบบ write-through ครบ
+- [x] ย้าย persistence นอก store (`config-overrides`, `delivery queue/dead-letter`) ไป Prisma (`BotConfig`, `DeliveryQueueJob`, `DeliveryDeadLetter`)
 - [ ] เปิด `PERSIST_REQUIRE_DB=true` ใน production หลัง migration ครบ
+
+#### Phase 2/3 ที่ยังค้าง
+
+- [x] แยก process bot/web/worker ระดับ runtime flags + worker entrypoint + PM2 manifest
+- [ ] แยก process bot/web/worker ใน production environment จริง (ปรับ env + deploy + smoke test)
+- [ ] รวม domain service กลางไปคำสั่ง/flow อื่นที่เหลือให้ครบทั้งระบบ
 
 ### 7.3 ลำดับทำจริงรอบถัดไป
 
 1. หมุน `DISCORD_TOKEN` จริง แล้ว redeploy ทุก instance
-2. เดินงาน P2: ย้าย JSON store -> Prisma ตาม checklist
-3. ปิด fallback ใน production (`PERSIST_REQUIRE_DB=true`) และทำ smoke test หลัง deploy
+2. ปิด fallback ใน production (`PERSIST_REQUIRE_DB=true`) พร้อม smoke test หลัง deploy
+3. แยก process bot/web/worker พร้อม health checks + deploy manifests
+4. รวม service กลางเพิ่มเติมให้ครอบคลุม command สำคัญทั้งหมด
+5. เพิ่ม integration tests สำหรับ persistence non-store ที่ย้ายล่าสุด (config + delivery queue/dead-letter)
 
 ---
 
 ## 8) Changelog รวม
 
+### 2026-03-09
+
+- ทำ readiness verification รอบล่าสุดครบชุด:
+  - `npm run check` ผ่าน (43/43)
+  - `npm run security:check` ผ่าน
+  - `npm run doctor` ผ่าน
+  - `npm run doctor:web-standalone` ผ่าน
+- เพิ่ม hardening ฝั่งเว็บ player portal:
+  - ถ้าพอร์ตใช้งานอยู่ (`EADDRINUSE`) จะ `exit(1)` ทันที เพื่อไม่ให้ process ค้างเงียบ
+  - กรณี server error อื่น ๆ จะ `exit(1)` เช่นกัน
+- ปรับเอกสารให้พร้อมใช้งานจริง:
+  - อัปเดต `README.md` เป็นสถานะทดสอบ `43/43`
+  - เพิ่มคำสั่ง checklist readiness ก่อนปล่อยจริง
+  - เพิ่ม troubleshooting พอร์ตชนใน `apps/web-portal-standalone/README.md`
+  - เพิ่มขั้นตอน deploy production ให้เริ่มจาก `.env.production.example`
+- ยืนยันว่า doctor production จะ `PASS` เมื่อ override ค่าเป็น production ที่ถูกต้อง
+  (`https` + `secure cookie` + `origin check`)
+
+### 2026-03-08
+
+- ปิดงานหลัก Phase 1:
+  - เพิ่ม Prisma migration `20260308093000_phase1_wallet_ledger_state_machine`
+  - เพิ่ม Prisma migration `20260308123000_cart_entry_store` สำหรับ `CartEntry`
+  - เพิ่ม Prisma migration `20260308131500_event_ticket_store` สำหรับ `GuildEvent/GuildEventParticipant/TicketRecord`
+  - เพิ่ม Prisma migration `20260308134500_weapon_welcome_store` สำหรับ `WeaponStat/WelcomeClaim`
+  - เพิ่ม Prisma migration `20260308143000_moderation_giveaway_top_panel_delivery_audit` สำหรับ `Punishment/Giveaway/GiveawayEntrant/TopPanelMessage/DeliveryAudit`
+  - เพิ่ม Prisma migration `20260308170000_config_delivery_persistence` สำหรับ `BotConfig/DeliveryQueueJob/DeliveryDeadLetter`
+  - เพิ่มตาราง `WalletLedger`, `PurchaseStatusHistory`, `PlayerAccount`
+  - ย้าย store เพิ่มเป็น Prisma write-through: `vip/scum/event/ticket/weaponStats/welcomePack/moderation/giveaway/topPanel/deliveryAudit`
+  - ย้าย persistence นอก store ไป Prisma:
+    - `src/config.js` -> `BotConfig`
+    - `src/services/rconDelivery.js` -> `DeliveryQueueJob` + `DeliveryDeadLetter`
+  - เพิ่ม state machine สำหรับสถานะ purchase (`pending/delivering/delivered/delivery_failed/refunded`)
+  - บังคับ transition validation ผ่าน `src/services/purchaseStateMachine.js`
+  - ทุกการเปลี่ยนสถานะ purchase บันทึก history พร้อม `reason/actor/meta`
+  - ทุกการเปลี่ยนยอด wallet ผ่าน ledger audit trail
+- Hardening ฝั่ง Admin API:
+  - `/admin/api/purchase/status` ตรวจ transition ก่อน update และตอบ `400` พร้อม allowed statuses
+  - เพิ่ม `/admin/api/purchase/statuses`
+  - เพิ่ม Player APIs:
+    - `GET /admin/api/player/accounts`
+    - `GET /admin/api/player/dashboard?userId=<discordId>`
+    - `POST /admin/api/player/account/upsert`
+    - `POST /admin/api/player/steam/bind`
+    - `POST /admin/api/player/steam/unbind`
+- วางฐาน Phase 2/3:
+  - เพิ่ม `src/store/playerAccountStore.js`
+  - sync Steam binding จาก `linkStore` ไป `PlayerAccount` อัตโนมัติ
+  - เพิ่ม shared `src/services/coinService.js`
+  - ย้าย flow `redeem` และ `bounty` มาใช้ coin service กลาง
+- ปิดงาน Phase 2/3 เพิ่มเติม:
+  - เพิ่ม `src/services/playerOpsService.js` เป็น service กลางสำหรับ `rentbike`/`bounty`/`redeem`
+  - ปรับคำสั่ง `/redeem`, `/bounty`, `/rentbike` ให้เรียกผ่าน service กลาง
+  - เพิ่ม Player Portal UI จริงที่ `apps/web-portal-standalone/public/player.html`
+  - เพิ่ม endpoint ฝั่ง admin สำหรับ player portal:
+    - `GET /admin/api/portal/player/dashboard`
+    - `GET /admin/api/portal/shop/list`
+    - `GET /admin/api/portal/purchase/list`
+    - `GET /admin/api/portal/bounty/list`
+    - `POST /admin/api/portal/redeem`
+    - `POST /admin/api/portal/rentbike/request`
+    - `POST /admin/api/portal/bounty/add`
+- เดินงานแยก process (Phase 3) เพิ่ม:
+  - เพิ่ม runtime flags ใน `src/bot.js` เพื่อเปิด/ปิด service แยกตาม process
+  - เพิ่ม worker entrypoint `src/worker.js` (rentbike + delivery worker)
+  - เพิ่ม PM2 manifest ตัวอย่าง `deploy/pm2.ecosystem.config.cjs`
+  - เพิ่ม env flags แยก bot/worker ใน `.env.example`
+- รวม service กลางรอบเพิ่ม:
+  - เพิ่ม `setCoinsExact` และ `transferCoins` ใน `src/services/coinService.js`
+  - ย้าย flow `/addcoins`, `/removecoins`, `/setcoins`, `/gift`, reward ใน `/event`, และเครดิตใน `/refund` มาใช้ service กลาง
+- เพิ่ม worker runtime guard:
+  - เพิ่ม `getWorkerRuntimeErrors` และ `assertWorkerEnv` ใน `src/utils/env.js`
+  - เพิ่ม test `getWorkerRuntimeErrors` ใน `test/env.test.js`
+- เพิ่ม integration tests:
+  - `test/wallet-ledger.integration.test.js`
+  - `test/player-account.integration.test.js`
+  - ขยาย `test/admin-api.integration.test.js` สำหรับ purchase status transition
+  - `test/player-ops-service.integration.test.js`
+  - `test/admin-portal-api.integration.test.js`
+  - `test/cart-redeem-prisma.integration.test.js`
+  - `test/vip-event-ticket-scum-prisma.integration.test.js`
+  - `test/weapon-welcome-prisma.integration.test.js`
+  - `test/moderation-giveaway-top-panel-delivery-audit-prisma.integration.test.js`
+  - `test/config-delivery-persistence.integration.test.js`
+- ผลทดสอบรอบนี้:
+  - `npm run lint` ผ่าน
+  - `npm test` ผ่าน `41/41`
+
 ### 2026-03-07
 
+- เพิ่มโปรเจคเว็บแยกใหม่ `apps/web-portal-standalone`:
+  - Discord OAuth login (`/admin/auth/discord/start` + callback)
+  - session + RBAC gate (`owner/admin/mod`)
+  - proxy `/admin/api/*` ไป admin API เดิมด้วย `WEB_PORTAL_UPSTREAM_TOKEN`
+  - แยก process ออกจากบอทหลัก 100% (ไม่แก้ flow bot runtime เดิม)
+  - เพิ่ม production guard + health endpoint + env doctor (`npm run doctor:web-standalone:prod`)
 - เดินงาน P2 Data Layer เพิ่ม:
   - ย้าย `src/store/linkStore.js`, `src/store/bountyStore.js`, `src/store/statsStore.js` ให้ใช้ Prisma แบบ write-through
   - เพิ่ม startup hydration จาก Prisma พร้อม fallback โหลด snapshot เดิม
