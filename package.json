@@ -36,6 +36,7 @@
     "readiness:full": "node scripts/readiness-gate.js",
     "readiness:prod": "node scripts/readiness-gate.js --production",
     "readiness:prod:audit": "node scripts/readiness-gate.js --production --with-audit",
+    "preflight:prod": "node scripts/preflight-prod.js",
     "smoke:postdeploy": "node scripts/post-deploy-smoke.js",
     "security:check": "node scripts/security-check.js",
     "security:generate-secrets": "node scripts/generate-secrets.js",

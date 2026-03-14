@@ -208,7 +208,24 @@ function startFakeAgentServer() {
     }
     if (req.method === 'GET' && req.url === '/healthz') {
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ ok: true }));
+      res.end(JSON.stringify({ ok: true, ready: true, status: 'ready' }));
+      return;
+    }
+    if (req.method === 'GET' && req.url === '/preflight') {
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+      res.end(
+        JSON.stringify({
+          ok: true,
+          ready: true,
+          status: 'ready',
+          statusCode: 'READY',
+          result: {
+            ok: true,
+            backend: 'fake-agent',
+            mode: 'preflight',
+          },
+        }),
+      );
       return;
     }
     res.writeHead(404);

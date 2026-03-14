@@ -98,6 +98,52 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, delay));
 }
 
+function createDeliveryError(code, message, options = {}) {
+  const error = new Error(String(message || 'Delivery error'));
+  error.deliveryCode = String(code || 'DELIVERY_ERROR');
+  error.retryable = options.retryable !== false;
+  error.step = options.step ? String(options.step) : null;
+  error.command = options.command ? String(options.command) : null;
+  error.recoveryHint = options.recoveryHint ? String(options.recoveryHint) : null;
+  error.meta = options.meta && typeof options.meta === 'object' ? options.meta : null;
+  return error;
+}
+
+function normalizeDeliveryError(error, fallbackCode = 'DELIVERY_ERROR') {
+  if (error && typeof error === 'object') {
+    return {
+      code: String(error.deliveryCode || error.agentCode || error.code || fallbackCode),
+      message: trimText(error.message || String(error), 500),
+      retryable: error.retryable !== false,
+      step: error.step ? String(error.step) : null,
+      command: error.command ? String(error.command) : null,
+      recoveryHint: error.recoveryHint ? String(error.recoveryHint) : null,
+      meta: error.meta && typeof error.meta === 'object' ? error.meta : null,
+    };
+  }
+
+  return {
+    code: fallbackCode,
+    message: trimText(String(error || 'Delivery error'), 500),
+    retryable: true,
+    step: null,
+    command: null,
+    recoveryHint: null,
+    meta: null,
+  };
+}
+
+function formatDeliveryErrorSummary(failure) {
+  const normalized = normalizeDeliveryError(failure);
+  return `[${normalized.code}] ${normalized.message}`;
+}
+
+function deriveErrorCodeFromText(value, fallback = null) {
+  const text = String(value || '').trim();
+  const match = text.match(/^\[([A-Z0-9_:-]+)\]/);
+  return match ? match[1] : fallback;
+}
+
 function summarizeCommandOutputs(outputs, maxLen = 500) {
   const commands = (Array.isArray(outputs) ? outputs : [])
     .map((entry) => String(entry?.command || '').trim())
@@ -758,6 +804,21 @@ async function sendTestDeliveryCommand(options = {}) {
   const purchaseCode = String(options.purchaseCode || '').trim() || null;
   const outputs = [];
 
+  await runDeliveryPreflight(
+    {
+      purchaseCode: purchaseCode || 'TEST-SEND',
+      userId,
+      itemId: preview.itemId || preview.gameItemId || null,
+      itemName: preview.itemName || preview.itemId || preview.gameItemId || null,
+    },
+    settings,
+    {
+      purchaseCode: purchaseCode || 'TEST-SEND',
+      itemId: preview.itemId || preview.gameItemId || null,
+      steamId,
+    },
+  );
+
   for (const deliveryItem of preview.deliveryItems || []) {
     const vars = {
       steamId,
@@ -898,6 +959,116 @@ async function fetchAgentHealth(settings) {
   } finally {
     clearTimeout(timeout);
   }
+}
+
+async function fetchAgentPreflight(settings) {
+  const baseUrl = getAgentBaseUrl();
+  const token = String(process.env.SCUM_CONSOLE_AGENT_TOKEN || '').trim();
+  if (!token) {
+    return {
+      ok: false,
+      reachable: false,
+      baseUrl,
+      errorCode: 'AGENT_TOKEN_MISSING',
+      error: 'SCUM_CONSOLE_AGENT_TOKEN is not set',
+    };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    Math.max(1000, Math.min(settings.commandTimeoutMs, 5000)),
+  );
+  try {
+    const res = await fetch(`${baseUrl}/preflight`, {
+      method: 'GET',
+      signal: controller.signal,
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || payload?.ok !== true) {
+      return {
+        ok: false,
+        reachable: res.ok || res.status < 500,
+        baseUrl,
+        errorCode: String(payload?.errorCode || 'AGENT_PREFLIGHT_FAILED'),
+        error: trimText(payload?.error || payload?.message || `agent preflight failed (${res.status})`, 300),
+        result: payload?.result || null,
+      };
+    }
+    return {
+      ok: true,
+      reachable: true,
+      baseUrl,
+      ...payload,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      reachable: false,
+      baseUrl,
+      errorCode: 'AGENT_PREFLIGHT_UNREACHABLE',
+      error: trimText(error?.message || 'agent preflight request failed', 300),
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function runDeliveryPreflight(job, settings, context = {}) {
+  if (settings.executionMode !== 'agent') {
+    return {
+      ok: true,
+      mode: settings.executionMode,
+      checks: ['delivery-worker'],
+    };
+  }
+
+  const health = await fetchAgentHealth(settings);
+  if (!health.ok || !health.reachable) {
+    throw createDeliveryError(
+      health.errorCode || 'AGENT_UNREACHABLE',
+      health.error || 'SCUM console agent is unreachable',
+      {
+        step: 'preflight',
+        recoveryHint: 'ตรวจ agent process, token และ health endpoint ก่อน retry',
+        meta: { health },
+      },
+    );
+  }
+
+  const preflight = await fetchAgentPreflight(settings);
+  if (!preflight.ok) {
+    throw createDeliveryError(
+      preflight.errorCode || 'AGENT_PREFLIGHT_FAILED',
+      preflight.error || 'SCUM console agent preflight failed',
+      {
+        step: 'preflight',
+        recoveryHint: 'เช็ก SCUM client, focus ของหน้าต่างเกม, และ Windows session ว่ายัง active',
+        meta: { preflight, health },
+      },
+    );
+  }
+
+  queueAudit('info', 'preflight-ok', job, 'Agent preflight passed', {
+    preflight: preflight.result || null,
+    health: {
+      status: health.status || null,
+      ready: health.ready === true,
+      backend: health.backend || null,
+      activeExecutionCount: health.activeExecutionCount || 0,
+    },
+    context,
+  });
+
+  return {
+    ok: true,
+    health,
+    preflight,
+  };
 }
 
 function getWorkerHealthBaseUrl() {
@@ -1101,12 +1272,17 @@ async function getDeliveryRuntimeStatus() {
   };
 
   if (settings.executionMode === 'agent') {
+    const health = await fetchAgentHealth(settings);
+    const preflight = health.ok ? await fetchAgentPreflight(settings) : null;
+    const ready = Boolean(health?.ok && preflight?.ok);
     runtime.agent = {
       tokenConfigured: String(process.env.SCUM_CONSOLE_AGENT_TOKEN || '').trim().length > 0,
       execTemplateConfigured:
         String(process.env.SCUM_CONSOLE_AGENT_EXEC_TEMPLATE || '').trim().length > 0,
       backend: String(process.env.SCUM_CONSOLE_AGENT_BACKEND || 'exec').trim() || 'exec',
-      health: await fetchAgentHealth(settings),
+      health,
+      preflight,
+      ready,
     };
   } else {
     const shellTemplate = getRconTemplate();
@@ -1137,6 +1313,21 @@ async function getDeliveryRuntimeStatus() {
   }
 
   runtime.workerSource = workerStarted ? 'local-process' : 'current-process';
+
+  runtime.readiness = {
+    ready:
+      settings.enabled
+      && (
+        settings.executionMode !== 'agent'
+        || Boolean(runtime.agent?.ready)
+      ),
+    reason:
+      !settings.enabled
+        ? 'delivery-disabled'
+        : settings.executionMode === 'agent' && !runtime.agent?.ready
+          ? String(runtime.agent?.preflight?.errorCode || runtime.agent?.health?.statusCode || 'agent-not-ready')
+          : 'ready',
+  };
 
   return runtime;
 }
@@ -1183,6 +1374,28 @@ async function getDeliveryDetailsByPurchaseCode(purchaseCode, limit = 50) {
     return Array.isArray(outputs) && outputs.length > 0;
   }) || null;
 
+  const stepLog = auditRows
+    .slice()
+    .reverse()
+    .map((row) => {
+      const meta = row?.meta && typeof row.meta === 'object' ? row.meta : {};
+      const outputs = Array.isArray(meta.outputs) ? meta.outputs : [];
+      return {
+        at: row.createdAt,
+        level: row.level || 'info',
+        action: row.action || 'event',
+        step: String(meta.step || row.action || '').trim() || null,
+        errorCode:
+          String(meta.errorCode || deriveErrorCodeFromText(row.message, '')).trim() || null,
+        retryable:
+          typeof meta.retryable === 'boolean' ? meta.retryable : null,
+        recoveryHint: String(meta.recoveryHint || '').trim() || null,
+        message: row.message || '',
+        outputs,
+        commandSummary: meta.commandSummary || null,
+      };
+    });
+
   return {
     purchaseCode: code,
     purchase,
@@ -1191,6 +1404,7 @@ async function getDeliveryDetailsByPurchaseCode(purchaseCode, limit = 50) {
     link,
     statusHistory,
     auditRows,
+    stepLog,
     latestCommandSummary: latestCommandAudit?.meta?.commandSummary || null,
     latestOutputs: Array.isArray(latestCommandAudit?.meta?.outputs)
       ? latestCommandAudit.meta.outputs
@@ -1279,6 +1493,12 @@ function normalizeJob(input) {
     attempts: Math.max(0, asNumber(input.attempts, 0)),
     nextAttemptAt: Math.max(Date.now(), asNumber(input.nextAttemptAt, Date.now())),
     lastError: input.lastError ? String(input.lastError) : null,
+    lastErrorCode:
+      String(input.lastErrorCode || deriveErrorCodeFromText(input.lastError || '', '')).trim() || null,
+    lastStep: input.lastStep ? String(input.lastStep) : null,
+    retryable:
+      typeof input.retryable === 'boolean' ? input.retryable : null,
+    recoveryHint: input.recoveryHint ? String(input.recoveryHint) : null,
     createdAt: input.createdAt ? new Date(input.createdAt).toISOString() : nowIso(),
     updatedAt: input.updatedAt ? new Date(input.updatedAt).toISOString() : nowIso(),
   };
@@ -1301,6 +1521,19 @@ function normalizeDeadLetter(input) {
     reason: trimText(input.reason || 'delivery failed', 500),
     createdAt,
     lastError: input.lastError ? trimText(input.lastError, 500) : null,
+    lastErrorCode:
+      String(
+        input.lastErrorCode
+        || input?.meta?.errorCode
+        || deriveErrorCodeFromText(input.lastError || input.reason || '', ''),
+      ).trim() || null,
+    lastStep: input.lastStep ? String(input.lastStep) : null,
+    retryable:
+      typeof input.retryable === 'boolean'
+        ? input.retryable
+        : (typeof input?.meta?.retryable === 'boolean' ? input.meta.retryable : null),
+    recoveryHint:
+      String(input.recoveryHint || input?.meta?.recoveryHint || '').trim() || null,
     deliveryItems: normalizeDeliveryItemsForJob(input.deliveryItems, {
       gameItemId: input.gameItemId,
       quantity: input.quantity,
@@ -1565,11 +1798,34 @@ initDeliveryPersistenceStore();
 
 function listDeliveryQueue(limit = 500) {
   const max = Math.max(1, Number(limit || 500));
+  const latestByCode = new Map();
+  for (const row of listDeliveryAudit(2000)) {
+    const code = String(row?.purchaseCode || '').trim();
+    if (!code || latestByCode.has(code)) continue;
+    latestByCode.set(code, row);
+  }
   return Array.from(jobs.values())
     .slice()
     .sort((a, b) => a.nextAttemptAt - b.nextAttemptAt)
     .slice(0, max)
-    .map((job) => ({ ...job }));
+    .map((job) => {
+      const latestAudit = latestByCode.get(job.purchaseCode) || null;
+      const meta = latestAudit?.meta && typeof latestAudit.meta === 'object' ? latestAudit.meta : {};
+      return {
+        ...job,
+        lastErrorCode:
+          job.lastErrorCode
+          || String(meta.errorCode || deriveErrorCodeFromText(job.lastError || '', '')).trim()
+          || null,
+        lastStep: job.lastStep || String(meta.step || '').trim() || null,
+        retryable:
+          typeof job.retryable === 'boolean'
+            ? job.retryable
+            : (typeof meta.retryable === 'boolean' ? meta.retryable : null),
+        recoveryHint:
+          job.recoveryHint || String(meta.recoveryHint || '').trim() || null,
+      };
+    });
 }
 
 function replaceDeliveryQueue(nextJobs = []) {
@@ -1604,7 +1860,57 @@ function listDeliveryDeadLetters(limit = 500) {
     .slice()
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, max)
-    .map((row) => ({ ...row }));
+    .map((row) => ({
+      ...row,
+      lastErrorCode:
+        row.lastErrorCode
+        || String(row?.meta?.errorCode || deriveErrorCodeFromText(row.lastError || row.reason || '', '')).trim()
+        || null,
+      lastStep: row.lastStep || String(row?.meta?.step || '').trim() || null,
+      retryable:
+        typeof row.retryable === 'boolean'
+          ? row.retryable
+          : (typeof row?.meta?.retryable === 'boolean' ? row.meta.retryable : null),
+      recoveryHint:
+        row.recoveryHint || String(row?.meta?.recoveryHint || '').trim() || null,
+    }));
+}
+
+function filterDeliveryRows(rows, filters = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const errorCode = String(filters.errorCode || '').trim().toUpperCase();
+  const q = String(filters.q || '').trim().toLowerCase();
+  return list.filter((row) => {
+    if (errorCode) {
+      const rowCode = String(row?.lastErrorCode || '').trim().toUpperCase();
+      if (rowCode !== errorCode) return false;
+    }
+    if (q) {
+      const haystack = [
+        row?.purchaseCode,
+        row?.itemId,
+        row?.itemName,
+        row?.gameItemId,
+        row?.userId,
+        row?.lastError,
+        row?.reason,
+      ]
+        .map((entry) => String(entry || '').toLowerCase())
+        .join(' ');
+      if (!haystack.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function listFilteredDeliveryQueue(filters = {}) {
+  const limit = Math.max(1, Number(filters.limit || 500));
+  return filterDeliveryRows(listDeliveryQueue(Math.max(limit, 2000)), filters).slice(0, limit);
+}
+
+function listFilteredDeliveryDeadLetters(filters = {}) {
+  const limit = Math.max(1, Number(filters.limit || 500));
+  return filterDeliveryRows(listDeliveryDeadLetters(Math.max(limit, 2000)), filters).slice(0, limit);
 }
 
 function replaceDeliveryDeadLetters(nextRows = []) {
@@ -1918,11 +2224,13 @@ async function trySendDiscordAudit(job, message) {
   }
 }
 
-async function handleRetry(job, reason) {
+async function handleRetry(job, reasonInput) {
   const settings = getSettings();
+  const failure = normalizeDeliveryError(reasonInput, 'DELIVERY_RETRY');
+  const reason = formatDeliveryErrorSummary(failure);
   recordDeliveryOutcome(false, { purchaseCode: job?.purchaseCode });
   const nextAttempt = Number(job.attempts || 0) + 1;
-  if (nextAttempt > settings.maxRetries) {
+  if (failure.retryable === false || nextAttempt > settings.maxRetries) {
     const summary = trimText(
       normalizeDeliveryItemsForJob(job?.deliveryItems, {
         gameItemId: job?.gameItemId,
@@ -1933,10 +2241,22 @@ async function handleRetry(job, reason) {
       220,
     );
     queueAudit('error', 'failed', job, reason, {
+      errorCode: failure.code,
+      retryable: failure.retryable,
+      step: failure.step,
+      recoveryHint: failure.recoveryHint,
+      command: failure.command,
+      failureMeta: failure.meta,
       maxRetries: settings.maxRetries,
       failedStatus: settings.failedStatus,
     });
     addDeliveryDeadLetter(job, reason, {
+      errorCode: failure.code,
+      retryable: failure.retryable,
+      step: failure.step,
+      recoveryHint: failure.recoveryHint,
+      command: failure.command,
+      failureMeta: failure.meta,
       failedStatus: settings.failedStatus,
       maxRetries: settings.maxRetries,
     });
@@ -1957,27 +2277,45 @@ async function handleRetry(job, reason) {
   }
 
   const delayMs = calcDelayMs(nextAttempt);
-  setJob({
-    ...job,
-    attempts: nextAttempt,
-    nextAttemptAt: Date.now() + delayMs,
-    lastError: reason,
-    updatedAt: nowIso(),
-  });
-  queueAudit('warn', 'retry', job, `${reason} (retry in ${delayMs}ms)`, {
-    delayMs,
-    maxRetries: settings.maxRetries,
-  });
+    setJob({
+      ...job,
+      attempts: nextAttempt,
+      nextAttemptAt: Date.now() + delayMs,
+      lastError: reason,
+      lastErrorCode: failure.code,
+      lastStep: failure.step,
+      retryable: failure.retryable,
+      recoveryHint: failure.recoveryHint,
+      updatedAt: nowIso(),
+    });
+    queueAudit('warn', 'retry', job, `${reason} (retry in ${delayMs}ms)`, {
+      errorCode: failure.code,
+      retryable: failure.retryable,
+      step: failure.step,
+      recoveryHint: failure.recoveryHint,
+      command: failure.command,
+      failureMeta: failure.meta,
+      delayMs,
+      maxRetries: settings.maxRetries,
+    });
 }
 
 async function processJob(job) {
   const purchaseCode = String(job?.purchaseCode || '').trim();
   if (!purchaseCode) {
-    throw new Error('Missing purchaseCode in delivery job');
+    throw createDeliveryError('DELIVERY_JOB_INVALID', 'Missing purchaseCode in delivery job', {
+      retryable: false,
+      step: 'validate-job',
+    });
   }
   if (inFlightPurchaseCodes.has(purchaseCode)) {
-    throw new Error(
+    throw createDeliveryError(
+      'DELIVERY_IN_FLIGHT_DUPLICATE',
       `Idempotency guard blocked duplicate in-flight delivery for ${purchaseCode}`,
+      {
+        retryable: true,
+        step: 'validate-job',
+      },
     );
   }
 
@@ -1985,7 +2323,11 @@ async function processJob(job) {
   try {
     const purchase = await findPurchaseByCode(purchaseCode);
     if (!purchase) {
-      queueAudit('error', 'missing-purchase', job, 'Purchase not found');
+      queueAudit('error', 'missing-purchase', job, 'Purchase not found', {
+        errorCode: 'DELIVERY_PURCHASE_NOT_FOUND',
+        retryable: false,
+        step: 'load-purchase',
+      });
       removeJob(purchaseCode);
       return;
     }
@@ -2026,6 +2368,11 @@ async function processJob(job) {
         'missing-item-commands',
         job,
         `No auto-delivery command for itemId=${purchase.itemId}`,
+        {
+          errorCode: 'DELIVERY_ITEM_COMMAND_MISSING',
+          retryable: false,
+          step: 'resolve-command',
+        },
       );
       await setPurchaseStatusByCode(purchaseCode, 'pending', {
         actor: 'delivery-worker',
@@ -2037,7 +2384,18 @@ async function processJob(job) {
 
     const link = getLinkByUserId(purchase.userId);
     if (!link?.steamId) {
-      await handleRetry(job, `Missing steam link for userId=${purchase.userId}`);
+      await handleRetry(
+        job,
+        createDeliveryError(
+          'DELIVERY_STEAM_LINK_MISSING',
+          `Missing steam link for userId=${purchase.userId}`,
+          {
+            retryable: true,
+            step: 'resolve-player',
+            recoveryHint: 'ผูก SteamID/ลิงก์ผู้เล่นให้ครบก่อน retry',
+          },
+        ),
+      );
       return;
     }
 
@@ -2060,8 +2418,14 @@ async function processJob(job) {
     const needsItemPlaceholder = commandSupportsBundleItems(commands);
 
     if (resolvedDeliveryItems.length > 1 && !needsItemPlaceholder) {
-      throw new Error(
+      throw createDeliveryError(
+        'DELIVERY_BUNDLE_TEMPLATE_INVALID',
         'itemCommands ต้องมี {gameItemId} หรือ {quantity} เมื่อสินค้าเป็นหลายไอเทม',
+        {
+          retryable: false,
+          step: 'resolve-command',
+          recoveryHint: 'แก้ template ของสินค้า bundle ให้รองรับ {gameItemId} หรือ {quantity}',
+        },
       );
     }
 
@@ -2075,10 +2439,24 @@ async function processJob(job) {
     ) {
       await handleRetry(
         job,
-        `Missing teleport target for purchaseCode=${purchase.code}`,
+        createDeliveryError(
+          'DELIVERY_TELEPORT_TARGET_MISSING',
+          `Missing teleport target for purchaseCode=${purchase.code}`,
+          {
+            retryable: true,
+            step: 'resolve-teleport',
+            recoveryHint: 'ตั้ง delivery teleport target รายสินค้า หรือค่า DELIVERY_AGENT_TELEPORT_TARGET',
+          },
+        ),
       );
       return;
     }
+
+    const preflightState = await runDeliveryPreflight(job, settings, {
+      purchaseCode: purchase.code,
+      itemId: purchase.itemId,
+      steamId: link.steamId,
+    });
 
     const preCommands = agentHooks.preCommands;
     const postCommands = agentHooks.postCommands;
@@ -2088,12 +2466,34 @@ async function processJob(job) {
       commandList,
       deliveryItem = null,
     ) => {
-      const normalizedCommands = (Array.isArray(commandList) ? commandList : [])
+        const normalizedCommands = (Array.isArray(commandList) ? commandList : [])
         .map((entry) => String(entry || '').trim())
         .filter(Boolean);
       for (let i = 0; i < normalizedCommands.length; i += 1) {
         const gameCommand = normalizedCommands[i];
-        const output = await runGameCommand(gameCommand, settings);
+        let output;
+        try {
+          output = await runGameCommand(gameCommand, settings);
+        } catch (error) {
+          throw createDeliveryError(
+            error?.deliveryCode || error?.agentCode || 'DELIVERY_COMMAND_EXEC_FAILED',
+            error?.message || 'Game command execution failed',
+            {
+              retryable: error?.retryable !== false,
+              step: `${phase}-command`,
+              command: gameCommand,
+              recoveryHint:
+                phase === 'pre'
+                  ? 'ตรวจ pre-command, agent focus และ target ก่อน retry'
+                  : 'ตรวจ command log, agent focus, และสถานะ SCUM client ก่อน retry',
+              meta: {
+                phase,
+                deliveryItem,
+                preflightState,
+              },
+            },
+          );
+        }
         outputs.push({
           phase,
           mode: output.mode || settings.executionMode,
@@ -2176,6 +2576,7 @@ async function processJob(job) {
         ? `Auto delivery complete | commands: ${commandSummary}`
         : 'Auto delivery complete',
       {
+      preflightState,
       steamId: link.steamId,
       deliveryItems: resolvedDeliveryItems,
       outputs,
@@ -2217,12 +2618,12 @@ async function processDueJobOnce() {
     await processJob(job);
     return { processed: true, purchaseCode: job.purchaseCode, ok: true };
   } catch (error) {
-    await handleRetry(job, error?.message || 'Unknown delivery error');
+    await handleRetry(job, error);
     return {
       processed: true,
       purchaseCode: job.purchaseCode,
       ok: false,
-      error: String(error?.message || error),
+      error: formatDeliveryErrorSummary(error),
     };
   } finally {
     workerBusy = false;
@@ -2474,6 +2875,47 @@ async function retryDeliveryDeadLetter(purchaseCode, context = {}) {
   return { ok: true, reason: 'queued', queueLength: jobs.size };
 }
 
+function retryDeliveryNowMany(purchaseCodes = []) {
+  const codes = Array.isArray(purchaseCodes)
+    ? purchaseCodes.map((code) => String(code || '').trim()).filter(Boolean)
+    : [];
+  const results = [];
+  for (const code of codes) {
+    const result = retryDeliveryNow(code);
+    results.push({
+      code,
+      ok: Boolean(result),
+      data: result || null,
+    });
+  }
+  return {
+    total: codes.length,
+    queued: results.filter((row) => row.ok).length,
+    results,
+  };
+}
+
+async function retryDeliveryDeadLetterMany(purchaseCodes = [], context = {}) {
+  const codes = Array.isArray(purchaseCodes)
+    ? purchaseCodes.map((code) => String(code || '').trim()).filter(Boolean)
+    : [];
+  const results = [];
+  for (const code of codes) {
+    const result = await retryDeliveryDeadLetter(code, context);
+    results.push({
+      code,
+      ok: Boolean(result?.ok),
+      data: result || null,
+      reason: result?.reason || null,
+    });
+  }
+  return {
+    total: codes.length,
+    queued: results.filter((row) => row.ok).length,
+    results,
+  };
+}
+
 function cancelDeliveryJob(purchaseCode, reason = 'manual-cancel') {
   const code = String(purchaseCode || '').trim();
   const job = jobs.get(code);
@@ -2498,12 +2940,16 @@ module.exports = {
   enqueuePurchaseDelivery,
   enqueuePurchaseDeliveryByCode,
   listDeliveryQueue,
+  listFilteredDeliveryQueue,
   replaceDeliveryQueue,
   listDeliveryDeadLetters,
+  listFilteredDeliveryDeadLetters,
   replaceDeliveryDeadLetters,
   removeDeliveryDeadLetter,
   retryDeliveryNow,
+  retryDeliveryNowMany,
   retryDeliveryDeadLetter,
+  retryDeliveryDeadLetterMany,
   cancelDeliveryJob,
   listDeliveryAudit,
   getDeliveryMetricsSnapshot,

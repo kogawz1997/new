@@ -38,9 +38,13 @@ const {
 const {
   enqueuePurchaseDeliveryByCode,
   listDeliveryQueue,
+  listFilteredDeliveryQueue,
   listDeliveryDeadLetters,
+  listFilteredDeliveryDeadLetters,
   retryDeliveryNow,
+  retryDeliveryNowMany,
   retryDeliveryDeadLetter,
+  retryDeliveryDeadLetterMany,
   removeDeliveryDeadLetter,
   cancelDeliveryJob,
   listDeliveryAudit,
@@ -1318,6 +1322,28 @@ function requiredString(body, key) {
   return value || null;
 }
 
+function parseStringArray(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  const text = String(value || '').trim();
+  if (!text) return [];
+  if (text.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(text);
+      return Array.isArray(parsed)
+        ? parsed.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : [];
+    } catch {
+      return [];
+    }
+  }
+  return text
+    .split(/[\r\n,]+/)
+    .map((entry) => String(entry || '').trim())
+    .filter(Boolean);
+}
+
 function createHttpError(statusCode, message) {
   const error = new Error(String(message || 'Request error'));
   error.statusCode = Number(statusCode) || 500;
@@ -1965,6 +1991,15 @@ async function handlePostAction(client, pathname, body, res, auth) {
     return sendJson(res, 200, { ok: true, data: result });
   }
 
+  if (pathname === '/admin/api/delivery/retry-many') {
+    const codes = parseStringArray(body?.codes);
+    if (codes.length === 0) {
+      return sendJson(res, 400, { ok: false, error: 'codes is required' });
+    }
+    const result = retryDeliveryNowMany(codes);
+    return sendJson(res, 200, { ok: true, data: result });
+  }
+
   if (pathname === '/admin/api/delivery/dead-letter/retry') {
     const code = requiredString(body, 'code');
     if (!code) {
@@ -1979,6 +2014,17 @@ async function handlePostAction(client, pathname, body, res, auth) {
         error: result?.reason || 'ไม่สามารถ retry dead-letter ได้',
       });
     }
+    return sendJson(res, 200, { ok: true, data: result });
+  }
+
+  if (pathname === '/admin/api/delivery/dead-letter/retry-many') {
+    const codes = parseStringArray(body?.codes);
+    if (codes.length === 0) {
+      return sendJson(res, 400, { ok: false, error: 'codes is required' });
+    }
+    const result = await retryDeliveryDeadLetterMany(codes, {
+      guildId: requiredString(body, 'guildId') || undefined,
+    });
     return sendJson(res, 200, { ok: true, data: result });
   }
 
@@ -2704,13 +2750,33 @@ function startAdminWebServer(client) {
           });
         }
 
+        if (req.method === 'GET' && pathname === '/admin/api/delivery/queue') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const limit = asInt(urlObj.searchParams.get('limit'), 500) || 500;
+          const errorCode = String(urlObj.searchParams.get('errorCode') || '').trim();
+          const q = String(urlObj.searchParams.get('q') || '').trim();
+          return sendJson(res, 200, {
+            ok: true,
+            data: listFilteredDeliveryQueue({
+              limit,
+              errorCode,
+              q,
+            }),
+          });
+        }
+
         if (req.method === 'GET' && pathname === '/admin/api/delivery/dead-letter') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
           const limit = asInt(urlObj.searchParams.get('limit'), 500) || 500;
           return sendJson(res, 200, {
             ok: true,
-            data: listDeliveryDeadLetters(limit),
+            data: listFilteredDeliveryDeadLetters({
+              limit,
+              errorCode: String(urlObj.searchParams.get('errorCode') || '').trim(),
+              q: String(urlObj.searchParams.get('q') || '').trim(),
+            }),
           });
         }
 

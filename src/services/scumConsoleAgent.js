@@ -41,6 +41,13 @@ function parseJsonArray(value) {
   }
 }
 
+function createAgentError(code, message, meta = null) {
+  const error = new Error(message);
+  error.agentCode = String(code || 'AGENT_ERROR');
+  error.meta = meta && typeof meta === 'object' ? meta : null;
+  return error;
+}
+
 function normalizeHost(value, fallback = '127.0.0.1') {
   const text = String(value || '').trim();
   return text || fallback;
@@ -191,9 +198,14 @@ function startScumConsoleAgent(options = {}) {
   let managedChild = null;
   let managedChildExit = null;
   let lastCommandAt = null;
+  let lastSuccessAt = null;
   let lastError = null;
+  let lastErrorCode = null;
+  let lastPreflightAt = null;
+  let lastPreflight = null;
   let startedAt = new Date().toISOString();
   let executeCount = 0;
+  let activeExecutionCount = 0;
   let executionQueue = Promise.resolve();
   const recentStdout = createOutputBuffer(120);
   const recentStderr = createOutputBuffer(120);
@@ -207,6 +219,44 @@ function startScumConsoleAgent(options = {}) {
     if (recentExecutions.length > 25) {
       recentExecutions.splice(0, recentExecutions.length - 25);
     }
+  }
+
+  function getQueueDepth() {
+    return recentExecutions.filter((entry) => entry?.ok === false).length;
+  }
+
+  function isWindowScriptTemplate(template) {
+    return /send-scum-admin-command\.ps1/i.test(String(template || ''));
+  }
+
+  function getAgentStatus() {
+    if (!settings.token) {
+      return { status: 'error', ready: false, code: 'AGENT_TOKEN_MISSING', message: 'SCUM_CONSOLE_AGENT_TOKEN is not set' };
+    }
+    if (settings.backend === 'exec' && !settings.execTemplate) {
+      return { status: 'error', ready: false, code: 'AGENT_EXEC_TEMPLATE_MISSING', message: 'SCUM_CONSOLE_AGENT_EXEC_TEMPLATE is not set' };
+    }
+    if (settings.backend === 'process' && settings.autoStartServer && !managedChild) {
+      return { status: 'degraded', ready: false, code: 'AGENT_MANAGED_SERVER_STOPPED', message: 'Managed SCUM server is not running' };
+    }
+    if (lastErrorCode) {
+      return { status: 'degraded', ready: false, code: lastErrorCode, message: lastError || 'Agent reported an error' };
+    }
+    return { status: 'ready', ready: true, code: 'READY', message: 'Agent ready' };
+  }
+
+  function buildExecShellCommand(command, options = {}) {
+    if (!settings.execTemplate) {
+      throw createAgentError(
+        'AGENT_EXEC_TEMPLATE_MISSING',
+        'SCUM_CONSOLE_AGENT_EXEC_TEMPLATE is not set',
+      );
+    }
+    const shellCommand = substituteTemplate(settings.execTemplate, { command });
+    if (options.checkOnly && isWindowScriptTemplate(shellCommand)) {
+      return `${shellCommand} -CheckOnly`;
+    }
+    return shellCommand;
   }
 
   function getManagedServerState() {
@@ -272,10 +322,7 @@ function startScumConsoleAgent(options = {}) {
   }
 
   async function executeWithExecBackend(command) {
-    if (!settings.execTemplate) {
-      throw new Error('SCUM_CONSOLE_AGENT_EXEC_TEMPLATE is not set');
-    }
-    const shellCommand = substituteTemplate(settings.execTemplate, { command });
+    const shellCommand = buildExecShellCommand(command);
     const result = await execShell(shellCommand, settings.commandTimeoutMs);
     return {
       backend: 'exec',
@@ -289,7 +336,10 @@ function startScumConsoleAgent(options = {}) {
   async function executeWithProcessBackend(command) {
     const child = await ensureManagedServerStarted();
     if (!child.stdin || child.stdin.destroyed || !child.stdin.writable) {
-      throw new Error('managed server stdin is not writable');
+      throw createAgentError(
+        'AGENT_MANAGED_STDIN_UNAVAILABLE',
+        'managed server stdin is not writable',
+      );
     }
     child.stdin.write(`${command}\n`);
     await wait(settings.processResponseWaitMs);
@@ -302,27 +352,113 @@ function startScumConsoleAgent(options = {}) {
     };
   }
 
+  async function runPreflight() {
+    lastPreflightAt = new Date().toISOString();
+
+    if (!settings.token) {
+      throw createAgentError('AGENT_TOKEN_MISSING', 'SCUM_CONSOLE_AGENT_TOKEN is not set');
+    }
+
+    if (settings.backend === 'exec') {
+      if (!settings.execTemplate) {
+        throw createAgentError(
+          'AGENT_EXEC_TEMPLATE_MISSING',
+          'SCUM_CONSOLE_AGENT_EXEC_TEMPLATE is not set',
+        );
+      }
+
+      if (isWindowScriptTemplate(settings.execTemplate)) {
+        const shellCommand = buildExecShellCommand('#Announce PREFLIGHT', {
+          checkOnly: true,
+        });
+        const result = await execShell(shellCommand, settings.commandTimeoutMs);
+        let parsed = null;
+        try {
+          parsed = result.stdout ? JSON.parse(result.stdout) : null;
+        } catch {}
+        lastPreflight = {
+          ok: true,
+          backend: 'exec',
+          check: 'window',
+          shellCommand,
+          stdout: trimText(result.stdout),
+          stderr: trimText(result.stderr),
+          detail: parsed,
+        };
+        return lastPreflight;
+      }
+
+      lastPreflight = {
+        ok: true,
+        backend: 'exec',
+        check: 'config',
+        shellCommand: null,
+        detail: {
+          templateConfigured: true,
+          windowAware: false,
+        },
+      };
+      return lastPreflight;
+    }
+
+    if (settings.backend === 'process') {
+      const running = Boolean(managedChild && !managedChild.killed);
+      if (!running && settings.autoStartServer) {
+        await ensureManagedServerStarted();
+      }
+      const currentRunning = Boolean(managedChild && !managedChild.killed);
+      if (!currentRunning) {
+        throw createAgentError(
+          'AGENT_MANAGED_SERVER_STOPPED',
+          'Managed SCUM server is not running',
+        );
+      }
+      lastPreflight = {
+        ok: true,
+        backend: 'process',
+        check: 'managed-server',
+        detail: getManagedServerState(),
+      };
+      return lastPreflight;
+    }
+
+    throw createAgentError('AGENT_BACKEND_UNSUPPORTED', `Unsupported backend: ${settings.backend}`);
+  }
+
   async function executeCommand(command) {
     const normalizedCommand = ensureCommandAllowed(command);
     const executeOnce = async () => {
+      activeExecutionCount += 1;
       lastCommandAt = new Date().toISOString();
       executeCount += 1;
 
-      let result;
-      if (settings.backend === 'process') {
-        result = await executeWithProcessBackend(normalizedCommand);
-      } else {
-        result = await executeWithExecBackend(normalizedCommand);
-      }
+      try {
+        let result;
+        if (settings.backend === 'process') {
+          result = await executeWithProcessBackend(normalizedCommand);
+        } else {
+          result = await executeWithExecBackend(normalizedCommand);
+        }
 
-      pushExecution({
-        ok: true,
-        backend: settings.backend,
-        command: normalizedCommand,
-        stdout: trimText(result.stdout, 250),
-        stderr: trimText(result.stderr, 250),
-      });
-      return result;
+        lastSuccessAt = new Date().toISOString();
+        lastError = null;
+        lastErrorCode = null;
+
+        pushExecution({
+          ok: true,
+          backend: settings.backend,
+          command: normalizedCommand,
+          stdout: trimText(result.stdout, 250),
+          stderr: trimText(result.stderr, 250),
+        });
+        return result;
+      } catch (error) {
+        lastError = error.message;
+        lastErrorCode = String(error.agentCode || error.code || 'AGENT_EXEC_FAILED');
+        throw error;
+      } finally {
+        activeExecutionCount = Math.max(0, activeExecutionCount - 1);
+      }
     };
 
     const nextExecution = executionQueue.then(executeOnce);
@@ -348,17 +484,61 @@ function startScumConsoleAgent(options = {}) {
     const url = new URL(req.url || '/', `http://${settings.host}:${settings.port}`);
 
     if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/healthz')) {
+      const status = getAgentStatus();
       return reply(200, {
         ok: true,
         service: name,
         backend: settings.backend,
+        status: status.status,
+        ready: status.ready,
+        statusCode: status.code,
+        statusMessage: status.message,
         now: new Date().toISOString(),
         startedAt,
         lastCommandAt,
+        lastSuccessAt,
         lastError,
+        lastErrorCode,
+        lastPreflightAt,
+        lastPreflight,
+        activeExecutionCount,
+        recentExecutions: recentExecutions.slice(-10),
         executeCount,
+        queueDepth: getQueueDepth(),
         managedServer: getManagedServerState(),
       });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/preflight') {
+      try {
+        const result = await runPreflight();
+        const status = getAgentStatus();
+        return reply(200, {
+          ok: true,
+          ready: status.ready,
+          status: status.status,
+          statusCode: status.code,
+          statusMessage: status.message,
+          result,
+        });
+      } catch (error) {
+        lastError = error.message;
+        lastErrorCode = String(error.agentCode || error.code || 'AGENT_PREFLIGHT_FAILED');
+        lastPreflight = {
+          ok: false,
+          backend: settings.backend,
+          error: error.message,
+          errorCode: lastErrorCode,
+          detail: error.meta || null,
+        };
+        return reply(500, {
+          ok: false,
+          ready: false,
+          error: error.message,
+          errorCode: lastErrorCode,
+          result: lastPreflight,
+        });
+      }
     }
 
     if (req.method !== 'POST') {
@@ -384,13 +564,18 @@ function startScumConsoleAgent(options = {}) {
         return reply(200, { ok: true, result });
       } catch (error) {
         lastError = error.message;
+        lastErrorCode = String(error.agentCode || error.code || 'AGENT_EXEC_FAILED');
         pushExecution({
           ok: false,
           backend: settings.backend,
           command: String(body.command || '').trim(),
           error: error.message,
         });
-        return reply(500, { ok: false, error: error.message });
+        return reply(500, {
+          ok: false,
+          error: error.message,
+          errorCode: lastErrorCode,
+        });
       }
     }
 
@@ -407,7 +592,8 @@ function startScumConsoleAgent(options = {}) {
         });
       } catch (error) {
         lastError = error.message;
-        return reply(500, { ok: false, error: error.message });
+        lastErrorCode = String(error.agentCode || error.code || 'AGENT_SERVER_START_FAILED');
+        return reply(500, { ok: false, error: error.message, errorCode: lastErrorCode });
       }
     }
 

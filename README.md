@@ -18,6 +18,8 @@ SCUM Discord Bot + Admin Web + Player Portal + Delivery Worker
 เอกสารหลัก
 - คู่มือปฏิบัติการ: [docs/OPERATIONS_MANUAL_TH.md](./docs/OPERATIONS_MANUAL_TH.md)
 - คู่มืออธิบายตัวแปร `.env`: [docs/ENV_REFERENCE_TH.md](./docs/ENV_REFERENCE_TH.md)
+- รายงานเทียบ `.env` จริงกับ production baseline: [docs/PRODUCTION_ENV_GAP_TH.md](./docs/PRODUCTION_ENV_GAP_TH.md)
+- คู่มือแอดมินใช้งานประจำวัน: [docs/ADMIN_DAILY_OPERATIONS_TH.md](./docs/ADMIN_DAILY_OPERATIONS_TH.md)
 - สถานะระบบ/roadmap: [PROJECT_HQ.md](./PROJECT_HQ.md)
 - สถาปัตยกรรม: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
@@ -380,6 +382,10 @@ npm run security:check
 npm run readiness:prod
 npm run smoke:postdeploy
 ```
+
+หมายเหตุ `smoke:postdeploy`
+- ค่า default ตอนนี้เช็ก `admin` ผ่าน local admin web (`127.0.0.1:3200`) และยอมรับ `player portal` ที่ตอบกลับแบบ canonical redirect ไปโดเมนจริง
+- ถ้าต้องการบังคับเช็กผ่าน reverse proxy/public URL โดยตรง ให้ตั้ง `SMOKE_ADMIN_BASE_URL` และ `SMOKE_PLAYER_BASE_URL`
 
 health endpoint ที่มี
 - bot

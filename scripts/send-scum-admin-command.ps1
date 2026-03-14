@@ -1,6 +1,5 @@
 param(
-  [Parameter(Mandatory = $true)]
-  [string]$Command,
+  [string]$Command = '',
 
   [string]$WindowTitle = 'SCUM',
 
@@ -24,12 +23,18 @@ param(
 
   [int]$InterSubmitDelayMs = 120,
 
-  [switch]$SkipSubmit
+  [switch]$SkipSubmit,
+
+  [switch]$CheckOnly
 )
 
 $ErrorActionPreference = 'Stop'
 
-if (-not $Command.Trim().StartsWith('#')) {
+if (-not $CheckOnly -and [string]::IsNullOrWhiteSpace($Command)) {
+  throw 'Command is required unless -CheckOnly is used.'
+}
+
+if (-not $CheckOnly -and -not $Command.Trim().StartsWith('#')) {
   throw 'Only SCUM admin commands starting with # are allowed.'
 }
 
@@ -195,6 +200,19 @@ function Get-EffectiveSubmitKeyCount {
 
 $targetProcess = Get-ScumWindow -Title $WindowTitle
 Focus-ScumWindow -Process $targetProcess
+
+if ($CheckOnly) {
+  [pscustomobject]@{
+    ok = $true
+    mode = 'admin-client-preflight'
+    windowTitle = $WindowTitle
+    processId = $targetProcess.Id
+    openInputKey = $OpenInputKey
+    switchToAdminChannel = [bool]$SwitchToAdminChannel
+    adminChannelTabs = $AdminChannelTabs
+  } | ConvertTo-Json -Compress
+  return
+}
 
 if ($OpenInputKey) {
   $vk = Resolve-VirtualKey -Value $OpenInputKey

@@ -79,8 +79,15 @@ async function startWorker() {
       const rent = getRentBikeRuntime();
       const delivery = getDeliveryMetricsSnapshot();
       const deliveryRuntime = await getDeliveryRuntimeStatus();
+      const deliveryReady = deliveryRuntime?.readiness?.ready === true;
+      const status =
+        START_DELIVERY && !deliveryReady
+          ? 'degraded'
+          : 'ready';
       return {
         now: new Date().toISOString(),
+        status,
+        ready: status === 'ready',
         uptimeSec: Math.round(process.uptime()),
         rentBikeEnabled: START_RENT_BIKE,
         deliveryEnabled: START_DELIVERY,

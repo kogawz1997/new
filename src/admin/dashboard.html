@@ -1751,6 +1751,20 @@
                       <button type="button" id="deliveryOpsRefreshBtn" class="ghost">รีเฟรชตารางส่งของ</button>
                     </div>
                   </div>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Filter error code</span>
+                      <input id="deliveryQueueErrorFilterInput" placeholder="เช่น AGENT_PREFLIGHT_FAILED">
+                    </label>
+                    <label class="field">
+                      <span>ค้นหา</span>
+                      <input id="deliveryQueueSearchInput" placeholder="purchase, item, user">
+                    </label>
+                    <div class="inline-actions">
+                      <button type="button" id="deliveryQueueApplyFilterBtn" class="ghost">ใช้ filter คิว</button>
+                      <button type="button" id="deliveryQueueRetryManyBtn" class="ghost">Retry หลายรายการ</button>
+                    </div>
+                  </div>
                   <div id="deliveryQueueTableWrap" class="table-wrap"></div>
                 </div>
 
@@ -1761,6 +1775,20 @@
                       <p class="help">กด retry / delete / ดู log ได้จากแถวโดยตรง</p>
                     </div>
                   </div>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Filter error code</span>
+                      <input id="deliveryDeadErrorFilterInput" placeholder="เช่น DELIVERY_STEAM_LINK_MISSING">
+                    </label>
+                    <label class="field">
+                      <span>ค้นหา</span>
+                      <input id="deliveryDeadSearchInput" placeholder="purchase, item, user">
+                    </label>
+                    <div class="inline-actions">
+                      <button type="button" id="deliveryDeadApplyFilterBtn" class="ghost">ใช้ filter dead-letter</button>
+                      <button type="button" id="deliveryDeadRetryManyBtn" class="ghost">Requeue หลายรายการ</button>
+                    </div>
+                  </div>
                   <div id="deliveryDeadLetterTableWrap" class="table-wrap"></div>
                 </div>
               </div>
@@ -1769,6 +1797,7 @@
                 <h4>Command Log / Purchase Code</h4>
                 <p class="help">เลือก purchase code จากคิวหรือ dead-letter เพื่อดูสถานะ, history และ command log ที่ยิงจริง</p>
                 <div id="deliveryDetailSummary" class="summary"></div>
+                <div id="deliveryDetailStepLog" class="table-wrap"></div>
                 <pre id="deliveryDetailView" class="raw">ยังไม่ได้เลือก purchase code</pre>
               </div>
 
@@ -2331,6 +2360,15 @@
     const deliveryDeadLetterTableWrap = document.getElementById('deliveryDeadLetterTableWrap');
     const deliveryDetailSummary = document.getElementById('deliveryDetailSummary');
     const deliveryDetailView = document.getElementById('deliveryDetailView');
+    const deliveryDetailStepLog = document.getElementById('deliveryDetailStepLog');
+    const deliveryQueueErrorFilterInput = document.getElementById('deliveryQueueErrorFilterInput');
+    const deliveryQueueSearchInput = document.getElementById('deliveryQueueSearchInput');
+    const deliveryQueueApplyFilterBtn = document.getElementById('deliveryQueueApplyFilterBtn');
+    const deliveryQueueRetryManyBtn = document.getElementById('deliveryQueueRetryManyBtn');
+    const deliveryDeadErrorFilterInput = document.getElementById('deliveryDeadErrorFilterInput');
+    const deliveryDeadSearchInput = document.getElementById('deliveryDeadSearchInput');
+    const deliveryDeadApplyFilterBtn = document.getElementById('deliveryDeadApplyFilterBtn');
+    const deliveryDeadRetryManyBtn = document.getElementById('deliveryDeadRetryManyBtn');
     const protectedControls = Array.from(
       document.querySelectorAll(
         '.workspace input, .workspace select, .workspace textarea, .workspace button',
@@ -2378,6 +2416,10 @@
     let currentDeliveryRuntime = null;
     let currentDeliveryDetailCode = '';
     let currentDeliveryDetailData = null;
+    let currentDeliveryQueueErrorFilter = '';
+    let currentDeliveryQueueSearch = '';
+    let currentDeliveryDeadErrorFilter = '';
+    let currentDeliveryDeadSearch = '';
     let liveEnabled = true;
     let liveIntervalMs = Math.max(1000, Number(liveIntervalSelect.value || 2000));
     let liveTimer = null;
@@ -4033,6 +4075,7 @@
         ['Dead-Letter', Number(runtime.deadLetterCount || 0).toLocaleString()],
         ['กำลังส่ง', Number(runtime.inFlightCount || 0).toLocaleString()],
         ['Worker', runtime.workerStarted ? (runtime.workerBusy ? 'busy' : 'running') : 'stopped'],
+        ['Readiness', runtime.readiness?.ready ? 'ready' : `degraded${runtime.readiness?.reason ? `: ${runtime.readiness.reason}` : ''}`],
       ];
 
       if (runtime.executionMode === 'agent') {
@@ -4041,6 +4084,12 @@
           runtime.agent?.health?.reachable
             ? `online (${runtime.agent?.backend || runtime.agent?.health?.backend || 'agent'})`
             : `offline${runtime.agent?.health?.error ? `: ${runtime.agent.health.error}` : ''}`,
+        ]);
+        metrics.push([
+          'Preflight',
+          runtime.agent?.preflight?.ok
+            ? 'ok'
+            : `fail${runtime.agent?.preflight?.errorCode ? `: ${runtime.agent.preflight.errorCode}` : ''}`,
         ]);
       } else {
         metrics.push([
@@ -4121,6 +4170,41 @@
       return String(row?.itemName || row?.itemId || '-').trim() || '-';
     }
 
+    function getSelectedDeliveryCodes(container, attributeName) {
+      if (!container) return [];
+      return Array.from(container.querySelectorAll(`input[${attributeName}]:checked`))
+        .map((input) => String(input.getAttribute(attributeName) || '').trim())
+        .filter(Boolean);
+    }
+
+    function renderDeliveryStepLog(stepRows = []) {
+      if (!deliveryDetailStepLog) return;
+      const rows = Array.isArray(stepRows) ? stepRows : [];
+      if (rows.length === 0) {
+        deliveryDetailStepLog.innerHTML =
+          '<div style="padding:12px; color:#9eb0d9;">ยังไม่มี step log</div>';
+        return;
+      }
+
+      deliveryDetailStepLog.innerHTML = [
+        '<table><thead><tr>',
+        '<th>เวลา</th>',
+        '<th>Step</th>',
+        '<th>Error Code</th>',
+        '<th>ข้อความ</th>',
+        '</tr></thead><tbody>',
+        rows.map((row) => [
+          '<tr>',
+          `<td>${escapeHtml(formatDeliveryTime(row?.at || ''))}</td>`,
+          `<td><div class="delivery-cell-main">${escapeHtml(String(row?.step || row?.action || '-'))}</div><div class="delivery-cell-sub">${escapeHtml(String(row?.level || '-'))}</div></td>`,
+          `<td><div class="delivery-cell-main">${escapeHtml(String(row?.errorCode || '-'))}</div><div class="delivery-cell-sub">${escapeHtml(String(row?.retryable == null ? '-' : row.retryable ? 'retryable' : 'terminal'))}</div></td>`,
+          `<td><div class="delivery-cell-main">${escapeHtml(String(row?.message || '-'))}</div><div class="delivery-cell-sub">${escapeHtml(String(row?.recoveryHint || row?.commandSummary || '-'))}</div></td>`,
+          '</tr>',
+        ].join('')).join(''),
+        '</tbody></table>',
+      ].join('');
+    }
+
     function prefillDeliveryFormsFromDetail(detail) {
       const preview = detail?.preview && typeof detail.preview === 'object'
         ? detail.preview
@@ -4179,6 +4263,7 @@
       if (!detail) {
         deliveryDetailSummary.innerHTML =
           '<div class="metric"><div class="k">Delivery Detail</div><div class="v">ยังไม่ได้เลือก purchase code</div></div>';
+        renderDeliveryStepLog([]);
         deliveryDetailView.textContent = 'ยังไม่ได้เลือก purchase code';
         return;
       }
@@ -4187,6 +4272,7 @@
         deliveryDetailSummary.innerHTML =
           `<div class="metric"><div class="k">Purchase Code</div><div class="v">${escapeHtml(String(detail.purchaseCode || '-'))}</div></div>` +
           `<div class="metric"><div class="k">สถานะ</div><div class="v">โหลดไม่สำเร็จ</div></div>`;
+        renderDeliveryStepLog([]);
         deliveryDetailView.textContent = String(detail.error || 'โหลด delivery detail ไม่สำเร็จ');
         return;
       }
@@ -4207,6 +4293,7 @@
       deliveryDetailSummary.innerHTML = metrics
         .map(([k, v]) => `<div class="metric"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(String(v))}</div></div>`)
         .join('');
+      renderDeliveryStepLog(detail.stepLog || []);
 
       deliveryDetailView.textContent = JSON.stringify(
         {
@@ -4216,6 +4303,7 @@
           deadLetter,
           link: detail.link || null,
           statusHistory: Array.isArray(detail.statusHistory) ? detail.statusHistory : [],
+          stepLog: Array.isArray(detail.stepLog) ? detail.stepLog : [],
           latestCommandSummary: detail.latestCommandSummary || null,
           latestOutputs,
           preview: detail.preview || null,
@@ -4284,7 +4372,28 @@
 
     function renderDeliveryQueueTable(rows = []) {
       if (!deliveryQueueTableWrap) return;
-      const list = Array.isArray(rows) ? rows : [];
+      const list = (Array.isArray(rows) ? rows : []).filter((row) => {
+        const errorCode = String(currentDeliveryQueueErrorFilter || '').trim().toUpperCase();
+        const searchText = String(currentDeliveryQueueSearch || '').trim().toLowerCase();
+        if (errorCode && String(row?.lastErrorCode || '').trim().toUpperCase() !== errorCode) {
+          return false;
+        }
+        if (searchText) {
+          const haystack = [
+            row?.purchaseCode,
+            row?.itemId,
+            row?.itemName,
+            row?.gameItemId,
+            row?.userId,
+            row?.lastError,
+            row?.lastErrorCode,
+          ]
+            .map((entry) => String(entry || '').toLowerCase())
+            .join(' ');
+          if (!haystack.includes(searchText)) return false;
+        }
+        return true;
+      });
       if (list.length === 0) {
         deliveryQueueTableWrap.innerHTML =
           '<div style="padding:12px; color:#9eb0d9;">ไม่มีงานคิวส่งของค้างอยู่</div>';
@@ -4302,12 +4411,14 @@
           );
           const attemptText = `attempt ${Number(row?.attempts || 0)}`;
           const lastError = String(row?.lastError || '').trim();
+          const lastErrorCode = String(row?.lastErrorCode || '').trim();
           return [
             '<tr>',
+            `<td><input type="checkbox" data-delivery-select="${escapeHtml(code)}"></td>`,
             `<td><div class="delivery-cell-main"><strong>${escapeHtml(code || '-')}</strong></div><div class="delivery-cell-sub">${escapeHtml(String(row?.userId || '-'))}</div></td>`,
             `<td><div class="delivery-cell-main">${escapeHtml(itemText)}</div><div class="delivery-cell-sub">${escapeHtml(String(row?.itemName || row?.itemId || row?.gameItemId || '-'))}</div></td>`,
             `<td><div class="delivery-cell-main">${escapeHtml(attemptText)}</div><div class="delivery-cell-sub">${escapeHtml(nextAttempt)}</div></td>`,
-            `<td><div class="delivery-cell-main">${escapeHtml(lastError || 'พร้อมส่ง')}</div><div class="delivery-cell-sub">${escapeHtml(String(row?.guildId || '-'))}</div></td>`,
+            `<td><div class="delivery-cell-main">${escapeHtml(lastErrorCode || 'READY')}</div><div class="delivery-cell-sub">${escapeHtml(lastError || 'พร้อมส่ง')}</div></td>`,
             `<td><div class="row-actions"><button type="button" data-delivery-detail="${escapeHtml(code)}">ดู log</button><button type="button" data-delivery-retry="${escapeHtml(code)}" ${canAdmin ? '' : 'disabled'}>Retry</button><button type="button" data-delivery-cancel="${escapeHtml(code)}" ${canAdmin ? '' : 'disabled'}>Cancel</button></div></td>`,
             '</tr>',
           ].join('');
@@ -4316,10 +4427,11 @@
 
       deliveryQueueTableWrap.innerHTML = [
         '<table><thead><tr>',
+        '<th></th>',
         '<th>Purchase</th>',
         '<th>Item</th>',
         '<th>สถานะคิว</th>',
-        '<th>Last Error</th>',
+        '<th>Error</th>',
         '<th>Actions</th>',
         '</tr></thead><tbody>',
         body,
@@ -4377,7 +4489,28 @@
 
     function renderDeliveryDeadLetterTable(rows = []) {
       if (!deliveryDeadLetterTableWrap) return;
-      const list = Array.isArray(rows) ? rows : [];
+      const list = (Array.isArray(rows) ? rows : []).filter((row) => {
+        const errorCode = String(currentDeliveryDeadErrorFilter || '').trim().toUpperCase();
+        const searchText = String(currentDeliveryDeadSearch || '').trim().toLowerCase();
+        if (errorCode && String(row?.lastErrorCode || '').trim().toUpperCase() !== errorCode) {
+          return false;
+        }
+        if (searchText) {
+          const haystack = [
+            row?.purchaseCode,
+            row?.itemId,
+            row?.itemName,
+            row?.userId,
+            row?.reason,
+            row?.lastError,
+            row?.lastErrorCode,
+          ]
+            .map((entry) => String(entry || '').toLowerCase())
+            .join(' ');
+          if (!haystack.includes(searchText)) return false;
+        }
+        return true;
+      });
       if (list.length === 0) {
         deliveryDeadLetterTableWrap.innerHTML =
           '<div style="padding:12px; color:#9eb0d9;">ยังไม่มี dead-letter</div>';
@@ -4391,12 +4524,14 @@
           const code = String(row?.purchaseCode || '').trim();
           const itemText = summarizeDeliveryItems(row);
           const createdAt = formatDeliveryTime(row?.createdAt || row?.updatedAt);
+          const lastErrorCode = String(row?.lastErrorCode || '').trim();
           return [
             '<tr>',
+            `<td><input type="checkbox" data-delivery-dead-select="${escapeHtml(code)}"></td>`,
             `<td><div class="delivery-cell-main"><strong>${escapeHtml(code || '-')}</strong></div><div class="delivery-cell-sub">${escapeHtml(String(row?.userId || '-'))}</div></td>`,
             `<td><div class="delivery-cell-main">${escapeHtml(itemText)}</div><div class="delivery-cell-sub">${escapeHtml(String(row?.itemName || row?.itemId || row?.gameItemId || '-'))}</div></td>`,
             `<td><div class="delivery-cell-main">${escapeHtml(String(row?.reason || '-'))}</div><div class="delivery-cell-sub">${escapeHtml(createdAt)}</div></td>`,
-            `<td><div class="delivery-cell-main">${escapeHtml(String(row?.lastError || '-'))}</div><div class="delivery-cell-sub">${escapeHtml(`attempt ${Number(row?.attempts || 0)}`)}</div></td>`,
+            `<td><div class="delivery-cell-main">${escapeHtml(lastErrorCode || '-')}</div><div class="delivery-cell-sub">${escapeHtml(String(row?.lastError || '-'))}</div></td>`,
             `<td><div class="row-actions"><button type="button" data-delivery-detail="${escapeHtml(code)}">ดู log</button><button type="button" data-delivery-dead-retry="${escapeHtml(code)}" ${canAdmin ? '' : 'disabled'}>Retry</button><button type="button" data-delivery-dead-delete="${escapeHtml(code)}" ${canAdmin ? '' : 'disabled'}>Delete</button></div></td>`,
             '</tr>',
           ].join('');
@@ -4405,10 +4540,11 @@
 
       deliveryDeadLetterTableWrap.innerHTML = [
         '<table><thead><tr>',
+        '<th></th>',
         '<th>Purchase</th>',
         '<th>Item</th>',
         '<th>Reason</th>',
-        '<th>Last Error</th>',
+        '<th>Error</th>',
         '<th>Actions</th>',
         '</tr></thead><tbody>',
         body,
@@ -5124,6 +5260,60 @@
           toast('อัปเดตสถานะส่งของแล้ว');
         } catch (error) {
           toast(error.message || 'โหลดสถานะส่งของไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (deliveryQueueApplyFilterBtn) {
+      deliveryQueueApplyFilterBtn.addEventListener('click', () => {
+        currentDeliveryQueueErrorFilter = String(deliveryQueueErrorFilterInput?.value || '').trim();
+        currentDeliveryQueueSearch = String(deliveryQueueSearchInput?.value || '').trim();
+        renderDeliveryQueueTable(snapshot?.deliveryQueue || []);
+      });
+    }
+
+    if (deliveryDeadApplyFilterBtn) {
+      deliveryDeadApplyFilterBtn.addEventListener('click', () => {
+        currentDeliveryDeadErrorFilter = String(deliveryDeadErrorFilterInput?.value || '').trim();
+        currentDeliveryDeadSearch = String(deliveryDeadSearchInput?.value || '').trim();
+        renderDeliveryDeadLetterTable(snapshot?.deliveryDeadLetters || []);
+      });
+    }
+
+    if (deliveryQueueRetryManyBtn) {
+      deliveryQueueRetryManyBtn.addEventListener('click', async () => {
+        const codes = getSelectedDeliveryCodes(deliveryQueueTableWrap, 'data-delivery-select');
+        if (codes.length === 0) {
+          toast('เลือกคิวที่จะ retry ก่อน');
+          return;
+        }
+        try {
+          await runWithButtonState(deliveryQueueRetryManyBtn, 'กำลัง retry หลายรายการ...', async () => {
+            await api('/admin/api/delivery/retry-many', 'POST', { codes });
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: false });
+          toast(`สั่ง retry แล้ว ${codes.length} รายการ`);
+        } catch (error) {
+          toast(error.message || 'retry หลายรายการไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (deliveryDeadRetryManyBtn) {
+      deliveryDeadRetryManyBtn.addEventListener('click', async () => {
+        const codes = getSelectedDeliveryCodes(deliveryDeadLetterTableWrap, 'data-delivery-dead-select');
+        if (codes.length === 0) {
+          toast('เลือกรายการ dead-letter ก่อน requeue');
+          return;
+        }
+        try {
+          await runWithButtonState(deliveryDeadRetryManyBtn, 'กำลัง requeue หลายรายการ...', async () => {
+            await api('/admin/api/delivery/dead-letter/retry-many', 'POST', { codes });
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: false });
+          toast(`requeue แล้ว ${codes.length} รายการ`);
+        } catch (error) {
+          toast(error.message || 'requeue หลายรายการไม่สำเร็จ');
         }
       });
     }

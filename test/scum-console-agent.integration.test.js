@@ -31,6 +31,12 @@ test('scum console agent: exec backend executes command template', async () => {
     assert.equal(health.res.status, 200);
     assert.equal(health.payload.backend, 'exec');
 
+    const preflight = await fetchJson('http://127.0.0.1:3313/preflight');
+    assert.equal(preflight.res.status, 200);
+    assert.equal(preflight.payload.ok, true);
+    assert.equal(preflight.payload.ready, true);
+    assert.equal(preflight.payload.result?.mode, 'config-exec');
+
     const execRes = await fetchJson('http://127.0.0.1:3313/execute', {
       method: 'POST',
       headers: {
@@ -67,6 +73,11 @@ test('scum console agent: process backend autostarts child and writes command to
 
   try {
     await runtime.ready;
+    const preflight = await fetchJson('http://127.0.0.1:3314/preflight');
+    assert.equal(preflight.res.status, 200);
+    assert.equal(preflight.payload.ok, true);
+    assert.equal(preflight.payload.result?.backend, 'process');
+
     const execRes = await fetchJson('http://127.0.0.1:3314/execute', {
       method: 'POST',
       headers: {

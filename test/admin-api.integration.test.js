@@ -820,6 +820,13 @@ test('admin API delivery detail + test send routes work with local console agent
   assert.ok(Array.isArray(testSend.data.data?.outputs));
   assert.match(String(testSend.data.data?.outputs?.[0]?.stdout || ''), /AGENT-ECHO:/);
 
+  const runtimeStatus = await request('/admin/api/delivery/runtime', 'GET', null, cookie);
+  assert.equal(runtimeStatus.res.status, 200);
+  assert.equal(runtimeStatus.data.ok, true);
+  assert.equal(String(runtimeStatus.data.data?.executionMode || ''), 'agent');
+  assert.equal(Boolean(runtimeStatus.data.data?.readiness?.ready), true);
+  assert.equal(Boolean(runtimeStatus.data.data?.agent?.preflight?.ok), true);
+
   const initialShopItems = await listShopItems();
   const detailShopItem = initialShopItems.find(
     (row) => String(row?.kind || 'item').trim().toLowerCase() === 'item',
@@ -841,4 +848,45 @@ test('admin API delivery detail + test send routes work with local console agent
   assert.equal(String(detail.data.data?.purchase?.code || ''), purchase.code);
   assert.ok(detail.data.data?.preview);
   assert.ok(Array.isArray(detail.data.data?.statusHistory));
+  assert.ok(Array.isArray(detail.data.data?.stepLog));
+
+  const queuedPurchase = await createPurchase(
+    'admin-delivery-queue-user',
+    detailShopItem,
+  );
+  const enqueueRes = await request('/admin/api/delivery/enqueue', 'POST', {
+    code: queuedPurchase.code,
+  }, cookie);
+  assert.equal(enqueueRes.res.status, 200);
+  assert.equal(enqueueRes.data.ok, true);
+
+  const queueRes = await request(
+    `/admin/api/delivery/queue?limit=20&q=${encodeURIComponent(queuedPurchase.code)}`,
+    'GET',
+    null,
+    cookie,
+  );
+  assert.equal(queueRes.res.status, 200);
+  assert.equal(queueRes.data.ok, true);
+  assert.ok(
+    queueRes.data.data.some(
+      (row) => String(row?.purchaseCode || '') === queuedPurchase.code,
+    ),
+  );
+
+  const retryManyRes = await request('/admin/api/delivery/retry-many', 'POST', {
+    codes: [queuedPurchase.code],
+  }, cookie);
+  assert.equal(retryManyRes.res.status, 200);
+  assert.equal(retryManyRes.data.ok, true);
+  assert.equal(Number(retryManyRes.data.data?.total || 0), 1);
+  assert.equal(Number(retryManyRes.data.data?.queued || 0), 1);
+
+  const deadRetryManyRes = await request('/admin/api/delivery/dead-letter/retry-many', 'POST', {
+    codes: ['missing-dead-letter-code'],
+  }, cookie);
+  assert.equal(deadRetryManyRes.res.status, 200);
+  assert.equal(deadRetryManyRes.data.ok, true);
+  assert.equal(Number(deadRetryManyRes.data.data?.total || 0), 1);
+  assert.equal(Number(deadRetryManyRes.data.data?.queued || 0), 0);
 });
