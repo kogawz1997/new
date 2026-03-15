@@ -40,6 +40,28 @@ function createAgentError(code, message, meta = null) {
   return error;
 }
 
+function summarizeExecFailure(error, fallbackCode = 'AGENT_EXEC_FAILED') {
+  const stderr = trimText(error?.stderr || '', 600);
+  const stdout = trimText(error?.stdout || '', 600);
+  const detail = {
+    shellCommand: String(error?.displayCommand || '').trim() || null,
+    stderr: stderr || null,
+    stdout: stdout || null,
+    exitCode:
+      Number.isFinite(Number(error?.exitCode)) ? Number(error.exitCode) : null,
+    signal: String(error?.signal || '').trim() || null,
+  };
+  const message =
+    stderr
+    || stdout
+    || trimText(error?.message || 'Command failed', 300);
+  return createAgentError(
+    fallbackCode,
+    message,
+    detail,
+  );
+}
+
 function normalizeHost(value, fallback = '127.0.0.1') {
   const text = String(value || '').trim();
   return text || fallback;
@@ -352,16 +374,21 @@ function startScumConsoleAgent(options = {}) {
         const invocation = buildExecInvocation('#Announce PREFLIGHT', {
           checkOnly: true,
         });
-        const result = await executeCommandTemplate(
-          invocation.template,
-          invocation.vars,
-          {
-            extraArgs: invocation.extraArgs,
-            timeoutMs: settings.commandTimeoutMs,
-            windowsHide: true,
-            cwd: process.cwd(),
-          },
-        );
+        let result;
+        try {
+          result = await executeCommandTemplate(
+            invocation.template,
+            invocation.vars,
+            {
+              extraArgs: invocation.extraArgs,
+              timeoutMs: settings.commandTimeoutMs,
+              windowsHide: true,
+              cwd: process.cwd(),
+            },
+          );
+        } catch (error) {
+          throw summarizeExecFailure(error, 'AGENT_PREFLIGHT_FAILED');
+        }
         let parsed = null;
         try {
           parsed = result.stdout ? JSON.parse(result.stdout) : null;
@@ -430,7 +457,11 @@ function startScumConsoleAgent(options = {}) {
         if (settings.backend === 'process') {
           result = await executeWithProcessBackend(normalizedCommand);
         } else {
-          result = await executeWithExecBackend(normalizedCommand);
+          try {
+            result = await executeWithExecBackend(normalizedCommand);
+          } catch (error) {
+            throw summarizeExecFailure(error, 'AGENT_EXEC_FAILED');
+          }
         }
 
         lastSuccessAt = new Date().toISOString();

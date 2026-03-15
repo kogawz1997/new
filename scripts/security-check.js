@@ -4,6 +4,7 @@ const { spawnSync } = require('node:child_process');
 const { loadMergedEnvFiles } = require('../src/utils/loadEnvFiles');
 const { validateCommandTemplate } = require('../src/utils/commandTemplate');
 const { getAdminSsoRoleMappingSummary } = require('../src/utils/adminSsoRoleMapping');
+const { resolveDatabaseRuntime } = require('../src/utils/dbEngine');
 
 const ROOT_DIR = process.cwd();
 const ROOT_ENV_PATH = path.join(ROOT_DIR, '.env');
@@ -309,6 +310,30 @@ function run() {
 
   if (!String(env.DATABASE_URL || '').trim()) {
     errors.push('DATABASE_URL is missing');
+  } else {
+    const dbRuntime = resolveDatabaseRuntime({
+      databaseUrl: env.DATABASE_URL,
+      provider: env.PRISMA_SCHEMA_PROVIDER || env.DATABASE_PROVIDER || '',
+    });
+    if (dbRuntime.engine === 'unsupported') {
+      errors.push(`Unsupported DATABASE_URL engine: ${String(env.DATABASE_URL || '').trim()}`);
+    }
+    if (dbRuntime.isServerEngine) {
+      const provider = String(env.PRISMA_SCHEMA_PROVIDER || env.DATABASE_PROVIDER || dbRuntime.engine)
+        .trim()
+        .toLowerCase();
+      const normalizedProvider = provider === 'postgres' ? 'postgresql' : provider;
+      if (normalizedProvider && normalizedProvider !== dbRuntime.engine) {
+        errors.push(
+          `PRISMA_SCHEMA_PROVIDER/DATABASE_PROVIDER (${provider}) does not match DATABASE_URL engine (${dbRuntime.engine})`,
+        );
+      }
+      if (!provider) {
+        warnings.push(
+          `Set PRISMA_SCHEMA_PROVIDER=${dbRuntime.engine} for DB-server deployments so db scripts render the matching Prisma schema`,
+        );
+      }
+    }
   }
 
   if (persistRequireDb && legacySnapshotsEnabled) {

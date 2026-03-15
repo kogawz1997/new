@@ -3,6 +3,10 @@ param(
 
   [string]$WindowTitle = 'SCUM',
 
+  [string]$WindowProcessName = 'SCUM',
+
+  [string]$WindowTitleFallbacks = '',
+
   [string]$OpenInputKey = 't',
 
   [int]$FocusDelayMs = 350,
@@ -75,15 +79,70 @@ public static class NativeInput {
 Add-Type -TypeDefinition $signature -Language CSharp
 
 function Get-ScumWindow {
-  param([string]$Title)
+  param(
+    [string]$Title,
+    [string]$ProcessName,
+    [string]$TitleFallbacks
+  )
 
-  $match = Get-Process |
-    Where-Object { $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like "*$Title*" } |
-    Sort-Object StartTime -Descending |
-    Select-Object -First 1
+  $titleCandidates = @()
+  if (-not [string]::IsNullOrWhiteSpace($Title)) {
+    $titleCandidates += $Title.Trim()
+  }
+
+  if (-not [string]::IsNullOrWhiteSpace($TitleFallbacks)) {
+    $fallbacks = $TitleFallbacks -split '[,;|]' |
+      ForEach-Object { $_.Trim() } |
+      Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    $titleCandidates += $fallbacks
+  }
+
+  $titleCandidates = $titleCandidates | Select-Object -Unique
+
+  $visibleWindows = Get-Process |
+    Where-Object { $_.MainWindowHandle -ne 0 } |
+    Sort-Object StartTime -Descending
+
+  $match = $null
+
+  foreach ($candidate in $titleCandidates) {
+    $match = $visibleWindows |
+      Where-Object { $_.MainWindowTitle -like "*$candidate*" } |
+      Select-Object -First 1
+    if ($match) {
+      break
+    }
+  }
+
+  if (-not $match -and -not [string]::IsNullOrWhiteSpace($ProcessName)) {
+    $processPattern = $ProcessName.Trim()
+    $match = $visibleWindows |
+      Where-Object { $_.ProcessName -like "*$processPattern*" } |
+      Select-Object -First 1
+  }
 
   if (-not $match) {
-    throw "SCUM window not found for title: $Title"
+    $availableWindows = $visibleWindows |
+      Select-Object -First 10 ProcessName, Id, MainWindowTitle |
+      ForEach-Object {
+        $windowTitle = [string]$_.MainWindowTitle
+        if ([string]::IsNullOrWhiteSpace($windowTitle)) {
+          "$($_.ProcessName)#$($_.Id)"
+        } else {
+          "$($_.ProcessName)#$($_.Id): $windowTitle"
+        }
+      }
+    $candidateText = if ($titleCandidates.Count -gt 0) {
+      $titleCandidates -join ', '
+    } else {
+      '<none>'
+    }
+    $availableText = if ($availableWindows.Count -gt 0) {
+      $availableWindows -join ' | '
+    } else {
+      '<no visible windows>'
+    }
+    throw "SCUM window not found. titleCandidates=[$candidateText] processName=$ProcessName availableWindows=$availableText"
   }
 
   return $match
@@ -198,7 +257,7 @@ function Get-EffectiveSubmitKeyCount {
   return 1
 }
 
-$targetProcess = Get-ScumWindow -Title $WindowTitle
+$targetProcess = Get-ScumWindow -Title $WindowTitle -ProcessName $WindowProcessName -TitleFallbacks $WindowTitleFallbacks
 Focus-ScumWindow -Process $targetProcess
 
 if ($CheckOnly) {
@@ -206,6 +265,9 @@ if ($CheckOnly) {
     ok = $true
     mode = 'admin-client-preflight'
     windowTitle = $WindowTitle
+    windowProcessName = $WindowProcessName
+    windowTitleFallbacks = $WindowTitleFallbacks
+    resolvedWindowTitle = $targetProcess.MainWindowTitle
     processId = $targetProcess.Id
     openInputKey = $OpenInputKey
     switchToAdminChannel = [bool]$SwitchToAdminChannel
@@ -258,6 +320,8 @@ Start-Sleep -Milliseconds $PostSubmitDelayMs
   ok = $true
   mode = 'admin-client-sendinput'
   windowTitle = $WindowTitle
+  windowProcessName = $WindowProcessName
+  resolvedWindowTitle = $targetProcess.MainWindowTitle
   command = $Command
   processId = $targetProcess.Id
 } | ConvertTo-Json -Compress

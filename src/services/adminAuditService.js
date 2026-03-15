@@ -1,5 +1,7 @@
 ﻿const crypto = require('node:crypto');
 
+const { resolveDatabaseRuntime } = require('../utils/dbEngine');
+
 const REWARD_REASON_TOKENS = Object.freeze([
   'daily',
   'weekly',
@@ -863,37 +865,78 @@ async function ensureAdminAuditPresetSchema(prisma) {
     return ensureAdminAuditPresetSchemaPromise;
   }
   ensureAdminAuditPresetSchemaPromise = (async () => {
-    await prisma.$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS "AdminAuditPreset" (
-        "id" TEXT NOT NULL PRIMARY KEY,
-        "name" TEXT NOT NULL,
-        "view" TEXT NOT NULL DEFAULT 'wallet',
-        "visibility" TEXT NOT NULL DEFAULT 'public',
-        "sharedRole" TEXT,
-        "query" TEXT,
-        "userId" TEXT,
-        "actor" TEXT,
-        "actorMode" TEXT NOT NULL DEFAULT 'contains',
-        "reason" TEXT,
-        "reference" TEXT,
-        "referenceMode" TEXT NOT NULL DEFAULT 'contains',
-        "status" TEXT,
-        "statusMode" TEXT NOT NULL DEFAULT 'contains',
-        "dateFrom" TEXT,
-        "dateTo" TEXT,
-        "sortBy" TEXT NOT NULL DEFAULT 'timestamp',
-        "sortOrder" TEXT NOT NULL DEFAULT 'desc',
-        "windowMs" INTEGER,
-        "pageSize" INTEGER NOT NULL DEFAULT 50,
-        "createdBy" TEXT,
-        "createdByUser" TEXT,
-        "updatedBy" TEXT,
-        "updatedByUser" TEXT,
-        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
-    const columns = await prisma.$queryRawUnsafe(`PRAGMA table_info("AdminAuditPreset")`);
+    const runtime = resolveDatabaseRuntime();
+    if (runtime.engine === 'postgresql') {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "AdminAuditPreset" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "name" TEXT NOT NULL,
+          "view" TEXT NOT NULL DEFAULT 'wallet',
+          "visibility" TEXT NOT NULL DEFAULT 'public',
+          "sharedRole" TEXT,
+          "query" TEXT,
+          "userId" TEXT,
+          "actor" TEXT,
+          "actorMode" TEXT NOT NULL DEFAULT 'contains',
+          "reason" TEXT,
+          "reference" TEXT,
+          "referenceMode" TEXT NOT NULL DEFAULT 'contains',
+          "status" TEXT,
+          "statusMode" TEXT NOT NULL DEFAULT 'contains',
+          "dateFrom" TEXT,
+          "dateTo" TEXT,
+          "sortBy" TEXT NOT NULL DEFAULT 'timestamp',
+          "sortOrder" TEXT NOT NULL DEFAULT 'desc',
+          "windowMs" INTEGER,
+          "pageSize" INTEGER NOT NULL DEFAULT 50,
+          "createdBy" TEXT,
+          "createdByUser" TEXT,
+          "updatedBy" TEXT,
+          "updatedByUser" TEXT,
+          "createdAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    } else {
+      await prisma.$executeRawUnsafe(`
+        CREATE TABLE IF NOT EXISTS "AdminAuditPreset" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "name" TEXT NOT NULL,
+          "view" TEXT NOT NULL DEFAULT 'wallet',
+          "visibility" TEXT NOT NULL DEFAULT 'public',
+          "sharedRole" TEXT,
+          "query" TEXT,
+          "userId" TEXT,
+          "actor" TEXT,
+          "actorMode" TEXT NOT NULL DEFAULT 'contains',
+          "reason" TEXT,
+          "reference" TEXT,
+          "referenceMode" TEXT NOT NULL DEFAULT 'contains',
+          "status" TEXT,
+          "statusMode" TEXT NOT NULL DEFAULT 'contains',
+          "dateFrom" TEXT,
+          "dateTo" TEXT,
+          "sortBy" TEXT NOT NULL DEFAULT 'timestamp',
+          "sortOrder" TEXT NOT NULL DEFAULT 'desc',
+          "windowMs" INTEGER,
+          "pageSize" INTEGER NOT NULL DEFAULT 50,
+          "createdBy" TEXT,
+          "createdByUser" TEXT,
+          "updatedBy" TEXT,
+          "updatedByUser" TEXT,
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+    }
+    const columns = runtime.engine === 'postgresql'
+      ? await prisma.$queryRaw`
+        SELECT column_name AS name
+        FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = 'AdminAuditPreset'
+      `
+      : await prisma.$queryRawUnsafe(`PRAGMA table_info("AdminAuditPreset")`);
     const columnNames = new Set((Array.isArray(columns) ? columns : []).map((row) => String(row?.name || '')));
     const alterStatements = [];
     if (!columnNames.has('visibility')) {

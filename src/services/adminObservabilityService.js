@@ -1,10 +1,13 @@
 ﻿const DEFAULT_OBSERVABILITY_SERIES_KEYS = Object.freeze([
   'deliveryQueueLength',
   'deliveryFailRate',
+  'deliveryDeadLetters',
+  'agentCircuitOpen',
   'loginFailures',
   'webhookErrorRate',
   'adminRequestErrors',
   'adminRequest5xx',
+  'runtimeDegraded',
 ]);
 
 function asInt(value, fallback = null) {
@@ -86,6 +89,8 @@ function captureObservabilitySeries(options = {}) {
     getLoginFailureMetrics,
     getWebhookMetricsSnapshot,
     getAdminRequestLogMetrics,
+    getDeliveryRuntimeStatus,
+    getRuntimeSupervisorSnapshot,
   } = options;
   if (!seriesState || typeof seriesState !== 'object') return;
 
@@ -101,9 +106,21 @@ function captureObservabilitySeries(options = {}) {
   const requestLog = typeof getAdminRequestLogMetrics === 'function'
     ? getAdminRequestLogMetrics({ now })
     : { errors: 0, serverErrors: 0 };
+  const deliveryRuntime = typeof getDeliveryRuntimeStatus === 'function'
+    ? getDeliveryRuntimeStatus()
+    : { deadLetterCount: 0, agentCircuit: { open: false } };
+  const runtimeSupervisor = typeof getRuntimeSupervisorSnapshot === 'function'
+    ? getRuntimeSupervisorSnapshot()
+    : { counts: { degraded: 0, offline: 0 } };
 
   recordObservabilityPoint(seriesState, 'deliveryQueueLength', Number(delivery.queueLength || 0), retentionMs, now);
   recordObservabilityPoint(seriesState, 'deliveryFailRate', Number(delivery.failRate || 0), retentionMs, now);
+  if (Object.prototype.hasOwnProperty.call(seriesState, 'deliveryDeadLetters')) {
+    recordObservabilityPoint(seriesState, 'deliveryDeadLetters', Number(deliveryRuntime.deadLetterCount || 0), retentionMs, now);
+  }
+  if (Object.prototype.hasOwnProperty.call(seriesState, 'agentCircuitOpen')) {
+    recordObservabilityPoint(seriesState, 'agentCircuitOpen', deliveryRuntime?.agentCircuit?.open ? 1 : 0, retentionMs, now);
+  }
   recordObservabilityPoint(seriesState, 'loginFailures', Number(login.failures || 0), retentionMs, now);
   recordObservabilityPoint(seriesState, 'webhookErrorRate', Number(webhook.errorRate || 0), retentionMs, now);
   if (Object.prototype.hasOwnProperty.call(seriesState, 'adminRequestErrors')) {
@@ -111,6 +128,10 @@ function captureObservabilitySeries(options = {}) {
   }
   if (Object.prototype.hasOwnProperty.call(seriesState, 'adminRequest5xx')) {
     recordObservabilityPoint(seriesState, 'adminRequest5xx', Number(requestLog.serverErrors || 0), retentionMs, now);
+  }
+  if (Object.prototype.hasOwnProperty.call(seriesState, 'runtimeDegraded')) {
+    const degradedCount = Number(runtimeSupervisor?.counts?.degraded || 0) + Number(runtimeSupervisor?.counts?.offline || 0);
+    recordObservabilityPoint(seriesState, 'runtimeDegraded', degradedCount, retentionMs, now);
   }
 }
 
@@ -199,9 +220,12 @@ function buildObservabilityExportPayload(data = {}) {
     generatedAt: new Date().toISOString(),
     windowMs: Number(data.timeSeriesWindowMs || 0),
     delivery: data.delivery || {},
+    deliveryRuntime: data.deliveryRuntime || {},
     adminLogin: data.adminLogin || {},
     webhook: data.webhook || {},
     requestLog: data.requestLog || {},
+    runtimeSupervisor: data.runtimeSupervisor || null,
+    platformOps: data.platformOps || null,
     recentRequests: data.recentRequests || [],
     timeSeries: data.timeSeries || {},
   };
@@ -211,10 +235,14 @@ function buildObservabilityCsv(data = {}) {
   const summaryRows = [
     { metric: 'delivery.queueLength', value: Number(data?.delivery?.queueLength || 0) },
     { metric: 'delivery.failRate', value: Number(data?.delivery?.failRate || 0) },
+    { metric: 'delivery.runtime.queueDepth', value: Number(data?.deliveryRuntime?.queueDepth || 0) },
+    { metric: 'delivery.runtime.deadLetterCount', value: Number(data?.deliveryRuntime?.deadLetterCount || 0) },
     { metric: 'adminLogin.failures', value: Number(data?.adminLogin?.failures || 0) },
     { metric: 'webhook.errorRate', value: Number(data?.webhook?.errorRate || 0) },
     { metric: 'requestLog.errors', value: Number(data?.requestLog?.errors || 0) },
     { metric: 'requestLog.serverErrors', value: Number(data?.requestLog?.serverErrors || 0) },
+    { metric: 'runtimeSupervisor.degraded', value: Number(data?.runtimeSupervisor?.counts?.degraded || 0) },
+    { metric: 'runtimeSupervisor.offline', value: Number(data?.runtimeSupervisor?.counts?.offline || 0) },
   ];
   const lines = [
     [toCsvValue('metric'), toCsvValue('value')].join(','),

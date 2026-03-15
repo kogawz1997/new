@@ -49,6 +49,11 @@ const {
   normalizeShopKind,
   buildBundleSummary,
 } = require('./services/shopService');
+const {
+  getMemberCommandAccessRole,
+  getRequiredCommandAccessRole,
+  hasCommandAccessAtLeast,
+} = require('./utils/discordCommandAccess');
 const { claimWelcomePackForUser } = require('./services/welcomePackService');
 const {
   initLinkStore,
@@ -87,12 +92,13 @@ function envFlag(name, fallback = true) {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
 }
 
-const START_SCUM_WEBHOOK = envFlag('BOT_ENABLE_SCUM_WEBHOOK', true);
-const START_RESTART_SCHEDULER = envFlag('BOT_ENABLE_RESTART_SCHEDULER', true);
-const START_ADMIN_WEB = envFlag('BOT_ENABLE_ADMIN_WEB', true);
-const START_RENT_BIKE_SERVICE = envFlag('BOT_ENABLE_RENTBIKE_SERVICE', true);
-const START_DELIVERY_WORKER = envFlag('BOT_ENABLE_DELIVERY_WORKER', true);
-const START_OPS_ALERT_ROUTE = envFlag('BOT_ENABLE_OPS_ALERT_ROUTE', true);
+const IS_TEST_RUNTIME = String(process.env.NODE_ENV || '').trim().toLowerCase() === 'test';
+const START_SCUM_WEBHOOK = envFlag('BOT_ENABLE_SCUM_WEBHOOK', !IS_TEST_RUNTIME);
+const START_RESTART_SCHEDULER = envFlag('BOT_ENABLE_RESTART_SCHEDULER', !IS_TEST_RUNTIME);
+const START_ADMIN_WEB = envFlag('BOT_ENABLE_ADMIN_WEB', !IS_TEST_RUNTIME);
+const START_RENT_BIKE_SERVICE = envFlag('BOT_ENABLE_RENTBIKE_SERVICE', !IS_TEST_RUNTIME);
+const START_DELIVERY_WORKER = envFlag('BOT_ENABLE_DELIVERY_WORKER', !IS_TEST_RUNTIME);
+const START_OPS_ALERT_ROUTE = envFlag('BOT_ENABLE_OPS_ALERT_ROUTE', !IS_TEST_RUNTIME);
 const BOT_HEALTH_HOST = String(
   process.env.BOT_HEALTH_HOST || '127.0.0.1',
 ).trim() || '127.0.0.1';
@@ -823,6 +829,18 @@ async function handleInteractionCreate(interaction) {
   if (disabledCommands.includes(String(interaction.commandName || '').trim())) {
     return interaction.reply({
       content: 'คำสั่งนี้ถูกปิดใช้งานชั่วคราวโดยแอดมิน',
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+
+  const requiredRole = getRequiredCommandAccessRole(
+    interaction.commandName,
+    config.commands,
+  );
+  const actorRole = getMemberCommandAccessRole(interaction, config.roles);
+  if (!hasCommandAccessAtLeast(actorRole, requiredRole)) {
+    return interaction.reply({
+      content: `คำสั่งนี้ต้องใช้สิทธิ ${requiredRole} ขึ้นไป`,
       flags: MessageFlags.Ephemeral,
     });
   }

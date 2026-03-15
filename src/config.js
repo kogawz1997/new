@@ -180,6 +180,7 @@ const defaultConfig = {
   },
   commands: {
     disabled: [],
+    permissions: {},
   },
   serverInfo: {
     name: 'SCUM TH เซิร์ฟเวอร์',
@@ -360,6 +361,13 @@ const defaultConfig = {
             'ทดลอง delivery + admin web + player portal',
             'เหมาะสำหรับ proof-of-concept และ demo server',
           ],
+          quotas: {
+            apiKeys: 1,
+            webhooks: 2,
+            agentRuntimes: 1,
+            marketplaceOffers: 2,
+            purchases30d: 200,
+          },
         },
         {
           id: 'platform-starter',
@@ -374,6 +382,13 @@ const defaultConfig = {
             'delivery runtime + monitoring',
             'backup/restore + player portal',
           ],
+          quotas: {
+            apiKeys: 3,
+            webhooks: 5,
+            agentRuntimes: 2,
+            marketplaceOffers: 10,
+            purchases30d: 2000,
+          },
         },
         {
           id: 'platform-growth',
@@ -388,6 +403,13 @@ const defaultConfig = {
             'API keys + outbound webhooks',
             'analytics + reseller-ready setup',
           ],
+          quotas: {
+            apiKeys: 12,
+            webhooks: 25,
+            agentRuntimes: 8,
+            marketplaceOffers: 100,
+            purchases30d: 25000,
+          },
         },
       ],
     },

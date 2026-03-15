@@ -1,37 +1,30 @@
 # Customer Onboarding
 
-คู่มือนี้ใช้สำหรับติดตั้งและเปิดระบบ production ตาม topology ที่โปรเจกต์รองรับจริง:
-`bot / worker / watcher / web`
+คู่มือนี้ใช้สำหรับติดตั้งและเปิดระบบ production ตาม topology ที่โปรเจกต์รองรับจริง
 
-โดเมนตัวอย่างในคู่มือนี้ถูกตั้งให้ตรงกับ deployment ปัจจุบัน:
+อัปเดตล่าสุด: **2026-03-15**
+
+โดเมนตัวอย่างที่ใช้ใน deployment ปัจจุบัน:
 
 - player portal: `https://player.genz.noah-dns.online`
 - admin portal: `https://admin.genz.noah-dns.online/admin`
 
-## 0) ลูกค้าได้รับอะไรจากชุดนี้
+## 1. ชุดระบบที่ลูกค้าได้รับ
 
-ชุดส่งมอบมาตรฐานของโปรเจกต์นี้ไม่ใช่แค่บอท แต่เป็นระบบครบชุด:
-
-- Discord bot สำหรับ economy, shop, reward และ community ops
+- Discord bot สำหรับ economy, shop, reward, moderation, community ops
 - worker สำหรับ delivery queue และ rent bike runtime
 - watcher สำหรับ ingest event จาก `SCUM.log`
-- admin web สำหรับ config, delivery operations, backup/restore, audit และ observability
-- admin web มี request trace, preflight, simulator, failover visibility, restore preview token workflow, step-up auth และ security event trail แล้ว
-- player portal สำหรับ wallet, purchase history, redeem, profile และ steam link
+- admin web สำหรับ config, delivery operations, observability, backup/restore, audit
+- player portal สำหรับ wallet, purchase history, redeem, profile, steam link
+- console-agent สำหรับ agent mode
 
-ถ้าต้องใช้เอกสารสำหรับพรีเซนต์ภาพรวมระบบ ให้เปิด [docs/SHOWCASE_TH.md](./SHOWCASE_TH.md) ควบคู่กัน
-ก่อน go-live ให้ไล่ตาม [docs/GO_LIVE_CHECKLIST_TH.md](./GO_LIVE_CHECKLIST_TH.md)
-และถ้าต้อง handoff เชิงสัญญาหรือ SLA ให้แนบ [docs/LIMITATIONS_AND_SLA_TH.md](./LIMITATIONS_AND_SLA_TH.md) ไปด้วย
-
-## 1) หน้าที่ของแต่ละ runtime
+## 2. Runtime topology
 
 - `bot`
   - Discord gateway
   - slash/button/modal interactions
   - admin web
   - SCUM webhook receiver
-  - restart scheduler
-  - ops alert route
 - `worker`
   - delivery queue
   - rent bike runtime
@@ -40,20 +33,25 @@
   - ส่ง event เข้า `/scum-event`
 - `web`
   - player portal standalone
+- `console-agent`
+  - bridge คำสั่งไปยัง SCUM admin client
 
-## 2) สิ่งที่ต้องเตรียม
+## 3. สิ่งที่ต้องเตรียม
 
 1. Node.js 20+
 2. npm
-3. Prisma ใช้งานได้
-4. Discord Application / Bot พร้อม token จริง
-5. ถ้าใช้ PM2:
+3. PostgreSQL สำหรับ production
+4. Discord application / bot พร้อม token จริง
+5. ถ้าใช้ `agent mode`
+   - Windows session ที่ไม่ถูก lock
+   - SCUM client ที่ล็อกอินแอดมินและเปิดค้างไว้
+6. ถ้าจะใช้ PM2:
 
 ```bat
 npm i -g pm2
 ```
 
-## 3) เตรียมไฟล์ env
+## 4. เตรียม env
 
 1. root env
 
@@ -67,20 +65,21 @@ copy .env.production.example .env
 copy apps\web-portal-standalone\.env.production.example apps\web-portal-standalone\.env
 ```
 
-## 4) ค่า production baseline ที่ต้องยืนยัน
+## 5. ค่าหลักที่ต้องยืนยัน
 
-ใน [\.env](c:/new/.env)
+ใน [`.env`](../.env)
 
 - `NODE_ENV=production`
+- `DATABASE_PROVIDER=postgresql`
+- `DATABASE_URL=<postgresql://...>`
 - `PERSIST_REQUIRE_DB=true`
 - `PERSIST_LEGACY_SNAPSHOTS=false`
 - `DISCORD_TOKEN=<token จริง>`
 - `SCUM_WEBHOOK_SECRET=<secret จริง>`
 - `ADMIN_WEB_PASSWORD=<password จริง>`
 - `ADMIN_WEB_TOKEN=<token จริง>`
+- `ADMIN_WEB_2FA_ENABLED=true`
 - `ADMIN_WEB_STEP_UP_ENABLED=true`
-- `ADMIN_WEB_STEP_UP_TTL_MINUTES=15`
-- `DATABASE_URL=<db จริง>`
 
 runtime split ฝั่ง production
 
@@ -88,21 +87,19 @@ runtime split ฝั่ง production
   - `BOT_ENABLE_ADMIN_WEB=true`
   - `BOT_ENABLE_RENTBIKE_SERVICE=false`
   - `BOT_ENABLE_DELIVERY_WORKER=false`
-  - `BOT_HEALTH_PORT=3210`
 - worker
   - `WORKER_ENABLE_RENTBIKE=true`
   - `WORKER_ENABLE_DELIVERY=true`
-  - `WORKER_HEALTH_PORT=3211`
 - watcher
   - `SCUM_WATCHER_HEALTH_PORT=3212`
 - web
   - `WEB_PORTAL_PORT=3300`
 
-## 5) ตั้งค่า Discord OAuth ให้ตรงโดเมนจริง
+## 6. Discord OAuth
 
 Discord Developer Portal -> OAuth2 -> Redirects
 
-ต้องมีอย่างน้อย:
+อย่างน้อยต้องมี:
 
 - player portal: `https://player.genz.noah-dns.online/auth/discord/callback`
 - admin SSO: `https://admin.genz.noah-dns.online/admin/auth/discord/callback`
@@ -111,54 +108,43 @@ Discord Developer Portal -> OAuth2 -> Redirects
 
 - `WEB_PORTAL_DISCORD_CLIENT_ID`
 - `WEB_PORTAL_DISCORD_CLIENT_SECRET`
+- `ADMIN_WEB_SSO_DISCORD_CLIENT_SECRET`
 
-ถ้าจะ reuse secret ผ่าน root env:
+## 7. Database setup
 
-- ตั้ง `ADMIN_WEB_SSO_DISCORD_CLIENT_SECRET=<secret จริง>`
-- ปล่อย `WEB_PORTAL_DISCORD_CLIENT_SECRET=` ว่างได้
-
-## 6) หมุน secret ก่อน deploy
-
-```bat
-npm run security:rotate:prod -- --discord-token <DISCORD_TOKEN จริง> --portal-discord-secret <WEB_PORTAL_DISCORD_CLIENT_SECRET จริง>
-```
-
-สคริปต์นี้จะตั้งค่า:
-
-- `NODE_ENV=production`
-- `PERSIST_REQUIRE_DB=true`
-- `PERSIST_LEGACY_SNAPSHOTS=false`
-- `WEB_PORTAL_BASE_URL=https://player.genz.noah-dns.online`
-- `WEB_PORTAL_LEGACY_ADMIN_URL=https://admin.genz.noah-dns.online/admin`
-- `WEB_PORTAL_DISCORD_REDIRECT_PATH=/auth/discord/callback`
-
-## 7) ติดตั้ง dependency และ migrate
+### ทางเลือก A: ใช้ PostgreSQL ของลูกค้า
 
 ```bat
 npm install
-npx prisma generate
-npx prisma migrate deploy
+npm run db:generate:postgresql
+npm run db:migrate:deploy:postgresql
 ```
 
-## 8) วิธี start แบบแยก process
+### ทางเลือก B: ใช้ local PostgreSQL helper บนเครื่องนี้
+
+```bat
+npm run postgres:local:setup
+npm run db:generate:postgresql
+npm run db:migrate:deploy:postgresql
+```
+
+### ถ้ามีข้อมูล SQLite เดิมและต้องการ cut over
+
+```bat
+npm run db:cutover:postgresql -- --source-sqlite prisma/prisma/production.db
+```
+
+## 8. วิธี start
 
 ### รันเองทีละตัว
 
-เปิด 4 terminal:
+เปิดหลาย terminal:
 
 ```bat
 npm run start:bot
-```
-
-```bat
 npm run start:worker
-```
-
-```bat
 npm run start:watcher
-```
-
-```bat
+npm run start:scum-agent
 npm run start:web-standalone
 ```
 
@@ -175,19 +161,7 @@ pm2 status
 npm run pm2:reload:prod
 ```
 
-หรือใช้ helper Windows:
-
-```bat
-deploy\start-production-stack.cmd
-deploy\reload-production-stack.cmd
-deploy\stop-production-stack.cmd
-```
-
-manifest ที่ใช้งาน:
-
-- `deploy/pm2.ecosystem.config.cjs`
-
-## 9) ตรวจระบบหลังเปิดใช้งาน
+## 9. ตรวจระบบหลังเปิดใช้งาน
 
 ### Health endpoints
 
@@ -196,66 +170,38 @@ manifest ที่ใช้งาน:
 - watcher: `http://127.0.0.1:3212/healthz`
 - admin web: `http://127.0.0.1:3200/healthz`
 - player portal: `http://127.0.0.1:3300/healthz`
+- console-agent: `http://127.0.0.1:3213/healthz`
 
-### Readiness + smoke
+### Validation
 
 ```bat
+npm run doctor
+npm run security:check
 npm run readiness:prod
 npm run smoke:postdeploy
 ```
 
-ถ้าต้องการรวม audit:
+## 10. สิ่งที่ควร demo ให้ลูกค้าเห็น
 
-```bat
-npm run readiness:prod:audit
-```
-
-ตั้งค่า base URL ให้ smoke script:
-
-```bat
-set SMOKE_ADMIN_BASE_URL=https://admin.genz.noah-dns.online/admin
-set SMOKE_PLAYER_BASE_URL=https://player.genz.noah-dns.online
-npm run smoke:postdeploy
-```
-
-### Topology + text repair
-
-```bat
-npm run doctor:topology:prod
-npm run text:repair
-```
-
-## 10) งานที่ลูกค้าทำผ่าน panel เป็นหลัก
-
-- จัดการ config
-- ดู queue / dead-letter
-- backup / restore
-- ดู metrics / alerts
-- จัดการร้านค้า / เศรษฐกิจ / กิจกรรม
-
-## 10.1) สิ่งที่ควร demo ให้ลูกค้าเห็นก่อนส่งมอบ
-
-- dashboard landing ที่สรุป topology, delivery runtime และ restore guardrails
+- dashboard landing ที่สรุป topology, delivery runtime, และ restore guardrails
 - delivery preflight / simulator / capability tester
-- delivery detail รายออเดอร์พร้อม timeline และ step log
-- observability recent requests และ incident/debug trail สำหรับไล่ production issue
-- notification center และ backup/restore workflow
+- delivery detail พร้อม timeline และ step log
+- observability recent requests และ security events
+- backup / restore workflow
 - player portal ฝั่ง wallet / purchase / redeem / steam link
 
-## 11) กติกาความปลอดภัยที่ต้องย้ำ
+## 11. ข้อจำกัดที่ต้องแจ้งลูกค้า
 
-1. ห้าม commit `.env`
-2. ถ้าสงสัยว่า token หลุด ให้หมุนใหม่ทันที
-3. admin และ player portal ต้องอยู่หลัง HTTPS reverse proxy
-4. ห้ามเปิด production โดยยังตั้ง `PERSIST_LEGACY_SNAPSHOTS=true`
-5. ต้องรัน `npm run readiness:prod` และ `npm run smoke:postdeploy` ทุกครั้งหลัง deploy
-6. backup DB และไฟล์สำคัญออกนอกเครื่อง production เสมอ
+- agent mode ยังขึ้นกับ Windows session และ SCUM admin client จริง
+- admin web ยังไม่ครอบทุก setting ใน env/config
+- tenant isolation ยังไม่ใช่ database-per-tenant
+- game-side delivery verification ยังไม่ใช่ inventory-native proof ทุกกรณี
 
-## 12) เอกสารอ้างอิง
+## 12. เอกสารอ้างอิง
 
-- [README.md](c:/new/README.md)
-- [DEPLOYMENT_STORY.md](c:/new/docs/DEPLOYMENT_STORY.md)
-- [ARCHITECTURE.md](c:/new/docs/ARCHITECTURE.md)
-- [INCIDENT_RESPONSE.md](c:/new/docs/INCIDENT_RESPONSE.md)
-- [REPO_STRUCTURE_TH.md](c:/new/docs/REPO_STRUCTURE_TH.md)
-- [LIMITATIONS_AND_SLA_TH.md](c:/new/docs/LIMITATIONS_AND_SLA_TH.md)
+- [README.md](../README.md)
+- [PROJECT_HQ.md](../PROJECT_HQ.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [OPERATIONS_MANUAL_TH.md](./OPERATIONS_MANUAL_TH.md)
+- [GO_LIVE_CHECKLIST_TH.md](./GO_LIVE_CHECKLIST_TH.md)
+- [LIMITATIONS_AND_SLA_TH.md](./LIMITATIONS_AND_SLA_TH.md)

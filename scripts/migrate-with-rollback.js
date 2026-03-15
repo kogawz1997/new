@@ -18,8 +18,7 @@ function ensureDir(dirPath) {
 }
 
 function runPrismaMigrateDeploy() {
-  const command = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-  return spawnSync(command, ['prisma', 'migrate', 'deploy'], {
+  return spawnSync(process.execPath, ['scripts/prisma-with-provider.js', 'migrate', 'deploy'], {
     cwd: process.cwd(),
     stdio: 'inherit',
     shell: false,

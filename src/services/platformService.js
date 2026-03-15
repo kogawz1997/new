@@ -105,6 +105,14 @@ function parseDateOrNull(value) {
   return date;
 }
 
+function normalizeShopKind(value) {
+  const raw = String(value || 'item').trim().toLowerCase();
+  if (!raw) return 'item';
+  if (raw === 'vip') return 'vip';
+  if (raw === 'item') return 'item';
+  return raw;
+}
+
 function toIso(value) {
   const date = parseDateOrNull(value);
   return date ? date.toISOString() : null;
@@ -173,12 +181,53 @@ function getPlanCatalog() {
       features: Array.isArray(plan.features)
         ? plan.features.map((entry) => trimText(entry, 200)).filter(Boolean)
         : [],
+      quotas: normalizePlanQuotas(plan.quotas),
     })).filter((plan) => plan.id && plan.name)
     : [];
 }
 
 function findPlanById(planId) {
-  return getPlanCatalog().find((plan) => plan.id === String(planId || '').trim()) || null;
+  const requested = trimText(planId, 120);
+  if (!requested) return null;
+  const normalizedRequested = requested.toLowerCase().replace(/^platform-/, '');
+  return getPlanCatalog().find((plan) => {
+    const current = trimText(plan.id, 120);
+    if (!current) return false;
+    const normalizedCurrent = current.toLowerCase().replace(/^platform-/, '');
+    return current === requested || normalizedCurrent === normalizedRequested;
+  }) || null;
+}
+
+function normalizeQuotaLimit(value) {
+  if (value == null || value === '') return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (parsed < 0) return null;
+  return Math.max(0, Math.trunc(parsed));
+}
+
+function normalizePlanQuotas(value = {}) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  return {
+    apiKeys: normalizeQuotaLimit(source.apiKeys),
+    webhooks: normalizeQuotaLimit(source.webhooks),
+    agentRuntimes: normalizeQuotaLimit(source.agentRuntimes),
+    marketplaceOffers: normalizeQuotaLimit(source.marketplaceOffers),
+    purchases30d: normalizeQuotaLimit(source.purchases30d),
+  };
+}
+
+function buildQuotaEntry(limit, used) {
+  const normalizedLimit = normalizeQuotaLimit(limit);
+  const normalizedUsed = Math.max(0, asInt(used, 0, 0));
+  const unlimited = normalizedLimit == null;
+  return {
+    limit: unlimited ? null : normalizedLimit,
+    used: normalizedUsed,
+    remaining: unlimited ? null : Math.max(0, normalizedLimit - normalizedUsed),
+    exceeded: unlimited ? false : normalizedUsed >= normalizedLimit,
+    unlimited,
+  };
 }
 
 function maskSecret(value, visible = 6) {
@@ -363,6 +412,182 @@ async function getTenantOperationalState(tenantId) {
     tenant: sanitizeTenantRow(tenant),
     subscription: sanitizeSubscriptionRow(subscription),
     license: sanitizeLicenseRow(license),
+  };
+}
+
+async function getTenantQuotaSnapshot(tenantId) {
+  const id = trimText(tenantId, 120);
+  if (!id) {
+    return {
+      ok: false,
+      reason: 'tenant-required',
+      tenantId: null,
+      plan: null,
+      subscription: null,
+      license: null,
+      quotas: {},
+    };
+  }
+
+  const tenantState = await getTenantOperationalState(id);
+  const activeState = tenantState.ok
+    ? tenantState
+    : await (async () => {
+      const tenant = await prisma.platformTenant.findUnique({ where: { id } });
+      if (!tenant) return tenantState;
+      const [subscription, license] = await Promise.all([
+        prisma.platformSubscription.findFirst({
+          where: { tenantId: id },
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        }),
+        prisma.platformLicense.findFirst({
+          where: { tenantId: id },
+          orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        }),
+      ]);
+      return {
+        ok: false,
+        reason: tenantState.reason || 'tenant-not-ready',
+        tenant: sanitizeTenantRow(tenant),
+        subscription: sanitizeSubscriptionRow(subscription),
+        license: sanitizeLicenseRow(license),
+      };
+    })();
+
+  if (!activeState.tenant) {
+    return {
+      ok: false,
+      reason: activeState.reason || 'tenant-not-found',
+      tenantId: id,
+      tenant: null,
+      plan: null,
+      subscription: null,
+      license: null,
+      quotas: {},
+    };
+  }
+
+  const plan = findPlanById(activeState.subscription?.planId);
+  const quotas = normalizePlanQuotas(plan?.quotas);
+  const since30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const [
+    apiKeysUsed,
+    webhooksUsed,
+    agentRuntimesUsed,
+    marketplaceOffersUsed,
+    purchases30dUsed,
+  ] = await Promise.all([
+    prisma.platformApiKey.count({
+      where: {
+        tenantId: id,
+        status: 'active',
+        revokedAt: null,
+      },
+    }),
+    prisma.platformWebhookEndpoint.count({
+      where: {
+        tenantId: id,
+        enabled: true,
+      },
+    }),
+    prisma.platformAgentRuntime.count({
+      where: {
+        tenantId: id,
+      },
+    }),
+    prisma.platformMarketplaceOffer.count({
+      where: {
+        tenantId: id,
+        status: {
+          not: 'archived',
+        },
+      },
+    }),
+    prisma.purchase.count({
+      where: {
+        tenantId: id,
+        createdAt: {
+          gte: since30d,
+        },
+      },
+    }),
+  ]);
+
+  return {
+    ok: true,
+    reason: activeState.ok ? 'ready' : activeState.reason || 'tenant-not-ready',
+    tenantId: id,
+    tenant: activeState.tenant,
+    plan: plan ? {
+      id: plan.id,
+      name: plan.name,
+      billingCycle: plan.billingCycle,
+      quotas: plan.quotas,
+    } : null,
+    subscription: activeState.subscription || null,
+    license: activeState.license || null,
+    quotas: {
+      apiKeys: buildQuotaEntry(quotas.apiKeys, apiKeysUsed),
+      webhooks: buildQuotaEntry(quotas.webhooks, webhooksUsed),
+      agentRuntimes: buildQuotaEntry(quotas.agentRuntimes, agentRuntimesUsed),
+      marketplaceOffers: buildQuotaEntry(quotas.marketplaceOffers, marketplaceOffersUsed),
+      purchases30d: buildQuotaEntry(quotas.purchases30d, purchases30dUsed),
+    },
+  };
+}
+
+async function assertTenantQuotaAvailable(tenantId, quotaKey, nextUsageIncrement = 1) {
+  const normalizedQuotaKey = trimText(quotaKey, 80);
+  const increment = Math.max(1, asInt(nextUsageIncrement, 1, 1));
+  const snapshot = await getTenantQuotaSnapshot(tenantId);
+  if (!snapshot.ok && !snapshot.tenant) {
+    return {
+      ok: false,
+      reason: snapshot.reason || 'tenant-required',
+      quotaKey: normalizedQuotaKey || null,
+      snapshot,
+    };
+  }
+  const entry = snapshot.quotas?.[normalizedQuotaKey];
+  if (!entry) {
+    return {
+      ok: false,
+      reason: 'unknown-quota-key',
+      quotaKey: normalizedQuotaKey || null,
+      snapshot,
+    };
+  }
+  if (entry.unlimited) {
+    return {
+      ok: true,
+      quotaKey: normalizedQuotaKey,
+      quota: {
+        ...entry,
+        projectedUsed: entry.used + increment,
+      },
+      snapshot,
+    };
+  }
+  if (entry.used + increment > entry.limit) {
+    return {
+      ok: false,
+      reason: 'tenant-quota-exceeded',
+      quotaKey: normalizedQuotaKey,
+      quota: {
+        ...entry,
+        projectedUsed: entry.used + increment,
+      },
+      snapshot,
+    };
+  }
+  return {
+    ok: true,
+    quotaKey: normalizedQuotaKey,
+    quota: {
+      ...entry,
+      projectedUsed: entry.used + increment,
+    },
+    snapshot,
   };
 }
 
@@ -662,6 +887,16 @@ async function createPlatformApiKey(input = {}, actor = 'system') {
   if (!tenantId || !name) return { ok: false, reason: 'invalid-api-key' };
   const tenant = await prisma.platformTenant.findUnique({ where: { id: tenantId } });
   if (!tenant) return { ok: false, reason: 'tenant-not-found' };
+  const quotaCheck = await assertTenantQuotaAvailable(tenantId, 'apiKeys', 1);
+  if (!quotaCheck.ok) {
+    return {
+      ok: false,
+      reason: quotaCheck.reason || 'tenant-quota-exceeded',
+      quotaKey: quotaCheck.quotaKey || 'apiKeys',
+      quota: quotaCheck.quota || null,
+      snapshot: quotaCheck.snapshot || null,
+    };
+  }
   const rawKey = generateApiKey();
   const scopes = buildApiKeyScopes(input.scopes);
   const row = await prisma.platformApiKey.create({
@@ -763,6 +998,16 @@ async function createPlatformWebhookEndpoint(input = {}, actor = 'system') {
   }
   const tenant = await prisma.platformTenant.findUnique({ where: { id: tenantId } });
   if (!tenant) return { ok: false, reason: 'tenant-not-found' };
+  const quotaCheck = await assertTenantQuotaAvailable(tenantId, 'webhooks', 1);
+  if (!quotaCheck.ok) {
+    return {
+      ok: false,
+      reason: quotaCheck.reason || 'tenant-quota-exceeded',
+      quotaKey: quotaCheck.quotaKey || 'webhooks',
+      quota: quotaCheck.quota || null,
+      snapshot: quotaCheck.snapshot || null,
+    };
+  }
   const secretValue = trimText(input.secretValue, 200) || crypto.randomBytes(18).toString('hex');
   const row = await prisma.platformWebhookEndpoint.create({
     data: {
@@ -808,6 +1053,26 @@ async function recordPlatformAgentHeartbeat(input = {}, actor = 'platform-api') 
   }
   const tenant = await prisma.platformTenant.findUnique({ where: { id: tenantId } });
   if (!tenant) return { ok: false, reason: 'tenant-not-found' };
+  const existingRuntime = await prisma.platformAgentRuntime.findUnique({
+    where: {
+      tenantId_runtimeKey: {
+        tenantId,
+        runtimeKey,
+      },
+    },
+  });
+  if (!existingRuntime) {
+    const quotaCheck = await assertTenantQuotaAvailable(tenantId, 'agentRuntimes', 1);
+    if (!quotaCheck.ok) {
+      return {
+        ok: false,
+        reason: quotaCheck.reason || 'tenant-quota-exceeded',
+        quotaKey: quotaCheck.quotaKey || 'agentRuntimes',
+        quota: quotaCheck.quota || null,
+        snapshot: quotaCheck.snapshot || null,
+      };
+    }
+  }
   const minimumVersion = trimText(
     input.minRequiredVersion || config.platform?.agent?.minimumVersion || '1.0.0',
     80,
@@ -882,6 +1147,16 @@ async function createMarketplaceOffer(input = {}, actor = 'system') {
   if (!tenantId || !title) return { ok: false, reason: 'invalid-marketplace-offer' };
   const tenant = await prisma.platformTenant.findUnique({ where: { id: tenantId } });
   if (!tenant) return { ok: false, reason: 'tenant-not-found' };
+  const quotaCheck = await assertTenantQuotaAvailable(tenantId, 'marketplaceOffers', 1);
+  if (!quotaCheck.ok) {
+    return {
+      ok: false,
+      reason: quotaCheck.reason || 'tenant-quota-exceeded',
+      quotaKey: quotaCheck.quotaKey || 'marketplaceOffers',
+      quota: quotaCheck.quota || null,
+      snapshot: quotaCheck.snapshot || null,
+    };
+  }
   const row = await prisma.platformMarketplaceOffer.create({
     data: {
       id: trimText(input.id, 120) || createId('offer'),
@@ -920,6 +1195,12 @@ async function listMarketplaceOffers(options = {}) {
 async function getPlatformAnalyticsOverview(options = {}) {
   const tenantId = trimText(options.tenantId, 120) || null;
   const tenantWhere = tenantId ? { tenantId } : {};
+  const purchaseWhere = {
+    ...(tenantId ? { tenantId } : {}),
+    createdAt: {
+      gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
+    },
+  };
   const [
     tenantRows,
     subscriptionRows,
@@ -928,7 +1209,13 @@ async function getPlatformAnalyticsOverview(options = {}) {
     webhookRows,
     agentRows,
     offerRows,
-    purchaseRows,
+    purchaseCount30d,
+    deliveredCount,
+    failedCount,
+    queueJobsCount,
+    deadLettersCount,
+    auditRowsCount,
+    quota,
   ] = await Promise.all([
     prisma.platformTenant.findMany(tenantId ? { where: { id: tenantId } } : {}),
     prisma.platformSubscription.findMany({ where: tenantWhere }),
@@ -937,15 +1224,23 @@ async function getPlatformAnalyticsOverview(options = {}) {
     prisma.platformWebhookEndpoint.findMany({ where: tenantWhere }),
     prisma.platformAgentRuntime.findMany({ where: tenantWhere }),
     prisma.platformMarketplaceOffer.findMany({ where: tenantWhere }),
-    tenantId
-      ? Promise.resolve([])
-      : prisma.purchase.findMany({
-        where: {
-          createdAt: {
-            gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000),
-          },
-        },
-      }),
+    prisma.purchase.count({ where: purchaseWhere }),
+    prisma.purchase.count({
+      where: {
+        ...purchaseWhere,
+        status: 'delivered',
+      },
+    }),
+    prisma.purchase.count({
+      where: {
+        ...purchaseWhere,
+        status: 'delivery_failed',
+      },
+    }),
+    prisma.deliveryQueueJob.count({ where: tenantWhere }),
+    prisma.deliveryDeadLetter.count({ where: tenantWhere }),
+    prisma.deliveryAudit.count({ where: tenantWhere }),
+    tenantId ? getTenantQuotaSnapshot(tenantId).catch(() => null) : Promise.resolve(null),
   ]);
 
   const mrrCents = subscriptionRows
@@ -957,10 +1252,8 @@ async function getPlatformAnalyticsOverview(options = {}) {
       return sum + row.amountCents;
     }, 0);
 
-  const deliveredCount = purchaseRows.filter((row) => row.status === 'delivered').length;
-  const failedCount = purchaseRows.filter((row) => row.status === 'delivery_failed').length;
-  const successRate = purchaseRows.length > 0
-    ? Number((deliveredCount / purchaseRows.length).toFixed(4))
+  const successRate = purchaseCount30d > 0
+    ? Number((deliveredCount / purchaseCount30d).toFixed(4))
     : 0;
 
   return {
@@ -969,7 +1262,7 @@ async function getPlatformAnalyticsOverview(options = {}) {
       ? {
         tenantId,
         mode: 'tenant-isolated',
-        deliveryMetricsScoped: false,
+        deliveryMetricsScoped: true,
       }
       : {
         tenantId: null,
@@ -1005,14 +1298,18 @@ async function getPlatformAnalyticsOverview(options = {}) {
       draftOffers: offerRows.filter((row) => row.status === 'draft').length,
     },
     delivery: {
-      purchaseCount30d: tenantId ? null : purchaseRows.length,
-      deliveredCount: tenantId ? null : deliveredCount,
-      failedCount: tenantId ? null : failedCount,
-      successRate: tenantId ? null : successRate,
+      purchaseCount30d,
+      deliveredCount,
+      failedCount,
+      successRate,
+      queueJobs: queueJobsCount,
+      deadLetters: deadLettersCount,
+      auditEvents: auditRowsCount,
       note: tenantId
-        ? 'Global purchase/delivery tables are not tenant-partitioned; tenant public analytics excludes shared commerce metrics'
+        ? 'Tenant analytics include only tenant-tagged commerce rows; legacy rows without tenantId stay out of tenant views'
         : null,
     },
+    quota: quota?.ok ? quota : null,
   };
 }
 
@@ -1024,7 +1321,7 @@ async function reconcileDeliveryState(options = {}) {
   const since = new Date(Date.now() - windowMs);
 
   if (scopedTenantId) {
-    const [tenantState, agentRows, webhookRows] = await Promise.all([
+    const [tenantState, agentRows, webhookRows, purchases, queueJobs, deadLetters, auditRows] = await Promise.all([
       getTenantOperationalState(scopedTenantId),
       prisma.platformAgentRuntime.findMany({
         where: { tenantId: scopedTenantId },
@@ -1036,7 +1333,54 @@ async function reconcileDeliveryState(options = {}) {
         orderBy: { updatedAt: 'desc' },
         take: 100,
       }),
+      prisma.purchase.findMany({
+        where: { tenantId: scopedTenantId },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      }),
+      prisma.deliveryQueueJob.findMany({
+        where: { tenantId: scopedTenantId },
+      }),
+      prisma.deliveryDeadLetter.findMany({
+        where: { tenantId: scopedTenantId },
+      }),
+      prisma.deliveryAudit.findMany({
+        where: { tenantId: scopedTenantId },
+        orderBy: { createdAt: 'desc' },
+        take: 2000,
+      }),
     ]);
+
+    const queueByCode = new Map(queueJobs.map((row) => [String(row.purchaseCode), row]));
+    const deadByCode = new Map(deadLetters.map((row) => [String(row.purchaseCode), row]));
+    const auditByCode = new Map();
+    const itemKinds = new Map();
+    for (const row of auditRows) {
+      const code = trimText(row.purchaseCode, 120);
+      if (!code) continue;
+      const list = auditByCode.get(code) || [];
+      list.push(row);
+      auditByCode.set(code, list);
+    }
+    const purchaseItemIds = [...new Set(
+      purchases.map((row) => trimText(row.itemId, 120)).filter(Boolean),
+    )];
+    if (purchaseItemIds.length > 0) {
+      const shopItems = await prisma.shopItem.findMany({
+        where: {
+          id: {
+            in: purchaseItemIds,
+          },
+        },
+        select: {
+          id: true,
+          kind: true,
+        },
+      });
+      for (const row of shopItems) {
+        itemKinds.set(String(row.id), normalizeShopKind(row.kind));
+      }
+    }
 
     const anomalies = [];
     if (!tenantState.ok) {
@@ -1077,26 +1421,85 @@ async function reconcileDeliveryState(options = {}) {
       }
     }
 
+    for (const purchase of purchases) {
+      const code = String(purchase.code || '');
+      const queue = queueByCode.get(code) || null;
+      const dead = deadByCode.get(code) || null;
+      const audit = auditByCode.get(code) || [];
+      const ageMs = Date.now() - new Date(purchase.createdAt).getTime();
+      const itemKind = itemKinds.get(String(purchase.itemId || '')) || 'item';
+      const expectsDeliveryRuntime = itemKind !== 'vip';
+
+      if (purchase.status === 'delivered' && queue) {
+        anomalies.push({ code, type: 'delivered-still-queued', severity: 'error', detail: 'Purchase is delivered but queue job still exists' });
+      }
+      if (expectsDeliveryRuntime && purchase.status === 'delivery_failed' && !dead) {
+        anomalies.push({ code, type: 'failed-without-dead-letter', severity: 'warn', detail: 'Purchase is marked failed but no dead-letter record exists' });
+      }
+      if (expectsDeliveryRuntime && (purchase.status === 'pending' || purchase.status === 'delivering') && !queue && !dead && ageMs >= pendingOverdueMs) {
+        anomalies.push({ code, type: 'stuck-without-runtime-state', severity: 'error', detail: 'Pending purchase has neither queue nor dead-letter state' });
+      }
+      if (expectsDeliveryRuntime && purchase.status === 'delivered' && audit.length === 0) {
+        anomalies.push({ code, type: 'delivered-without-audit', severity: 'warn', detail: 'Delivered purchase has no delivery audit evidence' });
+      }
+    }
+
+    const recentPurchases = purchases.filter((row) => new Date(row.createdAt) >= since);
+    const ordersByUser = new Map();
+    const userItemCounts = new Map();
+    const failedByUser = new Map();
+    for (const row of recentPurchases) {
+      const userId = trimText(row.userId, 80) || 'unknown';
+      ordersByUser.set(userId, (ordersByUser.get(userId) || 0) + 1);
+      const itemKey = `${userId}:${trimText(row.itemId, 120) || 'unknown'}`;
+      userItemCounts.set(itemKey, (userItemCounts.get(itemKey) || 0) + 1);
+      if (row.status === 'delivery_failed') {
+        failedByUser.set(userId, (failedByUser.get(userId) || 0) + 1);
+      }
+    }
+
+    const abuseFindings = [];
+    const maxOrdersPerUser = asInt(antiAbuse.maxOrdersPerUser, 8, 1);
+    const maxSameItemPerUser = asInt(antiAbuse.maxSameItemPerUser, 4, 1);
+    const failedDeliveriesThreshold = asInt(antiAbuse.failedDeliveriesThreshold, 3, 1);
+
+    for (const [userId, count] of ordersByUser.entries()) {
+      if (count > maxOrdersPerUser) {
+        abuseFindings.push({ type: 'order-burst', userId, count, threshold: maxOrdersPerUser });
+      }
+    }
+    for (const [key, count] of userItemCounts.entries()) {
+      if (count > maxSameItemPerUser) {
+        const [userId, itemId] = key.split(':');
+        abuseFindings.push({ type: 'same-item-burst', userId, itemId, count, threshold: maxSameItemPerUser });
+      }
+    }
+    for (const [userId, count] of failedByUser.entries()) {
+      if (count >= failedDeliveriesThreshold) {
+        abuseFindings.push({ type: 'repeated-delivery-failures', userId, count, threshold: failedDeliveriesThreshold });
+      }
+    }
+
     return {
       generatedAt: nowIso(),
       scope: {
         tenantId: scopedTenantId,
         mode: 'tenant-isolated',
-        includesSharedCommerceTables: false,
+        includesSharedCommerceTables: true,
       },
       notes: [
-        'Shared purchase/queue tables are not tenant-partitioned; tenant reconcile is limited to tenant runtime/webhook operational drift.',
+        'Tenant reconcile uses tenant-tagged purchase, queue, dead-letter, and audit rows.',
       ],
       summary: {
-        purchases: null,
-        queueJobs: null,
-        deadLetters: null,
+        purchases: purchases.length,
+        queueJobs: queueJobs.length,
+        deadLetters: deadLetters.length,
         anomalies: anomalies.length,
-        abuseFindings: 0,
+        abuseFindings: abuseFindings.length,
         windowMs,
       },
       anomalies,
-      abuseFindings: [],
+      abuseFindings,
     };
   }
 
@@ -1116,12 +1519,32 @@ async function reconcileDeliveryState(options = {}) {
   const queueByCode = new Map(queueJobs.map((row) => [String(row.purchaseCode), row]));
   const deadByCode = new Map(deadLetters.map((row) => [String(row.purchaseCode), row]));
   const auditByCode = new Map();
+  const itemKinds = new Map();
   for (const row of auditRows) {
     const code = trimText(row.purchaseCode, 120);
     if (!code) continue;
     const list = auditByCode.get(code) || [];
     list.push(row);
     auditByCode.set(code, list);
+  }
+  const purchaseItemIds = [...new Set(
+    purchases.map((row) => trimText(row.itemId, 120)).filter(Boolean),
+  )];
+  if (purchaseItemIds.length > 0) {
+    const shopItems = await prisma.shopItem.findMany({
+      where: {
+        id: {
+          in: purchaseItemIds,
+        },
+      },
+      select: {
+        id: true,
+        kind: true,
+      },
+    });
+    for (const row of shopItems) {
+      itemKinds.set(String(row.id), normalizeShopKind(row.kind));
+    }
   }
 
   const anomalies = [];
@@ -1131,17 +1554,19 @@ async function reconcileDeliveryState(options = {}) {
     const dead = deadByCode.get(code) || null;
     const audit = auditByCode.get(code) || [];
     const ageMs = Date.now() - new Date(purchase.createdAt).getTime();
+    const itemKind = itemKinds.get(String(purchase.itemId || '')) || 'item';
+    const expectsDeliveryRuntime = itemKind !== 'vip';
 
     if (purchase.status === 'delivered' && queue) {
       anomalies.push({ code, type: 'delivered-still-queued', severity: 'error', detail: 'Purchase is delivered but queue job still exists' });
     }
-    if (purchase.status === 'delivery_failed' && !dead) {
+    if (expectsDeliveryRuntime && purchase.status === 'delivery_failed' && !dead) {
       anomalies.push({ code, type: 'failed-without-dead-letter', severity: 'warn', detail: 'Purchase is marked failed but no dead-letter record exists' });
     }
-    if ((purchase.status === 'pending' || purchase.status === 'delivering') && !queue && !dead && ageMs >= pendingOverdueMs) {
+    if (expectsDeliveryRuntime && (purchase.status === 'pending' || purchase.status === 'delivering') && !queue && !dead && ageMs >= pendingOverdueMs) {
       anomalies.push({ code, type: 'stuck-without-runtime-state', severity: 'error', detail: 'Pending purchase has neither queue nor dead-letter state' });
     }
-    if (purchase.status === 'delivered' && audit.length === 0) {
+    if (expectsDeliveryRuntime && purchase.status === 'delivered' && audit.length === 0) {
       anomalies.push({ code, type: 'delivered-without-audit', severity: 'warn', detail: 'Delivered purchase has no delivery audit evidence' });
     }
   }
@@ -1247,6 +1672,7 @@ function getPlatformPermissionCatalog() {
 
 module.exports = {
   acceptPlatformLicenseLegal,
+  assertTenantQuotaAvailable,
   compareVersions,
   createMarketplaceOffer,
   createPlatformApiKey,
@@ -1259,6 +1685,7 @@ module.exports = {
   getPlatformPermissionCatalog,
   getPlatformPublicOverview,
   getPlatformTenantById,
+  getTenantQuotaSnapshot,
   getTenantOperationalState,
   issuePlatformLicense,
   listMarketplaceOffers,

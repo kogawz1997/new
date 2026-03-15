@@ -18,6 +18,7 @@ function normalizeAudit(entry) {
   return {
     id,
     createdAt,
+    tenantId: entry.tenantId ? String(entry.tenantId) : null,
     level: String(entry.level || 'info'),
     action: String(entry.action || 'event'),
     purchaseCode: entry.purchaseCode ? String(entry.purchaseCode) : null,
@@ -75,6 +76,7 @@ async function hydrateFromPrisma() {
                 where: { id: entry.id },
                 update: {
                   createdAt: entry.createdAt,
+                  tenantId: entry.tenantId,
                   level: entry.level,
                   action: entry.action,
                   purchaseCode: entry.purchaseCode,
@@ -88,6 +90,7 @@ async function hydrateFromPrisma() {
                 create: {
                   id: entry.id,
                   createdAt: entry.createdAt,
+                  tenantId: entry.tenantId,
                   level: entry.level,
                   action: entry.action,
                   purchaseCode: entry.purchaseCode,
@@ -113,6 +116,7 @@ async function hydrateFromPrisma() {
       const parsed = normalizeAudit({
         id: row.id,
         createdAt: row.createdAt,
+        tenantId: row.tenantId,
         level: row.level,
         action: row.action,
         purchaseCode: row.purchaseCode,
@@ -179,6 +183,7 @@ function addDeliveryAudit(entry) {
         where: { id: normalized.id },
         update: {
           createdAt: normalized.createdAt,
+          tenantId: normalized.tenantId,
           level: normalized.level,
           action: normalized.action,
           purchaseCode: normalized.purchaseCode,
@@ -192,6 +197,7 @@ function addDeliveryAudit(entry) {
         create: {
           id: normalized.id,
           createdAt: normalized.createdAt,
+          tenantId: normalized.tenantId,
           level: normalized.level,
           action: normalized.action,
           purchaseCode: normalized.purchaseCode,
@@ -250,6 +256,7 @@ function replaceDeliveryAudit(nextAudits = []) {
           data: {
             id: entry.id,
             createdAt: entry.createdAt,
+            tenantId: entry.tenantId,
             level: entry.level,
             action: entry.action,
             purchaseCode: entry.purchaseCode,

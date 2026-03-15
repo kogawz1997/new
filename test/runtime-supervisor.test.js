@@ -35,6 +35,8 @@ const ENV_KEYS = [
   'WORKER_HEALTH_HOST',
   'WORKER_HEALTH_PORT',
   'SCUM_LOG_PATH',
+  'SCUM_WATCHER_ENABLED',
+  'SCUM_WATCHER_REQUIRED',
   'SCUM_WATCHER_HEALTH_HOST',
   'SCUM_WATCHER_HEALTH_PORT',
   'ADMIN_WEB_HOST',
@@ -43,6 +45,8 @@ const ENV_KEYS = [
   'WEB_PORTAL_PORT',
   'WEB_PORTAL_BASE_URL',
   'DELIVERY_EXECUTION_MODE',
+  'SCUM_CONSOLE_AGENT_ENABLED',
+  'SCUM_CONSOLE_AGENT_REQUIRED',
   'SCUM_CONSOLE_AGENT_HOST',
   'SCUM_CONSOLE_AGENT_PORT',
   'SCUM_CONSOLE_AGENT_BASE_URL',
@@ -114,9 +118,6 @@ test('runtime supervisor reports ready when all required runtimes are healthy', 
   };
   process.env.RUNTIME_SUPERVISOR_TIMEOUT_MS = '1000';
   process.env.SCUM_WATCHER_BACKLOG_STALE_MS = '1000';
-  const {
-    collectRuntimeSupervisorSnapshot,
-  } = loadRuntimeSupervisorWithMock(mockedAdminLiveBus);
 
   const bot = await startJsonHealthServer({
     ok: true,
@@ -190,6 +191,8 @@ test('runtime supervisor reports ready when all required runtimes are healthy', 
   process.env.WORKER_HEALTH_PORT = String(worker.port);
 
   process.env.SCUM_LOG_PATH = 'C:\\fake\\SCUM.log';
+  process.env.SCUM_WATCHER_ENABLED = 'true';
+  process.env.SCUM_WATCHER_REQUIRED = 'true';
   process.env.SCUM_WATCHER_HEALTH_HOST = watcher.host;
   process.env.SCUM_WATCHER_HEALTH_PORT = String(watcher.port);
 
@@ -203,7 +206,12 @@ test('runtime supervisor reports ready when all required runtimes are healthy', 
   process.env.DELIVERY_EXECUTION_MODE = 'agent';
   process.env.SCUM_CONSOLE_AGENT_HOST = agent.host;
   process.env.SCUM_CONSOLE_AGENT_PORT = String(agent.port);
+  process.env.SCUM_CONSOLE_AGENT_REQUIRED = 'true';
   delete process.env.SCUM_CONSOLE_AGENT_BASE_URL;
+
+  const {
+    collectRuntimeSupervisorSnapshot,
+  } = loadRuntimeSupervisorWithMock(mockedAdminLiveBus);
 
   const snapshot = await collectRuntimeSupervisorSnapshot();
 
@@ -224,9 +232,6 @@ test('runtime supervisor marks degraded watcher and emits an alert', async (t) =
   };
   process.env.RUNTIME_SUPERVISOR_TIMEOUT_MS = '1000';
   process.env.SCUM_WATCHER_BACKLOG_STALE_MS = '1000';
-  const {
-    collectRuntimeSupervisorSnapshot,
-  } = loadRuntimeSupervisorWithMock(mockedAdminLiveBus);
 
   const watcher = await startJsonHealthServer({
     ok: true,
@@ -258,6 +263,8 @@ test('runtime supervisor marks degraded watcher and emits an alert', async (t) =
   delete process.env.WORKER_HEALTH_PORT;
 
   process.env.SCUM_LOG_PATH = 'C:\\fake\\SCUM.log';
+  process.env.SCUM_WATCHER_ENABLED = 'true';
+  process.env.SCUM_WATCHER_REQUIRED = 'true';
   process.env.SCUM_WATCHER_HEALTH_HOST = watcher.host;
   process.env.SCUM_WATCHER_HEALTH_PORT = String(watcher.port);
 
@@ -270,6 +277,10 @@ test('runtime supervisor marks degraded watcher and emits an alert', async (t) =
   delete process.env.SCUM_CONSOLE_AGENT_HOST;
   delete process.env.SCUM_CONSOLE_AGENT_PORT;
   delete process.env.SCUM_CONSOLE_AGENT_BASE_URL;
+
+  const {
+    collectRuntimeSupervisorSnapshot,
+  } = loadRuntimeSupervisorWithMock(mockedAdminLiveBus);
 
   const snapshot = await collectRuntimeSupervisorSnapshot();
   const watcherEntry = snapshot.items.find((item) => item.key === 'watcher');
@@ -285,4 +296,73 @@ test('runtime supervisor marks degraded watcher and emits an alert', async (t) =
         && entry.payload?.runtimeKey === 'watcher',
     ),
   );
+});
+
+test('runtime supervisor does not alert optional watcher or console-agent when delivery mode does not require them', async (t) => {
+  const alerts = [];
+  const mockedAdminLiveBus = {
+    publishAdminLiveUpdate: (type, payload) => {
+      alerts.push({ type, payload });
+    },
+  };
+  const {
+    collectRuntimeSupervisorSnapshot,
+  } = loadRuntimeSupervisorWithMock(mockedAdminLiveBus);
+
+  const watcher = await startJsonHealthServer({
+    ok: true,
+    service: 'watcher',
+    status: 'degraded',
+    ready: false,
+    watch: {
+      fileExists: false,
+      backlogBytes: 0,
+      backlogAgeMs: 0,
+    },
+  });
+  const agent = await startJsonHealthServer({
+    ok: true,
+    service: 'console-agent',
+    status: 'degraded',
+    ready: false,
+    reason: 'AGENT_EXEC_TEMPLATE_MISSING',
+  });
+
+  t.after(async () => {
+    await Promise.all([
+      new Promise((resolve) => watcher.server.close(resolve)),
+      new Promise((resolve) => agent.server.close(resolve)),
+    ]);
+  });
+
+  process.env.BOT_ENABLE_ADMIN_WEB = 'false';
+  process.env.BOT_ENABLE_SCUM_WEBHOOK = 'false';
+  process.env.BOT_ENABLE_RESTART_SCHEDULER = 'false';
+  process.env.BOT_ENABLE_RENTBIKE_SERVICE = 'false';
+  process.env.BOT_ENABLE_DELIVERY_WORKER = 'false';
+  process.env.WORKER_ENABLE_RENTBIKE = 'false';
+  process.env.WORKER_ENABLE_DELIVERY = 'false';
+  delete process.env.SCUM_LOG_PATH;
+  process.env.SCUM_WATCHER_HEALTH_HOST = watcher.host;
+  process.env.SCUM_WATCHER_HEALTH_PORT = String(watcher.port);
+  delete process.env.SCUM_WATCHER_REQUIRED;
+  process.env.DELIVERY_EXECUTION_MODE = 'rcon';
+  process.env.SCUM_CONSOLE_AGENT_HOST = agent.host;
+  process.env.SCUM_CONSOLE_AGENT_PORT = String(agent.port);
+  delete process.env.SCUM_CONSOLE_AGENT_REQUIRED;
+  delete process.env.ADMIN_WEB_HOST;
+  delete process.env.ADMIN_WEB_PORT;
+  delete process.env.WEB_PORTAL_HOST;
+  delete process.env.WEB_PORTAL_PORT;
+  delete process.env.WEB_PORTAL_BASE_URL;
+
+  const snapshot = await collectRuntimeSupervisorSnapshot();
+  const watcherEntry = snapshot.items.find((item) => item.key === 'watcher');
+  const agentEntry = snapshot.items.find((item) => item.key === 'console-agent');
+
+  assert.equal(snapshot.overall, 'ready');
+  assert.equal(Boolean(watcherEntry?.required), false);
+  assert.equal(Boolean(agentEntry?.required), false);
+  assert.equal(snapshot.counts.required, 0);
+  assert.equal(alerts.length, 0);
 });

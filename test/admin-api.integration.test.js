@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
+const http = require('node:http');
 const os = require('node:os');
 const { once } = require('node:events');
 const { createPurchase, listShopItems } = require('../src/store/memoryStore');
@@ -253,10 +254,12 @@ test('admin API auth + validation integration flow', async (t) => {
   assert.equal(typeof observability.data.data.delivery.queueLength, 'number');
   assert.equal(typeof observability.data.data.adminLogin.failures, 'number');
   assert.equal(typeof observability.data.data.webhook.errorRate, 'number');
+  assert.equal(typeof observability.data.data.deliveryRuntime.queueLength, 'number');
   assert.equal(
     typeof observability.data.data.timeSeriesWindowMs,
     'number',
   );
+  assert.equal(typeof observability.data.data.platformOps.updatedAt, 'string');
 
   const observabilityFiltered = await request(
     '/admin/api/observability?windowMs=60000&series=loginFailures,webhookErrorRate',
@@ -826,9 +829,30 @@ test('admin platform APIs expose overview data while snapshot stays sanitized', 
   const subscriptionId = `sub-platform-${nowSeed}`;
   const licenseId = `license-platform-${nowSeed}`;
   const apiKeyId = `apikey-platform-${nowSeed}`;
+  const apiKeyIdOverflow = `apikey-platform-overflow-${nowSeed}`;
   const webhookId = `hook-platform-${nowSeed}`;
   const offerId = `offer-platform-${nowSeed}`;
+  const purchaseCode = `PUR-PLATFORM-${nowSeed}`;
   const webhookSecret = 'platform-secret-1234567890';
+  const captureRequests = [];
+  const capturePort = randomPort(39650, 300);
+  const captureServer = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+    }
+    captureRequests.push({
+      method: req.method,
+      url: req.url,
+      headers: req.headers,
+      body: Buffer.concat(chunks).toString('utf8'),
+    });
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ ok: true }));
+  });
+  captureServer.listen(capturePort, '127.0.0.1');
+  await once(captureServer, 'listening');
+  const webhookTargetUrl = `http://127.0.0.1:${capturePort}/platform-webhook`;
 
   updatePlatformOpsState({
     lastMonitoringAt: '2026-03-15T10:00:00.000Z',
@@ -847,9 +871,14 @@ test('admin platform APIs expose overview data while snapshot stays sanitized', 
 
   t.after(async () => {
     await new Promise((resolve) => server.close(resolve));
+    await new Promise((resolve) => captureServer.close(resolve));
+    await prisma.deliveryAudit.deleteMany({ where: { purchaseCode } }).catch(() => null);
+    await prisma.purchase.deleteMany({ where: { code: purchaseCode } }).catch(() => null);
     await prisma.platformWebhookEndpoint.deleteMany({ where: { id: webhookId } }).catch(() => null);
+    await prisma.platformApiKey.deleteMany({ where: { id: apiKeyIdOverflow } }).catch(() => null);
     await prisma.platformApiKey.deleteMany({ where: { id: apiKeyId } }).catch(() => null);
     await prisma.platformMarketplaceOffer.deleteMany({ where: { id: offerId } }).catch(() => null);
+    await prisma.platformAgentRuntime.deleteMany({ where: { tenantId } }).catch(() => null);
     await prisma.platformLicense.deleteMany({ where: { id: licenseId } }).catch(() => null);
     await prisma.platformSubscription.deleteMany({ where: { id: subscriptionId } }).catch(() => null);
     await prisma.platformTenant.deleteMany({ where: { id: tenantId } }).catch(() => null);
@@ -894,10 +923,10 @@ test('admin platform APIs expose overview data while snapshot stays sanitized', 
   const subscriptionRes = await request('/admin/api/platform/subscription', 'POST', {
     id: subscriptionId,
     tenantId,
-    planId: 'starter',
+    planId: 'trial-14d',
     status: 'active',
-    billingCycle: 'monthly',
-    amountCents: 9900,
+    billingCycle: 'trial',
+    amountCents: 0,
     currency: 'THB',
   }, cookie);
   assert.equal(subscriptionRes.res.status, 200);
@@ -926,19 +955,31 @@ test('admin platform APIs expose overview data while snapshot stays sanitized', 
     id: apiKeyId,
     tenantId,
     name: 'Integration API Key',
-    scopes: ['tenant:read', 'analytics:read', 'delivery:reconcile'],
+    scopes: ['tenant:read', 'analytics:read', 'delivery:reconcile', 'webhook:write', 'agent:write'],
   }, cookie);
   assert.equal(apiKeyRes.res.status, 200);
   assert.equal(apiKeyRes.data.ok, true);
   assert.equal(String(apiKeyRes.data.data?.apiKey?.id || ''), apiKeyId);
   assert.match(String(apiKeyRes.data.data?.rawKey || ''), /^sk_/);
+  const rawPlatformApiKey = String(apiKeyRes.data.data?.rawKey || '');
+  assert.ok(rawPlatformApiKey.length > 10);
+
+  const apiKeyOverflowRes = await request('/admin/api/platform/apikey', 'POST', {
+    id: apiKeyIdOverflow,
+    tenantId,
+    name: 'Overflow API Key',
+    scopes: ['tenant:read'],
+  }, cookie);
+  assert.equal(apiKeyOverflowRes.res.status, 400);
+  assert.equal(apiKeyOverflowRes.data.ok, false);
+  assert.equal(String(apiKeyOverflowRes.data.error || ''), 'tenant-quota-exceeded');
 
   const webhookRes = await request('/admin/api/platform/webhook', 'POST', {
     id: webhookId,
     tenantId,
     name: 'Integration Webhook',
     eventType: '*',
-    targetUrl: 'https://example.com/platform-webhook',
+    targetUrl: webhookTargetUrl,
     secretValue: webhookSecret,
   }, cookie);
   assert.equal(webhookRes.res.status, 200);
@@ -959,6 +1000,20 @@ test('admin platform APIs expose overview data while snapshot stays sanitized', 
   assert.equal(offerRes.res.status, 200);
   assert.equal(offerRes.data.ok, true);
 
+  await prisma.purchase.create({
+    data: {
+      code: purchaseCode,
+      tenantId,
+      userId: 'tenant-user-1',
+      itemId: 'm1911-test',
+      price: 123,
+      status: 'pending',
+      createdAt: new Date(Date.now() - 45 * 60 * 1000),
+      updatedAt: new Date(),
+      statusUpdatedAt: new Date(Date.now() - 45 * 60 * 1000),
+    },
+  });
+
   const overviewRes = await request('/admin/api/platform/overview', 'GET', null, cookie);
   assert.equal(overviewRes.res.status, 200);
   assert.equal(overviewRes.data.ok, true);
@@ -976,10 +1031,28 @@ test('admin platform APIs expose overview data while snapshot stays sanitized', 
   assert.equal(opsStateRes.data.ok, true);
   assert.equal(String(opsStateRes.data.data?.lastAutoBackupAt || '').length > 0, true);
 
+  const quotaRes = await request(`/admin/api/platform/quota?tenantId=${encodeURIComponent(tenantId)}`, 'GET', null, cookie);
+  assert.equal(quotaRes.res.status, 200);
+  assert.equal(quotaRes.data.ok, true);
+  assert.equal(Number(quotaRes.data.data?.quotas?.apiKeys?.used || 0), 1);
+  assert.equal(Number(quotaRes.data.data?.quotas?.apiKeys?.limit || 0), 1);
+  assert.equal(Number(quotaRes.data.data?.quotas?.webhooks?.used || 0), 1);
+  assert.equal(Number(quotaRes.data.data?.quotas?.marketplaceOffers?.used || 0), 1);
+  assert.equal(Number(quotaRes.data.data?.quotas?.purchases30d?.used || 0), 1);
+
   const reconcileRes = await request('/admin/api/platform/reconcile', 'GET', null, cookie);
   assert.equal(reconcileRes.res.status, 200);
   assert.equal(reconcileRes.data.ok, true);
   assert.equal(typeof reconcileRes.data.data?.summary?.anomalies, 'number');
+
+  const adminWebhookTestRes = await request('/admin/api/platform/webhook/test', 'POST', {
+    tenantId,
+    eventType: 'platform.admin.test',
+    payload: { scope: 'admin-test' },
+  }, cookie);
+  assert.equal(adminWebhookTestRes.res.status, 200);
+  assert.equal(adminWebhookTestRes.data.ok, true);
+  assert.equal(Array.isArray(adminWebhookTestRes.data.data?.results), true);
 
   const monitoringRes = await request('/admin/api/platform/monitoring/run', 'POST', {}, cookie);
   assert.equal(monitoringRes.res.status, 200);
@@ -1004,7 +1077,13 @@ test('admin platform APIs expose overview data while snapshot stays sanitized', 
   assert.ok(snapshotApiKey, 'expected platform api key in snapshot');
   assert.equal('keyHash' in snapshotApiKey, false);
   assert.equal('rawKey' in snapshotApiKey, false);
-  assert.deepEqual(snapshotApiKey.scopes, ['tenant:read', 'analytics:read', 'delivery:reconcile']);
+  assert.deepEqual(snapshotApiKey.scopes, [
+    'tenant:read',
+    'analytics:read',
+    'delivery:reconcile',
+    'webhook:write',
+    'agent:write',
+  ]);
 
   const snapshotWebhook = (snapshotRes.data.data?.platformWebhookEndpoints || []).find(
     (row) => String(row?.id || '') === webhookId,
@@ -1012,6 +1091,115 @@ test('admin platform APIs expose overview data while snapshot stays sanitized', 
   assert.ok(snapshotWebhook, 'expected platform webhook in snapshot');
   assert.notEqual(String(snapshotWebhook.secretValue || ''), webhookSecret);
   assert.match(String(snapshotWebhook.secretValue || ''), /\*{2,}/);
+
+  const publicTenantRes = await fetch(`${baseUrl}/platform/api/v1/tenant/self`, {
+    headers: {
+      'x-platform-api-key': rawPlatformApiKey,
+    },
+  });
+  const publicTenantData = await publicTenantRes.json().catch(() => ({}));
+  assert.equal(publicTenantRes.status, 200);
+  assert.equal(publicTenantData.ok, true);
+  assert.equal(String(publicTenantData.data?.tenant?.id || ''), tenantId);
+  assert.equal(Number(publicTenantData.data?.quota?.quotas?.apiKeys?.used || 0), 1);
+
+  const publicQuotaRes = await fetch(`${baseUrl}/platform/api/v1/quota/self`, {
+    headers: {
+      authorization: `Bearer ${rawPlatformApiKey}`,
+    },
+  });
+  const publicQuotaData = await publicQuotaRes.json().catch(() => ({}));
+  assert.equal(publicQuotaRes.status, 200);
+  assert.equal(publicQuotaData.ok, true);
+  assert.equal(Number(publicQuotaData.data?.quotas?.purchases30d?.used || 0), 1);
+
+  const publicAnalyticsRes = await fetch(`${baseUrl}/platform/api/v1/analytics/overview`, {
+    headers: {
+      'x-platform-api-key': rawPlatformApiKey,
+    },
+  });
+  const publicAnalyticsData = await publicAnalyticsRes.json().catch(() => ({}));
+  assert.equal(publicAnalyticsRes.status, 200);
+  assert.equal(publicAnalyticsData.ok, true);
+  assert.equal(String(publicAnalyticsData.data?.scope?.mode || ''), 'tenant-isolated');
+  assert.equal(Boolean(publicAnalyticsData.data?.scope?.deliveryMetricsScoped), true);
+  assert.equal(Number(publicAnalyticsData.data?.delivery?.purchaseCount30d || 0), 1);
+
+  const publicReconcileRes = await fetch(`${baseUrl}/platform/api/v1/delivery/reconcile`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-platform-api-key': rawPlatformApiKey,
+    },
+    body: JSON.stringify({}),
+  });
+  const publicReconcileData = await publicReconcileRes.json().catch(() => ({}));
+  assert.equal(publicReconcileRes.status, 200);
+  assert.equal(publicReconcileData.ok, true);
+  assert.equal(String(publicReconcileData.data?.scope?.tenantId || ''), tenantId);
+  assert.equal(Number(publicReconcileData.data?.summary?.purchases || 0), 1);
+  assert.equal(Number(publicReconcileData.data?.summary?.anomalies || 0) >= 1, true);
+
+  const publicWebhookTestRes = await fetch(`${baseUrl}/platform/api/v1/webhooks/test`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-platform-api-key': rawPlatformApiKey,
+    },
+    body: JSON.stringify({
+      eventType: 'platform.public.test',
+      payload: { scope: 'public-test' },
+    }),
+  });
+  const publicWebhookTestData = await publicWebhookTestRes.json().catch(() => ({}));
+  assert.equal(publicWebhookTestRes.status, 200);
+  assert.equal(publicWebhookTestData.ok, true);
+  assert.equal(Array.isArray(publicWebhookTestData.data?.results), true);
+
+  const heartbeatPrimaryRes = await fetch(`${baseUrl}/platform/api/v1/agent/heartbeat`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-platform-api-key': rawPlatformApiKey,
+    },
+    body: JSON.stringify({
+      runtimeKey: 'primary-agent',
+      version: '1.2.0',
+      channel: 'stable',
+      status: 'online',
+    }),
+  });
+  const heartbeatPrimaryData = await heartbeatPrimaryRes.json().catch(() => ({}));
+  assert.equal(heartbeatPrimaryRes.status, 200);
+  assert.equal(heartbeatPrimaryData.ok, true);
+
+  const heartbeatOverflowRes = await fetch(`${baseUrl}/platform/api/v1/agent/heartbeat`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'x-platform-api-key': rawPlatformApiKey,
+    },
+    body: JSON.stringify({
+      runtimeKey: 'secondary-agent',
+      version: '1.2.0',
+      channel: 'stable',
+      status: 'online',
+    }),
+  });
+  const heartbeatOverflowData = await heartbeatOverflowRes.json().catch(() => ({}));
+  assert.equal(heartbeatOverflowRes.status, 400);
+  assert.equal(heartbeatOverflowData.ok, false);
+  assert.equal(String(heartbeatOverflowData.error || ''), 'tenant-quota-exceeded');
+
+  assert.equal(captureRequests.length >= 2, true);
+  assert.equal(
+    captureRequests.some((entry) => String(entry.headers['x-scum-platform-event'] || '') === 'platform.admin.test'),
+    true,
+  );
+  assert.equal(
+    captureRequests.some((entry) => String(entry.headers['x-scum-platform-event'] || '') === 'platform.public.test'),
+    true,
+  );
 });
 
 test('admin API rejects malformed JSON and oversized UTF-8 body with proper status', async (t) => {
@@ -1615,6 +1803,8 @@ test('admin API control panel settings, env patching, and admin user management'
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scum-admin-control-'));
   const rootEnvPath = path.join(tempDir, 'root.env');
   const portalEnvPath = path.join(tempDir, 'portal.env');
+  const restartLogPath = path.join(tempDir, 'restart.log');
+  const restartScriptPath = path.join(tempDir, 'restart-script.js');
   fs.writeFileSync(
     rootEnvPath,
     [
@@ -1655,6 +1845,28 @@ test('admin API control panel settings, env patching, and admin user management'
     ].join('\n'),
     'utf8',
   );
+  fs.writeFileSync(
+    restartScriptPath,
+    [
+      "const fs = require('node:fs');",
+      "const path = require('node:path');",
+      "const logPath = process.env.TEST_RESTART_LOG_PATH || path.join(process.cwd(), 'restart.log');",
+      "fs.appendFileSync(logPath, `${process.argv.slice(2).join(' ')}\\n`, 'utf8');",
+    ].join('\n'),
+    'utf8',
+  );
+  const preservedEnv = new Map(
+    [
+      'DISCORD_GUILD_ID',
+      'BOT_ENABLE_ADMIN_WEB',
+      'RCON_HOST',
+      'RCON_PASSWORD',
+      'WEB_PORTAL_BASE_URL',
+      'WEB_PORTAL_PLAYER_OPEN_ACCESS',
+      'ADMIN_WEB_SERVICE_RESTART_SCRIPT',
+      'TEST_RESTART_LOG_PATH',
+    ].map((key) => [key, process.env[key]]),
+  );
   process.env.ADMIN_WEB_HOST = '127.0.0.1';
   process.env.ADMIN_WEB_PORT = String(port);
   process.env.ADMIN_WEB_USER = 'owner_control';
@@ -1664,17 +1876,8 @@ test('admin API control panel settings, env patching, and admin user management'
   process.env.ADMIN_WEB_2FA_ENABLED = 'false';
   process.env.ADMIN_WEB_ENV_FILE_PATH = rootEnvPath;
   process.env.ADMIN_WEB_PORTAL_ENV_FILE_PATH = portalEnvPath;
-
-  const preservedEnv = new Map(
-    [
-      'DISCORD_GUILD_ID',
-      'BOT_ENABLE_ADMIN_WEB',
-      'RCON_HOST',
-      'RCON_PASSWORD',
-      'WEB_PORTAL_BASE_URL',
-      'WEB_PORTAL_PLAYER_OPEN_ACCESS',
-    ].map((key) => [key, process.env[key]]),
-  );
+  process.env.ADMIN_WEB_SERVICE_RESTART_SCRIPT = restartScriptPath;
+  process.env.TEST_RESTART_LOG_PATH = restartLogPath;
 
   const fakeClient = {
     guilds: {
@@ -1774,6 +1977,10 @@ test('admin API control panel settings, env patching, and admin user management'
     patch: {
       commands: {
         disabled: ['alpha'],
+        permissions: {
+          alpha: 'admin',
+          beta: 'owner',
+        },
       },
     },
   }, cookie);
@@ -1809,6 +2016,16 @@ test('admin API control panel settings, env patching, and admin user management'
   assert.match(portalEnvText, /WEB_PORTAL_BASE_URL=https:\/\/player-new\.example\.com/i);
   assert.match(portalEnvText, /WEB_PORTAL_PLAYER_OPEN_ACCESS=true/i);
 
+  const restartRes = await request('/admin/api/runtime/restart-service', 'POST', {
+    services: ['worker'],
+  }, cookie);
+  assert.equal(restartRes.res.status, 200);
+  assert.equal(restartRes.data.ok, true);
+  assert.ok(Array.isArray(restartRes.data.data?.services));
+  assert.ok(restartRes.data.data.services.some((entry) => entry.key === 'worker'));
+  const restartLogText = fs.readFileSync(restartLogPath, 'utf8');
+  assert.match(restartLogText, /scum-worker/i);
+
   const createAdminUser = await request('/admin/api/auth/user', 'POST', {
     username: 'ops_control',
     role: 'admin',
@@ -1836,9 +2053,17 @@ test('admin API control panel settings, env patching, and admin user management'
     Array.isArray(updatedSettings.data.data?.commandConfig?.disabled)
       && updatedSettings.data.data.commandConfig.disabled.includes('alpha'),
   );
+  assert.equal(
+    String(updatedSettings.data.data?.commandConfig?.permissions?.alpha || ''),
+    'admin',
+  );
   assert.ok(
     Array.isArray(updatedSettings.data.data?.adminUsers)
       && updatedSettings.data.data.adminUsers.some((entry) => entry.username === 'ops_control'),
+  );
+  assert.ok(
+    Array.isArray(updatedSettings.data.data?.managedServices)
+      && updatedSettings.data.data.managedServices.some((entry) => entry.key === 'worker'),
   );
 });
 

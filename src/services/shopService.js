@@ -3,13 +3,21 @@ const {
   getShopItemById,
   getShopItemByName,
   createPurchase,
+  setPurchaseStatusByCode,
   addShopItem,
   deleteShopItem,
   setShopItemPrice,
 } = require('../store/memoryStore');
 const { getLinkByUserId } = require('../store/linkStore');
+const {
+  getMembership,
+  setMembership,
+  removeMembership,
+} = require('../store/vipStore');
 const { debitCoins, creditCoins } = require('./coinService');
 const { enqueuePurchaseDelivery } = require('./rconDelivery');
+const { assertTenantQuotaAvailable } = require('./platformService');
+const { getVipPlan } = require('./vipService');
 
 function normalizeShopKind(value) {
   const raw = String(value || 'item').trim().toLowerCase();
@@ -160,9 +168,12 @@ async function createQueuedPurchase(params = {}) {
   const enqueuePurchaseDeliveryFn =
     params.enqueuePurchaseDeliveryFn || enqueuePurchaseDelivery;
 
-  const purchase = await createPurchaseFn(userId, item);
+  const purchase = await createPurchaseFn(userId, item, {
+    tenantId: params.tenantId || item?.tenantId || null,
+  });
   const delivery = await enqueuePurchaseDeliveryFn(purchase, {
     guildId: params.guildId || null,
+    tenantId: params.tenantId || item?.tenantId || purchase?.tenantId || null,
     ...(params.deliveryOptions && typeof params.deliveryOptions === 'object'
       ? params.deliveryOptions
       : {}),
@@ -177,6 +188,80 @@ async function createQueuedPurchase(params = {}) {
   };
 }
 
+async function createVipPurchase(params = {}) {
+  const userId = String(params.userId || '').trim();
+  const item = params.item;
+  if (!userId || !item?.id) {
+    throw new Error('invalid-vip-purchase-input');
+  }
+
+  const actor = String(params.actor || '').trim() || 'system';
+  const source = String(params.source || '').trim() || 'shop-service';
+  const createPurchaseFn = params.createPurchaseFn || createPurchase;
+  const setPurchaseStatusByCodeFn =
+    params.setPurchaseStatusByCodeFn || setPurchaseStatusByCode;
+  const getMembershipFn = params.getMembershipFn || getMembership;
+  const setMembershipFn = params.setMembershipFn || setMembership;
+  const removeMembershipFn = params.removeMembershipFn || removeMembership;
+
+  const vipPlan = params.vipPlan || getVipPlan(item.id);
+  if (!vipPlan) {
+    throw new Error('vip-plan-not-found');
+  }
+
+  const purchase = await createPurchaseFn(userId, item, {
+    tenantId: params.tenantId || item?.tenantId || null,
+  });
+
+  const previousMembership = getMembershipFn(userId);
+  const now = params.now instanceof Date ? params.now : new Date();
+  const membershipBaseAt =
+    previousMembership?.expiresAt instanceof Date
+    && previousMembership.expiresAt.getTime() > now.getTime()
+      ? previousMembership.expiresAt
+      : now;
+  const expiresAt = new Date(
+    membershipBaseAt.getTime() + Number(vipPlan.durationDays || 0) * 24 * 60 * 60 * 1000,
+  );
+  const membership = setMembershipFn(userId, vipPlan.id, expiresAt);
+  if (!membership) {
+    throw new Error('vip-membership-write-failed');
+  }
+
+  try {
+    const completedPurchase = await setPurchaseStatusByCodeFn(purchase.code, 'delivered', {
+      actor,
+      reason: 'vip-activated',
+      meta: {
+        source,
+        planId: vipPlan.id,
+        durationDays: Number(vipPlan.durationDays || 0),
+      },
+    });
+
+    return {
+      item,
+      kind: normalizeShopKind(item.kind),
+      bundle: buildBundleSummary(item),
+      purchase: completedPurchase || purchase,
+      delivery: {
+        queued: false,
+        backend: 'vip-membership',
+        reason: 'vip-activated',
+      },
+      membership,
+      vipPlan,
+    };
+  } catch (error) {
+    if (previousMembership?.expiresAt instanceof Date) {
+      setMembershipFn(userId, previousMembership.planId, previousMembership.expiresAt);
+    } else {
+      removeMembershipFn(userId);
+    }
+    throw error;
+  }
+}
+
 async function purchaseShopItemForUser(params = {}) {
   const userId = String(params.userId || '').trim();
   const actor = String(params.actor || '').trim() || 'system';
@@ -189,6 +274,7 @@ async function purchaseShopItemForUser(params = {}) {
   if (!item) {
     return { ok: false, reason: 'item-not-found' };
   }
+  const tenantId = String(params.tenantId || item?.tenantId || '').trim() || null;
 
   const kind = normalizeShopKind(item.kind);
   if (isGameItemShopKind(kind) && params.requireSteamLink !== false) {
@@ -205,10 +291,27 @@ async function purchaseShopItemForUser(params = {}) {
     }
   }
 
+  if (tenantId) {
+    const quotaCheck = await assertTenantQuotaAvailable(tenantId, 'purchases30d', 1);
+    if (!quotaCheck.ok) {
+      return {
+        ok: false,
+        reason: quotaCheck.reason || 'tenant-quota-exceeded',
+        item,
+        kind,
+        tenantId,
+        quotaKey: quotaCheck.quotaKey || 'purchases30d',
+        quota: quotaCheck.quota || null,
+        quotaSnapshot: quotaCheck.snapshot || null,
+      };
+    }
+  }
+
   const price = Math.max(0, Number(item.price || 0));
   const debitCoinsFn = params.debitCoinsFn || debitCoins;
   const creditCoinsFn = params.creditCoinsFn || creditCoins;
   const createQueuedPurchaseFn = params.createQueuedPurchaseFn || createQueuedPurchase;
+  const createVipPurchaseFn = params.createVipPurchaseFn || createVipPurchase;
 
   let balance = null;
   let debitApplied = 0;
@@ -243,13 +346,25 @@ async function purchaseShopItemForUser(params = {}) {
   }
 
   try {
-    const result = await createQueuedPurchaseFn({
+    const purchaseFactory = isVipShopKind(kind)
+      ? createVipPurchaseFn
+      : createQueuedPurchaseFn;
+    const result = await purchaseFactory({
       userId,
       item,
       guildId: params.guildId || null,
+      tenantId,
+      actor,
+      source,
       deliveryOptions: params.deliveryOptions,
       createPurchaseFn: params.createPurchaseFn,
       enqueuePurchaseDeliveryFn: params.enqueuePurchaseDeliveryFn,
+      setPurchaseStatusByCodeFn: params.setPurchaseStatusByCodeFn,
+      getMembershipFn: params.getMembershipFn,
+      setMembershipFn: params.setMembershipFn,
+      removeMembershipFn: params.removeMembershipFn,
+      vipPlan: params.vipPlan,
+      now: params.now,
     });
     return {
       ok: true,

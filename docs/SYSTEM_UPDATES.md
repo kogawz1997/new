@@ -1,51 +1,60 @@
 # SYSTEM_UPDATES
 
-อัปเดตรอบล่าสุดถูกรวมไว้ที่ [PROJECT_HQ.md](../PROJECT_HQ.md) เป็นหลัก แต่รอบ `2026-03-15` มีงาน platform foundation เพิ่มสำคัญดังนี้:
+อัปเดตล่าสุด: **2026-03-15**
 
-- Billing / subscription foundation พร้อม plan catalog และ subscription records
-- License / legal docs พร้อม `Terms`, `Privacy`, `Subscription Policy`
-- Multi-tenant foundation พร้อม tenant, reseller-ready shape, API key scope และ webhook endpoint
-- Anti-abuse + delivery reconcile พร้อม monitoring cycle และ alert integration
-- Monitoring + alerting ฝั่ง platform พร้อม auto backup และ agent stale/version drift alert
-- One-click / bootstrap path เพิ่ม `npm run platform:bootstrap:win` และ schema upgrade fallback
-- Public API / webhook สำหรับ tenant integration และ agent heartbeat
-- Permission catalog ระดับ scope สำหรับ platform API
-- Agent version management ผ่าน heartbeat + minimumVersion
-- Marketplace / analytics / landing / trial / showcase route สำหรับ demo และ commercial flow
+ไฟล์นี้ใช้สรุปสิ่งที่เปลี่ยนในระบบช่วงล่าสุดแบบสั้น ๆ โดยภาพรวมสถานะให้ดูที่ [PROJECT_HQ.md](../PROJECT_HQ.md)
 
-ลิงก์ที่เกี่ยวข้อง:
+## รอบอัปเดตล่าสุด
 
-- สถานะรวมและ roadmap: [PROJECT_HQ.md](../PROJECT_HQ.md)
-- เช็กลิสต์ go-live: [GO_LIVE_CHECKLIST_TH.md](./GO_LIVE_CHECKLIST_TH.md)
-- เอกสารโชว์งาน: [SHOWCASE_TH.md](./SHOWCASE_TH.md)
-- Terms: [LEGAL_TERMS_TH.md](./LEGAL_TERMS_TH.md)
-- Privacy: [PRIVACY_POLICY_TH.md](./PRIVACY_POLICY_TH.md)
-- Subscription Policy: [SUBSCRIPTION_POLICY_TH.md](./SUBSCRIPTION_POLICY_TH.md)
+### Persistence / database
 
-Production rollout update:
+- runtime บนเครื่องนี้ cut over จาก SQLite ไป PostgreSQL แล้ว
+- เพิ่ม helper สำหรับ local PostgreSQL cluster:
+  - `npm run postgres:local:setup`
+  - `npm run postgres:local:start`
+  - `npm run postgres:local:status`
+- เพิ่ม cutover script:
+  - `npm run db:cutover:postgresql -- --source-sqlite prisma/prisma/production.db`
+- เพิ่ม provider-aware Prisma flow สำหรับ `sqlite`, `postgresql`, `mysql`
 
-- Admin portal now targets `https://admin.genz.noah-dns.online/admin`
-- Player portal now targets `https://player.genz.noah-dns.online`
-- `ADMIN_WEB_2FA_ENABLED=true` and `ADMIN_WEB_2FA_SECRET` are now set in the live root `.env`
-- `ADMIN_WEB_STEP_UP_ENABLED=true` and `ADMIN_WEB_STEP_UP_TTL_MINUTES=15` are now set explicitly in the live root `.env`
-- PM2 runtime `bot / worker / watcher / web / console-agent` is online together and `npm run smoke:postdeploy` now passes against the live split-origin stack
-- `ADMIN_WEB_SSO_DISCORD_ENABLED=true` and admin OAuth start now redirects to Discord successfully on the live split-origin stack
-- Added [ADMIN_SSO_ROLE_MAPPING_TH.md](./ADMIN_SSO_ROLE_MAPPING_TH.md) plus `npm run admin:sso:roles` to export owner/admin/mod Discord role ids for admin SSO
-- Added fallback support for `ADMIN_WEB_SSO_DISCORD_*_ROLE_NAMES` so production can map `Owner / Admin / Moderator` explicitly even when role ids are not yet exported
-- Added agent circuit breaker + RCon failover strategy for delivery runtime hardening
-- Added admin security event trail, session revoke flow, step-up auth for sensitive mutations, and role-matrix API
-- Added dedicated Auth + Security admin panel, modal-based step-up confirmation, auth explorer filters/search, and migration/rollback/restore policy docs with schema-version compatibility evidence
-- Added tenant-scoped analytics/reconcile guards for public platform API isolation
-- Added admin recent request trace logging for production debugging
-- Added restore preview token / expiry / schema guard as an extra restore safety layer
-- Moved admin web bootstrap out of the Discord-ready path so `/admin` stays available during Discord login degradation
-- Added [REPO_STRUCTURE_TH.md](./REPO_STRUCTURE_TH.md) and [LIMITATIONS_AND_SLA_TH.md](./LIMITATIONS_AND_SLA_TH.md) for long-term handoff quality
-- Added workflow-backed CI badge/release badge, Node matrix testing, clean-room install checks, and verification artifacts instead of hardcoded test counts
-- Added env profile overlays plus `npm run env:prepare:*` for development/test/production separation
-- Added `npm run smoke:local-ci`, `npm run ci:verify`, and local smoke stack automation for clean-room verification
-- Added package metadata cleanup, commercial license file, release-please workflow, and changelog automation baseline
-- Added delivery evidence bundle persistence per order plus a dedicated capability matrix for `RCON` vs `agent mode`
-- Hardened `ci:verify` to inject deterministic test-safe env values instead of depending on the developer machine `.env`
-- Updated tracked env profile examples so topology doctor passes cleanly in `test` profile without bot/worker overlap
-- Removed hardcoded test totals from operations docs and pointed status references at CI artifacts instead
-- Extended secret scanning allowlist for tracked `development/test` env examples while still blocking generated `.env.*.split` and backup paths
+### Test / validation
+
+- `npm test` ใช้ `scripts/run-tests-with-provider.js`
+- ถ้า generated Prisma client เป็น PostgreSQL ชุดทดสอบจะสร้าง isolated schema ใหม่ให้เอง
+- ลดความเสี่ยงที่ test จะไปชน runtime database จริง
+- แก้ interaction test ที่เคยเปิด admin web ค้างจน test process ไม่ยอมปิด
+
+### Delivery / runtime
+
+- delivery runtime บันทึก `executionMode`, `backend`, `commandPath`, `retryCount`
+- agent mode มี circuit breaker และ failover policy
+- watcher runtime รายงาน `degraded` แทนการ exit ทันทีเมื่อ `SCUM.log` ไม่พร้อม
+
+### Admin / tenant scope
+
+- admin users และ sessions รองรับ `tenantId`
+- tenant-scoped admin ถูกจำกัดไม่ให้แตะ global config/env/restart routes ที่ไม่ควรเข้าถึง
+- เพิ่ม tenant config API และ tenant config persistence
+- control panel แสดง tenant config ให้กับ tenant-scoped admin ได้
+
+### Docs / evidence
+
+- ปรับเอกสารหลักให้สะท้อน PostgreSQL cutover, tenant boundary, และ validation ปัจจุบัน
+- คงแนวทางใช้ CI artifact เป็น source of truth สำหรับสถานะ test
+
+## คำสั่งที่ใช้บ่อยหลังอัปเดตนี้
+
+```bash
+npm run lint
+npm test
+npm run doctor
+npm run security:check
+npm run readiness:prod
+npm run smoke:postdeploy
+```
+
+## ข้อจำกัดที่ยังอยู่
+
+- current `.env` บนเครื่องนี้ใช้ `DELIVERY_EXECUTION_MODE=rcon`
+- agent mode ยังต้องพึ่ง Windows session และ SCUM admin client จริง
+- tenant isolation ยังไม่ใช่ per-tenant database isolation

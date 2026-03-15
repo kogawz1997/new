@@ -10,6 +10,7 @@ const {
   resolveCanonicalItemId,
   resolveItemIconUrl,
 } = require('../services/itemIconService');
+const { resolveDatabaseRuntime } = require('../utils/dbEngine');
 
 function normalizeShopKind(value, fallback = 'item') {
   const raw = String(value || fallback)
@@ -35,6 +36,12 @@ function normalizeInteger(value, fallback = 0) {
 function normalizeOptionalText(value) {
   const text = String(value || '').trim();
   return text || null;
+}
+
+function resolveTenantId(input) {
+  const direct = normalizeOptionalText(input);
+  if (direct) return direct;
+  return normalizeOptionalText(process.env.PLATFORM_DEFAULT_TENANT_ID || process.env.DEFAULT_TENANT_ID);
 }
 
 function normalizeShopCommandList(value) {
@@ -82,7 +89,15 @@ async function ensureShopItemDeliveryProfileColumns() {
   if (shopItemSchemaEnsurePromise) return shopItemSchemaEnsurePromise;
   shopItemSchemaEnsurePromise = (async () => {
     try {
-      const rows = await prisma.$queryRawUnsafe('PRAGMA table_info("ShopItem")');
+      const runtime = resolveDatabaseRuntime();
+      const rows = runtime.engine === 'postgresql'
+        ? await prisma.$queryRaw`
+          SELECT column_name AS name
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'ShopItem'
+        `
+        : await prisma.$queryRawUnsafe('PRAGMA table_info("ShopItem")');
       const columnNames = new Set(
         Array.isArray(rows) ? rows.map((row) => String(row?.name || '')) : [],
       );
@@ -646,8 +661,10 @@ async function setShopItemPrice(idOrName, newPrice) {
   return toShopItemView(updated);
 }
 
-async function createPurchase(userId, item) {
+async function createPurchase(userId, item, options = {}) {
+  const tenantId = resolveTenantId(options.tenantId || item?.tenantId);
   const payload = {
+    tenantId,
     userId: String(userId),
     itemId: String(item.id),
     price: Number(item.price || 0),

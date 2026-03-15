@@ -3408,6 +3408,21 @@ async function getDeliveryRuntimeStatus() {
   return runtime;
 }
 
+function getDeliveryRuntimeSnapshotSync() {
+  const settings = getSettings();
+  return {
+    enabled: settings.enabled,
+    executionMode: settings.executionMode,
+    workerStarted,
+    workerBusy,
+    queueLength: jobs.size,
+    deadLetterCount: deadLetters.size,
+    inFlightCount: inFlightPurchaseCodes.size,
+    recentSuccessCount: recentlyDeliveredCodes.size,
+    agentCircuit: getAgentCircuitState(),
+  };
+}
+
 async function getDeliveryDetailsByPurchaseCode(purchaseCode, limit = 50) {
   const code = String(purchaseCode || '').trim();
   if (!code) {
@@ -3561,6 +3576,7 @@ function normalizeJob(input) {
 
   return {
     purchaseCode,
+    tenantId: String(input.tenantId || '').trim() || null,
     userId: String(input.userId || '').trim(),
     itemId: String(input.itemId || '').trim(),
     itemName: String(input.itemName || '').trim() || null,
@@ -3596,6 +3612,7 @@ function normalizeDeadLetter(input) {
     : nowIso();
   return {
     purchaseCode,
+    tenantId: String(input.tenantId || '').trim() || null,
     userId: String(input.userId || '').trim() || null,
     itemId: String(input.itemId || '').trim() || null,
     itemName: String(input.itemName || '').trim() || null,
@@ -3680,6 +3697,7 @@ function toPrismaQueueJobData(job) {
   if (!normalized) return null;
   return {
     purchaseCode: normalized.purchaseCode,
+    tenantId: normalized.tenantId || null,
     userId: normalized.userId,
     itemId: normalized.itemId,
     itemName: normalized.itemName || null,
@@ -3700,6 +3718,7 @@ function fromPrismaQueueJobRow(row) {
   if (!row) return null;
   return normalizeJob({
     purchaseCode: row.purchaseCode,
+    tenantId: row.tenantId,
     userId: row.userId,
     itemId: row.itemId,
     itemName: row.itemName,
@@ -3722,6 +3741,7 @@ function toPrismaDeadLetterData(rowInput) {
   if (!row) return null;
   return {
     purchaseCode: row.purchaseCode,
+    tenantId: row.tenantId || null,
     userId: row.userId || null,
     itemId: row.itemId || null,
     itemName: row.itemName || null,
@@ -3739,6 +3759,7 @@ function fromPrismaDeadLetterRow(row) {
   if (!row) return null;
   return normalizeDeadLetter({
     purchaseCode: row.purchaseCode,
+    tenantId: row.tenantId,
     userId: row.userId,
     itemId: row.itemId,
     itemName: row.itemName,
@@ -4037,6 +4058,7 @@ function removeDeliveryDeadLetter(purchaseCode) {
 function addDeliveryDeadLetter(job, reason, meta = null) {
   const row = normalizeDeadLetter({
     purchaseCode: job?.purchaseCode,
+    tenantId: job?.tenantId,
     userId: job?.userId,
     itemId: job?.itemId,
     itemName: job?.itemName,
@@ -4069,6 +4091,7 @@ function addDeliveryDeadLetter(job, reason, meta = null) {
   publishAdminLiveUpdate('delivery-dead-letter', {
     action: 'add',
     purchaseCode: row.purchaseCode,
+    tenantId: row.tenantId || null,
     reason: row.reason,
     count: deadLetters.size,
   });
@@ -4265,6 +4288,7 @@ function publishQueueLiveUpdate(action, job) {
   publishAdminLiveUpdate('delivery-queue', {
     action: String(action || 'update'),
     purchaseCode: job?.purchaseCode || null,
+    tenantId: job?.tenantId || null,
     itemId: job?.itemId || null,
     itemName: job?.itemName || null,
     iconUrl: deliveryItems[0]?.iconUrl || job?.iconUrl || null,
@@ -4281,6 +4305,7 @@ function queueAudit(level, action, job, message, meta = null) {
   addDeliveryAudit({
     level,
     action,
+    tenantId: job?.tenantId || null,
     purchaseCode: job?.purchaseCode || null,
     itemId: job?.itemId || null,
     userId: job?.userId || null,
@@ -4292,6 +4317,7 @@ function queueAudit(level, action, job, message, meta = null) {
     at: new Date().toISOString(),
     level,
     action,
+    tenantId: job?.tenantId || null,
     message,
     status:
       String(executionMeta?.status || job?.status || '').trim()
@@ -5420,6 +5446,7 @@ async function enqueuePurchaseDelivery(purchase, context = {}) {
 
   const job = normalizeJob({
     purchaseCode,
+    tenantId: String(context.tenantId || purchase.tenantId || '').trim() || null,
     userId: String(purchase.userId),
     itemId: String(purchase.itemId),
     itemName,
@@ -5606,6 +5633,7 @@ module.exports = {
   cancelDeliveryJob,
   listDeliveryAudit,
   getDeliveryMetricsSnapshot,
+  getDeliveryRuntimeSnapshotSync,
   getDeliveryRuntimeStatus,
   getDeliveryPreflightReport,
   processDeliveryQueueNow,

@@ -5,6 +5,8 @@ const { getRuntimeSupervisorSnapshot } = require('./runtimeSupervisorService');
 const {
   listPlatformAgentRuntimes,
   getPlatformAnalyticsOverview,
+  getTenantQuotaSnapshot,
+  listPlatformTenants,
   reconcileDeliveryState,
 } = require('./platformService');
 const {
@@ -159,11 +161,12 @@ async function runPlatformMonitoringCycle({ client = null, force = false } = {})
 
       const shouldReconcile =
         force || shouldRunInterval(state.lastReconcileAt, monitoring.reconcileEveryMs);
-      const [analytics, reconcile, runtimeSupervisor, agentRuntimes] = await Promise.all([
+      const [analytics, reconcile, runtimeSupervisor, agentRuntimes, tenants] = await Promise.all([
         getPlatformAnalyticsOverview(),
         shouldReconcile ? reconcileDeliveryState() : Promise.resolve(null),
         getRuntimeSupervisorSnapshot({ forceRefresh: true }).catch(() => null),
         listPlatformAgentRuntimes({ limit: 500 }),
+        listPlatformTenants({ limit: 500 }),
       ]);
 
       report.analytics = analytics;
@@ -172,6 +175,11 @@ async function runPlatformMonitoringCycle({ client = null, force = false } = {})
       report.agents = {
         total: agentRuntimes.length,
         items: agentRuntimes,
+      };
+      report.quota = {
+        tenants: 0,
+        exceeded: [],
+        nearLimit: [],
       };
 
       if (reconcile?.summary?.anomalies > 0) {
@@ -232,6 +240,50 @@ async function runPlatformMonitoringCycle({ client = null, force = false } = {})
             });
             updatedAlertMap[alertKey] = generatedAt;
             report.alerts.push(alertKey);
+          }
+        }
+      }
+
+      for (const tenant of tenants) {
+        const quotaSnapshot = await getTenantQuotaSnapshot(tenant.id).catch(() => null);
+        if (!quotaSnapshot?.quotas) continue;
+        report.quota.tenants += 1;
+        for (const [quotaKey, quota] of Object.entries(quotaSnapshot.quotas)) {
+          if (!quota || quota.unlimited) continue;
+          const entry = {
+            tenantId: tenant.id,
+            tenantSlug: tenant.slug,
+            quotaKey,
+            used: quota.used,
+            limit: quota.limit,
+            remaining: quota.remaining,
+          };
+          if (quota.exceeded) {
+            report.quota.exceeded.push(entry);
+            const alertKey = `tenant-quota-exceeded:${tenant.id}:${quotaKey}`;
+            if (force || cooldownAllowsAlert(state, alertKey, monitoring.alertCooldownMs)) {
+              publishAdminLiveUpdate('ops-alert', {
+                source: 'platform-monitor',
+                kind: 'tenant-quota-exceeded',
+                ...entry,
+              });
+              updatedAlertMap[alertKey] = generatedAt;
+              report.alerts.push(alertKey);
+            }
+            continue;
+          }
+          if (Number(quota.remaining) <= 1) {
+            report.quota.nearLimit.push(entry);
+            const alertKey = `tenant-quota-near-limit:${tenant.id}:${quotaKey}`;
+            if (force || cooldownAllowsAlert(state, alertKey, monitoring.alertCooldownMs)) {
+              publishAdminLiveUpdate('ops-alert', {
+                source: 'platform-monitor',
+                kind: 'tenant-quota-near-limit',
+                ...entry,
+              });
+              updatedAlertMap[alertKey] = generatedAt;
+              report.alerts.push(alertKey);
+            }
           }
         }
       }

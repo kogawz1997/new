@@ -171,10 +171,12 @@ function makeTestContext(overrides = {}) {
         if (!code) return null;
         const current = evidenceByCode.get(code) || {
           purchaseCode: code,
+          tenantId: String(payload.tenantId || '').trim() || null,
           events: [],
         };
         current.updatedAt = payload.at || new Date().toISOString();
         current.status = payload.status || current.status || null;
+        current.tenantId = String(payload.tenantId || current.tenantId || '').trim() || null;
         current.execution = payload.execution || current.execution || null;
         current.latestOutputs = Array.isArray(payload.latestOutputs) ? payload.latestOutputs : [];
         current.latestCommandSummary = payload.latestCommandSummary || null;
@@ -372,6 +374,7 @@ test('purchase -> queue -> auto-delivery success for bundle item', async () => {
 
   ctx.purchases.set('P-100', {
     code: 'P-100',
+    tenantId: 'tenant-bundle',
     userId: 'u-1',
     itemId: 'bundle-ak',
     status: 'pending',
@@ -392,6 +395,7 @@ test('purchase -> queue -> auto-delivery success for bundle item', async () => {
   });
   assert.equal(queued.ok, true);
   assert.equal(api.listDeliveryQueue().length, 1);
+  assert.equal(String(api.listDeliveryQueue()[0]?.tenantId || ''), 'tenant-bundle');
 
   const processed = await api.processDeliveryQueueNow(5);
   assert.equal(processed.processed, 1);
@@ -405,6 +409,7 @@ test('purchase -> queue -> auto-delivery success for bundle item', async () => {
     '#SpawnItem 76561198000000001 Weapon_AK47 2',
     '#SpawnItem 76561198000000001 Ammo_762 150',
   ]);
+  assert.equal(String(successAudit.tenantId || ''), 'tenant-bundle');
   assert.equal(successAudit.meta.executionMode, 'rcon');
   assert.equal(successAudit.meta.backend, 'rcon-template');
   assert.match(String(successAudit.meta.commandPath || ''), /rcon/i);
@@ -425,6 +430,7 @@ test('purchase -> queue -> auto-delivery success for bundle item', async () => {
 
   const detail = await api.getDeliveryDetailsByPurchaseCode('P-100');
   assert.equal(detail.evidence?.purchaseCode, 'P-100');
+  assert.equal(String(detail.evidence?.tenantId || ''), 'tenant-bundle');
   assert.match(String(detail.evidence?.filePath || ''), /delivery-evidence/i);
   assert.equal(String(detail.evidence?.execution?.executionMode || ''), 'rcon');
   assert.ok(Array.isArray(detail.evidence?.events));

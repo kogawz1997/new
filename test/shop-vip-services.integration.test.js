@@ -15,6 +15,7 @@ const { purchaseShopItemForUser } = require('../src/services/shopService');
 const { checkoutCart } = require('../src/services/cartService');
 const { buyVipForUser, getVipPlan } = require('../src/services/vipService');
 const { updatePurchaseStatusForActor } = require('../src/services/purchaseService');
+const { getMembership, removeMembership } = require('../src/store/vipStore');
 const { prisma } = require('../src/prisma');
 
 function uniqueId(prefix) {
@@ -164,6 +165,62 @@ test('buyVipForUser rolls back debit when membership activation fails', async ()
     await prisma.vipMembership.deleteMany({ where: { userId } });
     await prisma.walletLedger.deleteMany({ where: { userId } });
     await prisma.userWallet.deleteMany({ where: { userId } });
+  }
+});
+
+test('purchaseShopItemForUser activates VIP immediately and marks purchase delivered', async () => {
+  const userId = uniqueId('shop-vip-user');
+  const itemId = 'vip-7d';
+  let item = null;
+
+  try {
+    item = await getShopItemById(itemId);
+    if (!item) {
+    item = await addShopItem(itemId, 'VIP 7 วัน', 5000, 'vip item', {
+      kind: 'vip',
+    });
+    }
+    await setCoins(userId, 50000, {
+      reason: 'test-init',
+      actor: 'test-suite',
+    });
+
+    const result = await purchaseShopItemForUser({
+      userId,
+      item,
+      actor: 'test-suite',
+      source: 'shop-vip-test',
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(String(result.kind || ''), 'vip');
+    assert.equal(String(result.purchase?.status || ''), 'delivered');
+    assert.equal(Boolean(result.delivery?.queued), false);
+    assert.equal(String(result.delivery?.reason || ''), 'vip-activated');
+
+    const membership = getMembership(userId);
+    assert.ok(membership);
+    assert.equal(String(membership?.planId || ''), 'vip-7d');
+
+    const wallet = await getWallet(userId);
+    assert.equal(wallet.balance, 45000);
+  } finally {
+    removeMembership(userId);
+    await prisma.purchaseStatusHistory.deleteMany({
+      where: {
+        purchase: {
+          userId,
+        },
+      },
+    }).catch(() => null);
+    await prisma.purchase.deleteMany({
+      where: {
+        userId,
+      },
+    }).catch(() => null);
+    await prisma.walletLedger.deleteMany({ where: { userId } }).catch(() => null);
+    await prisma.userWallet.deleteMany({ where: { userId } }).catch(() => null);
+    await deleteShopItem(itemId).catch(() => null);
   }
 });
 

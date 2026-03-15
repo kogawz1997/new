@@ -61,6 +61,7 @@ function appendDeliveryEvidenceEvent(purchaseCode, payload = {}) {
   if (!filePath) return null;
   const current = loadEvidence(purchaseCode) || {
     purchaseCode: String(purchaseCode || '').trim() || null,
+    tenantId: String(payload.tenantId || '').trim() || null,
     createdAt: new Date().toISOString(),
     updatedAt: null,
     status: null,
@@ -78,6 +79,8 @@ function appendDeliveryEvidenceEvent(purchaseCode, payload = {}) {
     meta: payload.meta && typeof payload.meta === 'object' ? payload.meta : null,
   };
   current.updatedAt = event.at;
+  current.tenantId =
+    String(payload.tenantId || current.tenantId || '').trim() || null;
   current.status = String(payload.status || current.status || '').trim() || null;
   current.execution = normalizeExecution({
     ...current.execution,

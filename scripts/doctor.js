@@ -5,6 +5,7 @@ const path = require('node:path');
 const { loadMergedEnvFiles } = require('../src/utils/loadEnvFiles');
 const { validateCommandTemplate } = require('../src/utils/commandTemplate');
 const { getAdminSsoRoleMappingSummary } = require('../src/utils/adminSsoRoleMapping');
+const { resolveDatabaseRuntime } = require('../src/utils/dbEngine');
 
 const ROOT_DIR = process.cwd();
 const ROOT_ENV_PATH = path.join(ROOT_DIR, '.env');
@@ -517,10 +518,23 @@ runCheck('portal .env exists', () => {
   }
 });
 
-runCheck('DATABASE_URL format (file:...)', () => {
-  const value = (process.env.DATABASE_URL || 'file:./prisma/dev.db').trim();
-  if (!value.startsWith('file:')) {
-    throw new Error(`Expected file:... DATABASE_URL, got ${value}`);
+runCheck('DATABASE_URL format', () => {
+  const runtime = resolveDatabaseRuntime();
+  if (runtime.engine === 'unsupported') {
+    throw new Error(`Unsupported DATABASE_URL engine: ${runtime.rawUrl}`);
+  }
+  if (runtime.isSqlite && !runtime.filePath) {
+    throw new Error('SQLite DATABASE_URL must point to a file path');
+  }
+  if (runtime.isServerEngine) {
+    const schemaProvider = String(
+      process.env.PRISMA_SCHEMA_PROVIDER || process.env.DATABASE_PROVIDER || runtime.engine,
+    ).trim().toLowerCase();
+    if (schemaProvider && ![runtime.engine, runtime.engine === 'postgresql' ? 'postgres' : runtime.engine].includes(schemaProvider)) {
+      throw new Error(
+        `PRISMA_SCHEMA_PROVIDER/DATABASE_PROVIDER (${schemaProvider}) does not match DATABASE_URL engine (${runtime.engine})`,
+      );
+    }
   }
 });
 

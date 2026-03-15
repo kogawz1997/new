@@ -150,7 +150,7 @@ test('admin platform routes and tenant public API flow work end-to-end', async (
   assert.equal(analytics.data.ok, true);
   assert.equal(Number(analytics.data.data?.tenants?.total || 0), 1);
   assert.equal(String(analytics.data.data?.scope?.tenantId || ''), 'tenant-admin-api');
-  assert.equal(Boolean(analytics.data.data?.scope?.deliveryMetricsScoped), false);
+  assert.equal(Boolean(analytics.data.data?.scope?.deliveryMetricsScoped), true);
 
   const heartbeat = await request('/platform/api/v1/agent/heartbeat', 'POST', {
     runtimeKey: 'tenant-agent',

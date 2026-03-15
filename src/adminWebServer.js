@@ -12,6 +12,9 @@ const {
   resolveMappedMemberRole,
 } = require('./utils/adminSsoRoleMapping');
 const {
+  getRequiredCommandAccessRole,
+} = require('./utils/discordCommandAccess');
+const {
   buildRoleMatrix,
   getAdminPermissionForPath,
   getAdminPermissionMatrixSummary,
@@ -48,6 +51,10 @@ const {
   runRentBikeMidnightReset,
 } = require('./services/rentBikeService');
 const {
+  listManagedRuntimeServices,
+  restartManagedRuntimeServices,
+} = require('./services/adminServiceControl');
+const {
   enqueuePurchaseDeliveryByCode,
   listDeliveryQueue,
   listFilteredDeliveryQueue,
@@ -59,6 +66,7 @@ const {
   removeDeliveryDeadLetter,
   cancelDeliveryJob,
   getDeliveryMetricsSnapshot,
+  getDeliveryRuntimeSnapshotSync,
   getDeliveryRuntimeStatus,
   getDeliveryPreflightReport,
   previewDeliveryCommands,
@@ -167,6 +175,7 @@ const {
   buildAdminDashboardCards,
 } = require('./services/adminDashboardService');
 const {
+  getCachedRuntimeSupervisorSnapshot,
   getRuntimeSupervisorSnapshot,
   startRuntimeSupervisorMonitor,
   stopRuntimeSupervisorMonitor,
@@ -178,11 +187,13 @@ const {
   createPlatformWebhookEndpoint,
   createSubscription,
   createTenant,
+  dispatchPlatformWebhookEvent,
   getPlanCatalog,
   getPlatformAnalyticsOverview,
   getPlatformPermissionCatalog,
   getPlatformPublicOverview,
   getPlatformTenantById,
+  getTenantQuotaSnapshot,
   issuePlatformLicense,
   listMarketplaceOffers,
   listPlatformAgentRuntimes,
@@ -227,6 +238,12 @@ const {
 const { getWebhookMetricsSnapshot } = require('./scumWebhookServer');
 const { parseEnvFile } = require('./utils/loadEnvFiles');
 const { updateEnvFile } = require('./utils/envFileEditor');
+const { resolveDatabaseRuntime } = require('./utils/dbEngine');
+const {
+  getPlatformTenantConfig,
+  listPlatformTenantConfigs,
+  upsertPlatformTenantConfig,
+} = require('./services/platformTenantConfigService');
 
 const dashboardHtmlPath = path.join(__dirname, 'admin', 'dashboard.html');
 const loginHtmlPath = path.join(__dirname, 'admin', 'login.html');
@@ -327,6 +344,8 @@ let metricsSeriesTimer = null;
 const metricsSeries = createObservabilitySeriesState();
 const METRICS_SERIES_KEYS = Object.freeze(Object.keys(metricsSeries));
 const CONTROL_PANEL_ENV_FIELDS = Object.freeze([
+  { file: 'root', key: 'DATABASE_URL', type: 'secret', secret: true },
+  { file: 'root', key: 'PRISMA_SCHEMA_PROVIDER', type: 'text', secret: false },
   { file: 'root', key: 'DISCORD_GUILD_ID', type: 'text', secret: false },
   { file: 'root', key: 'BOT_ENABLE_ADMIN_WEB', type: 'boolean', secret: false },
   { file: 'root', key: 'BOT_ENABLE_SCUM_WEBHOOK', type: 'boolean', secret: false },
@@ -346,9 +365,17 @@ const CONTROL_PANEL_ENV_FIELDS = Object.freeze([
   { file: 'root', key: 'SCUM_CONSOLE_AGENT_BACKEND', type: 'text', secret: false },
   { file: 'root', key: 'SCUM_CONSOLE_AGENT_EXEC_TEMPLATE', type: 'text', secret: false },
   { file: 'root', key: 'SCUM_CONSOLE_AGENT_TOKEN', type: 'secret', secret: true },
+  { file: 'root', key: 'DELIVERY_AGENT_FAILOVER_MODE', type: 'text', secret: false },
+  { file: 'root', key: 'DELIVERY_AGENT_CIRCUIT_BREAKER_THRESHOLD', type: 'number', secret: false },
+  { file: 'root', key: 'DELIVERY_AGENT_CIRCUIT_BREAKER_COOLDOWN_MS', type: 'number', secret: false },
+  { file: 'root', key: 'DELIVERY_VERIFY_MODE', type: 'text', secret: false },
+  { file: 'root', key: 'DELIVERY_VERIFY_SUCCESS_REGEX', type: 'text', secret: false },
+  { file: 'root', key: 'DELIVERY_VERIFY_FAILURE_REGEX', type: 'text', secret: false },
   { file: 'root', key: 'SCUM_WEBHOOK_URL', type: 'text', secret: false },
   { file: 'root', key: 'SCUM_WEBHOOK_PORT', type: 'number', secret: false },
+  { file: 'root', key: 'SCUM_WEBHOOK_SECRET', type: 'secret', secret: true },
   { file: 'root', key: 'SCUM_LOG_PATH', type: 'text', secret: false },
+  { file: 'root', key: 'PLATFORM_DEFAULT_TENANT_ID', type: 'text', secret: false },
   { file: 'portal', key: 'WEB_PORTAL_BASE_URL', type: 'text', secret: false },
   { file: 'portal', key: 'WEB_PORTAL_PLAYER_OPEN_ACCESS', type: 'boolean', secret: false },
   { file: 'portal', key: 'WEB_PORTAL_REQUIRE_GUILD_MEMBER', type: 'boolean', secret: false },
@@ -828,9 +855,11 @@ function captureMetricsSeries(now = Date.now()) {
     retentionMs: METRICS_SERIES_RETENTION_MS,
     now,
     getDeliveryMetricsSnapshot,
+    getDeliveryRuntimeStatus: getDeliveryRuntimeSnapshotSync,
     getLoginFailureMetrics,
     getWebhookMetricsSnapshot,
     getAdminRequestLogMetrics,
+    getRuntimeSupervisorSnapshot: getCachedRuntimeSupervisorSnapshot,
   });
 }
 
@@ -944,6 +973,7 @@ function parseAdminUsersFromEnv() {
               username,
               password,
               role: normalizeRole(row.role || 'mod'),
+              tenantId: String(row.tenantId || '').trim() || null,
             };
           })
           .filter(Boolean);
@@ -958,10 +988,22 @@ function parseAdminUsersFromEnv() {
       username: ADMIN_WEB_USER,
       password: getAdminLoginPassword(),
       role: ADMIN_WEB_USER_ROLE,
+      tenantId: null,
     });
   }
 
   return users;
+}
+
+function getAdminUsersDatabaseEngine() {
+  const runtime = resolveDatabaseRuntime();
+  return runtime.engine === 'unsupported' ? 'sqlite' : runtime.engine;
+}
+
+function isIgnorableAddColumnError(error) {
+  const message = String(error?.message || error || '').toLowerCase();
+  return message.includes('duplicate column')
+    || message.includes('already exists');
 }
 
 function createAdminPasswordHash(password) {
@@ -1002,65 +1044,107 @@ function verifyAdminPassword(password, passwordHash) {
 }
 
 async function ensureAdminUsersTable() {
-  await prisma.$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS admin_web_users (
-      username TEXT PRIMARY KEY COLLATE NOCASE,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL DEFAULT 'mod',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-  `);
+  const engine = getAdminUsersDatabaseEngine();
+  if (engine === 'postgresql') {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS admin_web_users (
+        username TEXT PRIMARY KEY,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'mod',
+        tenant_id TEXT,
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } else {
+    await prisma.$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS admin_web_users (
+        username TEXT PRIMARY KEY COLLATE NOCASE,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'mod',
+        tenant_id TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  }
+  try {
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE admin_web_users
+      ADD COLUMN tenant_id TEXT;
+    `);
+  } catch (error) {
+    if (!isIgnorableAddColumnError(error)) {
+      throw error;
+    }
+  }
 }
 
 async function seedAdminUsersFromEnv() {
   const users = parseAdminUsersFromEnv();
   for (const user of users) {
-    await prisma.$executeRawUnsafe(
-      `
+    await prisma.$executeRaw`
       INSERT INTO admin_web_users (
         username,
         password_hash,
         role,
+        tenant_id,
         is_active,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))
-      ON CONFLICT(username) DO NOTHING;
-      `,
-      String(user.username || '').trim(),
-      createAdminPasswordHash(user.password),
-      normalizeRole(user.role),
-    );
+      VALUES (
+        ${String(user.username || '').trim()},
+        ${createAdminPasswordHash(user.password)},
+        ${normalizeRole(user.role)},
+        ${String(user.tenantId || '').trim() || null},
+        ${true},
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+      ON CONFLICT (username) DO NOTHING
+    `;
   }
 }
 
 async function listAdminUsersFromDb(limit = 100, options = {}) {
   const { activeOnly = true } = options;
-  const whereSql = activeOnly ? 'WHERE is_active = 1' : '';
-  const rows = await prisma.$queryRawUnsafe(
+  const normalizedLimit = Math.max(1, Math.trunc(Number(limit || 100)));
+  const rows = activeOnly
+    ? await prisma.$queryRaw`
+      SELECT
+        username,
+        role,
+        tenant_id AS "tenantId",
+        is_active AS "isActive",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM admin_web_users
+      WHERE is_active = ${true}
+      ORDER BY username ASC
+      LIMIT ${normalizedLimit}
     `
-    SELECT
-      username,
-      role,
-      is_active AS isActive,
-      created_at AS createdAt,
-      updated_at AS updatedAt
-    FROM admin_web_users
-    ${whereSql}
-    ORDER BY username ASC
-    LIMIT ?;
-    `,
-    Math.max(1, Math.trunc(Number(limit || 100))),
-  );
+    : await prisma.$queryRaw`
+      SELECT
+        username,
+        role,
+        tenant_id AS "tenantId",
+        is_active AS "isActive",
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM admin_web_users
+      ORDER BY username ASC
+      LIMIT ${normalizedLimit}
+    `;
 
   if (!Array.isArray(rows)) return [];
   return rows.map((row) => ({
     username: String(row?.username || '').trim(),
     role: normalizeRole(row?.role || 'mod'),
-    isActive: Number(row?.isActive || 0) === 1,
+    tenantId: String(row?.tenantId || '').trim() || null,
+    isActive: row?.isActive === true || Number(row?.isActive || 0) === 1,
     createdAt: row?.createdAt ? new Date(row.createdAt).toISOString() : null,
     updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
   }));
@@ -1069,42 +1153,39 @@ async function listAdminUsersFromDb(limit = 100, options = {}) {
 async function getAdminUserByUsername(username) {
   const name = String(username || '').trim();
   if (!name) return null;
-  const rows = await prisma.$queryRawUnsafe(
-    `
+  const rows = await prisma.$queryRaw`
     SELECT
       username,
-      password_hash AS passwordHash,
+      password_hash AS "passwordHash",
       role,
-      is_active AS isActive,
-      created_at AS createdAt,
-      updated_at AS updatedAt
+      tenant_id AS "tenantId",
+      is_active AS "isActive",
+      created_at AS "createdAt",
+      updated_at AS "updatedAt"
     FROM admin_web_users
-    WHERE username = ?
-    LIMIT 1;
-    `,
-    name,
-  );
+    WHERE username = ${name}
+    LIMIT 1
+  `;
   const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
   if (!row) return null;
   return {
     username: String(row.username || '').trim(),
     passwordHash: String(row.passwordHash || '').trim(),
     role: normalizeRole(row.role || 'mod'),
-    isActive: Number(row.isActive || 0) === 1,
+    tenantId: String(row.tenantId || '').trim() || null,
+    isActive: row.isActive === true || Number(row.isActive || 0) === 1,
     createdAt: row?.createdAt ? new Date(row.createdAt).toISOString() : null,
     updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
   };
 }
 
 async function countActiveOwnerUsers() {
-  const rows = await prisma.$queryRawUnsafe(
-    `
+  const rows = await prisma.$queryRaw`
     SELECT COUNT(*) AS total
     FROM admin_web_users
-    WHERE is_active = 1
-      AND lower(role) = 'owner';
-    `,
-  );
+    WHERE is_active = ${true}
+      AND lower(role) = 'owner'
+  `;
   const total = Array.isArray(rows) && rows.length > 0
     ? Number(rows[0]?.total || 0)
     : 0;
@@ -1123,6 +1204,7 @@ async function upsertAdminUserInDb(input = {}) {
   const role = normalizeRole(input.role || 'mod');
   const isActive = input.isActive !== false;
   const password = String(input.password || '').trim();
+  const tenantId = String(input.tenantId || '').trim() || null;
   if (!username) {
     throw new Error('Invalid username');
   }
@@ -1147,51 +1229,45 @@ async function upsertAdminUserInDb(input = {}) {
   }
 
   if (!existing) {
-    await prisma.$executeRawUnsafe(
-      `
+    await prisma.$executeRaw`
       INSERT INTO admin_web_users (
         username,
         password_hash,
         role,
+        tenant_id,
         is_active,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'));
-      `,
-      username,
-      createAdminPasswordHash(password),
-      role,
-      isActive ? 1 : 0,
-    );
+      VALUES (
+        ${username},
+        ${createAdminPasswordHash(password)},
+        ${role},
+        ${tenantId},
+        ${isActive},
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+      )
+    `;
   } else if (password) {
-    await prisma.$executeRawUnsafe(
-      `
+    await prisma.$executeRaw`
       UPDATE admin_web_users
-      SET password_hash = ?,
-          role = ?,
-          is_active = ?,
-          updated_at = datetime('now')
-      WHERE username = ?;
-      `,
-      createAdminPasswordHash(password),
-      role,
-      isActive ? 1 : 0,
-      username,
-    );
+      SET password_hash = ${createAdminPasswordHash(password)},
+          role = ${role},
+          tenant_id = ${tenantId},
+          is_active = ${isActive},
+          updated_at = CURRENT_TIMESTAMP
+      WHERE username = ${username}
+    `;
   } else {
-    await prisma.$executeRawUnsafe(
-      `
+    await prisma.$executeRaw`
       UPDATE admin_web_users
-      SET role = ?,
-          is_active = ?,
-          updated_at = datetime('now')
-      WHERE username = ?;
-      `,
-      role,
-      isActive ? 1 : 0,
-      username,
-    );
+      SET role = ${role},
+          tenant_id = ${tenantId},
+          is_active = ${isActive},
+          updated_at = CURRENT_TIMESTAMP
+      WHERE username = ${username}
+    `;
   }
 
   return getAdminUserByUsername(username);
@@ -1221,26 +1297,25 @@ async function getUserByCredentials(username, password) {
   if (!name || !pass) return null;
 
   await ensureAdminUsersReady();
-  const rows = await prisma.$queryRawUnsafe(
-    `
+  const rows = await prisma.$queryRaw`
     SELECT
       username,
-      password_hash AS passwordHash,
+      password_hash AS "passwordHash",
       role,
-      is_active AS isActive
+      tenant_id AS "tenantId",
+      is_active AS "isActive"
     FROM admin_web_users
-    WHERE username = ?
-    LIMIT 1;
-    `,
-    name,
-  );
+    WHERE username = ${name}
+    LIMIT 1
+  `;
   const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
-  if (!row || Number(row.isActive || 0) !== 1) return null;
+  if (!row || !(row.isActive === true || Number(row.isActive || 0) === 1)) return null;
   if (!verifyAdminPassword(pass, row.passwordHash)) return null;
 
   return {
     username: String(row.username || '').trim(),
     role: normalizeRole(row.role || 'mod'),
+    tenantId: String(row.tenantId || '').trim() || null,
     authMethod: 'password-db',
   };
 }
@@ -1335,18 +1410,21 @@ function buildCommandRegistry(client) {
           json?.description || entry?.description || '',
         ).trim(),
         disabled: disabled.has(name),
+        requiredRole: getRequiredCommandAccessRole(name, config.commands),
       };
     })
     .filter(Boolean)
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-async function buildControlPanelSettings(client, auth = null) {
+async function buildControlPanelSettings(client, auth = null, options = {}) {
   const envValues = getControlPanelEnvFileValues();
+  const authTenantId = String(auth?.tenantId || '').trim() || null;
+  const scopedTenantId = String(options.tenantId || auth?.tenantId || '').trim() || null;
   return {
     env: {
-      root: buildControlPanelEnvSection('root', envValues.root),
-      portal: buildControlPanelEnvSection('portal', envValues.portal),
+      root: authTenantId ? {} : buildControlPanelEnvSection('root', envValues.root),
+      portal: authTenantId ? {} : buildControlPanelEnvSection('portal', envValues.portal),
     },
     commands: buildCommandRegistry(client),
     adminUsers: auth && hasRoleAtLeast(auth.role, 'owner')
@@ -1356,10 +1434,20 @@ async function buildControlPanelSettings(client, auth = null) {
       disabled: Array.isArray(config.commands?.disabled)
         ? config.commands.disabled.map((entry) => String(entry || '').trim()).filter(Boolean)
         : [],
+      permissions:
+        config.commands && typeof config.commands.permissions === 'object' && config.commands.permissions
+          ? { ...config.commands.permissions }
+          : {},
     },
+    managedServices: listManagedRuntimeServices(),
     files: {
       root: rootEnvFilePath,
       portal: portalEnvFilePath,
+    },
+    tenantScope: {
+      tenantId: authTenantId,
+      requestedTenantId: scopedTenantId,
+      tenantConfig: scopedTenantId ? await getPlatformTenantConfig(scopedTenantId) : null,
     },
     reloadRequired: true,
   };
@@ -1645,6 +1733,7 @@ function buildSessionView(sessionId, session = {}, options = {}) {
     id: String(sessionId || '').trim(),
     user: String(session.user || '').trim() || null,
     role: normalizeRole(session.role || 'mod'),
+    tenantId: String(session.tenantId || '').trim() || null,
     authMethod: String(session.authMethod || 'password').trim() || 'password',
     createdAt: Number.isFinite(session.createdAt) ? new Date(session.createdAt).toISOString() : null,
     lastSeenAt: Number.isFinite(session.lastSeenAt) ? new Date(session.lastSeenAt).toISOString() : null,
@@ -1752,6 +1841,7 @@ function createSession(user, role = 'mod', authMethod = 'password', req = null) 
   sessions.set(sessionId, {
     user: username,
     role: normalizeRole(role),
+    tenantId: String(req?.__pendingAdminTenantId || '').trim() || null,
     authMethod: String(authMethod || 'password'),
     authSource: String(authMethod || 'password'),
     createdAt: now,
@@ -1890,6 +1980,7 @@ function getAuthContext(req, urlObj) {
       sessionId,
       user: session.user || ADMIN_WEB_USER,
       role: normalizeRole(session.role || 'mod'),
+      tenantId: String(session.tenantId || '').trim() || null,
       authMethod: session.authMethod || 'password',
       stepUpVerifiedAt: session.stepUpVerifiedAt || null,
     };
@@ -1898,6 +1989,7 @@ function getAuthContext(req, urlObj) {
       sessionId: auth.sessionId,
       user: auth.user,
       role: auth.role,
+      tenantId: auth.tenantId,
     });
     return auth;
   }
@@ -1917,6 +2009,7 @@ function getAuthContext(req, urlObj) {
       authMode: auth.mode,
       user: auth.user,
       role: auth.role,
+      tenantId: null,
     });
     return auth;
   }
@@ -2036,6 +2129,40 @@ function ensureRole(req, urlObj, minRole, res) {
     return null;
   }
   return auth;
+}
+
+function getAuthTenantId(auth = null) {
+  return String(auth?.tenantId || '').trim() || null;
+}
+
+function resolveScopedTenantId(req, res, auth, requestedTenantId = '', options = {}) {
+  const authTenantId = getAuthTenantId(auth);
+  const normalizedRequested = String(requestedTenantId || '').trim() || null;
+  if (!authTenantId) {
+    if (!normalizedRequested && options.required === true) {
+      sendJson(res, 400, { ok: false, error: 'tenantId is required' });
+      return null;
+    }
+    return normalizedRequested;
+  }
+  if (normalizedRequested && normalizedRequested !== authTenantId) {
+    sendJson(res, 403, {
+      ok: false,
+      error: 'Forbidden: tenant scope mismatch',
+      tenantId: authTenantId,
+    });
+    return null;
+  }
+  return authTenantId;
+}
+
+function filterRowsByTenantScope(rows, auth = null) {
+  const authTenantId = getAuthTenantId(auth);
+  if (!authTenantId) return Array.isArray(rows) ? rows : [];
+  return (Array.isArray(rows) ? rows : []).filter((row) => {
+    const rowTenantId = String(row?.tenantId || row?.id || '').trim() || null;
+    return rowTenantId === authTenantId;
+  });
 }
 
 function getForwardedDiscordId(req) {
@@ -2312,8 +2439,8 @@ function readJsonBody(req) {
   });
 }
 
-function getCurrentObservabilitySnapshot(options = {}) {
-  return buildAdminObservabilitySnapshot({
+async function getCurrentObservabilitySnapshot(options = {}) {
+  const snapshot = buildAdminObservabilitySnapshot({
     windowMs: options.windowMs,
     seriesKeys: Array.isArray(options.seriesKeys) ? options.seriesKeys : [],
     retentionMs: METRICS_SERIES_RETENTION_MS,
@@ -2326,6 +2453,10 @@ function getCurrentObservabilitySnapshot(options = {}) {
     listDeliveryQueue,
     listSeries: ({ windowMs, keys }) => listMetricsSeries({ windowMs, keys }),
   });
+  snapshot.deliveryRuntime = await getDeliveryRuntimeStatus();
+  snapshot.runtimeSupervisor = getCachedRuntimeSupervisorSnapshot();
+  snapshot.platformOps = getPlatformOpsState();
+  return snapshot;
 }
 
 async function tryNotifyTicket(client, ticket, action, staffId) {
@@ -2892,6 +3023,12 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/control-panel/env') {
+    if (getAuthTenantId(auth)) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: 'Tenant-scoped admin cannot modify global environment settings',
+      });
+    }
     const envPatch = buildControlPanelEnvPatch(body);
     const hasRootPatch = Object.keys(envPatch.root).length > 0;
     const hasPortalPatch = Object.keys(envPatch.portal).length > 0;
@@ -2932,15 +3069,23 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/auth/user') {
+    if (getAuthTenantId(auth)) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: 'Tenant-scoped admin cannot manage global admin users',
+      });
+    }
     const username = requiredString(body, 'username');
     const role = requiredString(body, 'role') || 'mod';
     const password = String(body?.password || '').trim();
     const isActive = body?.isActive !== false;
+    const tenantId = requiredString(body, 'tenantId') || null;
     const saved = await upsertAdminUserInDb({
       username,
       role,
       password,
       isActive,
+      tenantId,
     });
 
     recordAdminSecuritySignal('admin-user-updated', {
@@ -2955,6 +3100,7 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
       data: {
         username: saved?.username || username,
         role: saved?.role || role,
+        tenantId: saved?.tenantId || tenantId,
         isActive: saved?.isActive ?? isActive,
         passwordUpdated: Boolean(password),
       },
@@ -2968,7 +3114,62 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
     });
   }
 
+  if (pathname === '/admin/api/runtime/restart-service') {
+    if (getAuthTenantId(auth)) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: 'Tenant-scoped admin cannot restart shared runtime services',
+      });
+    }
+    const requestedServices = parseStringArray(body?.services);
+    const singleService = requiredString(body, 'service');
+    const services = requestedServices.length > 0
+      ? requestedServices
+      : singleService
+        ? [singleService]
+        : [];
+    if (services.length === 0) {
+      return sendJson(res, 400, { ok: false, error: 'service or services is required' });
+    }
+    const restartResult = await restartManagedRuntimeServices(services);
+    recordAdminSecuritySignal('runtime-service-restarted', {
+      actor: auth?.user || null,
+      role: auth?.role || null,
+      authMethod: auth?.authMethod || null,
+      sessionId: auth?.sessionId || null,
+      ip: getClientIp(req),
+      path: pathname,
+      detail: restartResult.ok
+        ? 'Managed runtime services restarted'
+        : 'Managed runtime service restart failed',
+      data: {
+        services: restartResult.services,
+        exitCode: restartResult.exitCode,
+      },
+      severity: restartResult.ok ? 'info' : 'warn',
+      notify: restartResult.ok !== true,
+      title: restartResult.ok ? 'Runtime Restart' : 'Runtime Restart Failed',
+    });
+    if (!restartResult.ok) {
+      return sendJson(res, 500, {
+        ok: false,
+        error: 'Service restart failed',
+        data: restartResult,
+      });
+    }
+    return sendJson(res, 200, {
+      ok: true,
+      data: restartResult,
+    });
+  }
+
   if (pathname === '/admin/api/config/patch') {
+    if (getAuthTenantId(auth)) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: 'Tenant-scoped admin cannot patch global config directly',
+      });
+    }
     const patch = body?.patch;
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
       return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
@@ -2981,6 +3182,12 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/config/set') {
+    if (getAuthTenantId(auth)) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: 'Tenant-scoped admin cannot replace global config directly',
+      });
+    }
     const nextConfig = body?.config;
     if (!nextConfig || typeof nextConfig !== 'object' || Array.isArray(nextConfig)) {
       return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
@@ -2993,11 +3200,43 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/config/reset') {
+    if (getAuthTenantId(auth)) {
+      return sendJson(res, 403, {
+        ok: false,
+        error: 'Tenant-scoped admin cannot reset global config directly',
+      });
+    }
     if (typeof config.resetConfigToDefault !== 'function') {
       return sendJson(res, 500, { ok: false, error: 'Operation is not available' });
     }
     const next = config.resetConfigToDefault();
     return sendJson(res, 200, { ok: true, data: next });
+  }
+
+  if (pathname === '/admin/api/platform/tenant-config') {
+    const tenantId = resolveScopedTenantId(
+      req,
+      res,
+      auth,
+      requiredString(body, 'tenantId'),
+      { required: true },
+    );
+    if (!tenantId) return undefined;
+    const tenant = await getPlatformTenantById(tenantId);
+    if (!tenant) {
+      return sendJson(res, 404, { ok: false, error: 'tenant-not-found' });
+    }
+    const result = await upsertPlatformTenantConfig({
+      tenantId,
+      configPatch: body?.configPatch,
+      portalEnvPatch: body?.portalEnvPatch,
+      featureFlags: body?.featureFlags,
+      updatedBy: auth?.user || null,
+    });
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'tenant-config-failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.data });
   }
 
   if (pathname === '/admin/api/delivery/enqueue') {
@@ -3329,7 +3568,7 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
       role: auth?.role || 'unknown',
       note,
       includeSnapshot: body?.includeSnapshot !== false,
-      observabilitySnapshot: getCurrentObservabilitySnapshot(),
+      observabilitySnapshot: await getCurrentObservabilitySnapshot(),
     });
     publishAdminLiveUpdate('backup-create', {
       backup: saved?.id || saved?.file || null,
@@ -3355,7 +3594,7 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
               ok: true,
               data: await previewAdminBackupRestore(backupName, {
                 client,
-                observabilitySnapshot: getCurrentObservabilitySnapshot(),
+                observabilitySnapshot: await getCurrentObservabilitySnapshot(),
                 issuePreviewToken: true,
               }),
             });
@@ -3374,7 +3613,7 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
             role: auth?.role || 'unknown',
             confirmBackup: requiredString(body, 'confirmBackup') || '',
             previewToken: requiredString(body, 'previewToken') || '',
-            observabilitySnapshot: getCurrentObservabilitySnapshot(),
+            observabilitySnapshot: await getCurrentObservabilitySnapshot(),
           });
       return sendJson(res, 200, {
         ok: true,
@@ -3393,6 +3632,9 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/platform/tenant') {
+    if (getAuthTenantId(auth)) {
+      return sendJson(res, 403, { ok: false, error: 'Tenant-scoped admin cannot create or modify tenant records' });
+    }
     const result = await createTenant({
       id: requiredString(body, 'id'),
       slug: requiredString(body, 'slug'),
@@ -3412,9 +3654,17 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/platform/subscription') {
+    const tenantId = resolveScopedTenantId(
+      req,
+      res,
+      auth,
+      requiredString(body, 'tenantId'),
+      { required: true },
+    );
+    if (!tenantId) return undefined;
     const result = await createSubscription({
       id: requiredString(body, 'id'),
-      tenantId: requiredString(body, 'tenantId'),
+      tenantId,
       planId: requiredString(body, 'planId'),
       billingCycle: requiredString(body, 'billingCycle'),
       status: requiredString(body, 'status'),
@@ -3434,9 +3684,17 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/platform/license') {
+    const tenantId = resolveScopedTenantId(
+      req,
+      res,
+      auth,
+      requiredString(body, 'tenantId'),
+      { required: true },
+    );
+    if (!tenantId) return undefined;
     const result = await issuePlatformLicense({
       id: requiredString(body, 'id'),
-      tenantId: requiredString(body, 'tenantId'),
+      tenantId,
       licenseKey: requiredString(body, 'licenseKey'),
       status: requiredString(body, 'status'),
       seats: body.seats,
@@ -3453,6 +3711,16 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/platform/license/accept-legal') {
+    if (getAuthTenantId(auth)) {
+      const tenantLicenses = await listPlatformLicenses({
+        limit: 500,
+        tenantId: getAuthTenantId(auth),
+      });
+      const requestedLicenseId = requiredString(body, 'licenseId');
+      if (!tenantLicenses.some((row) => String(row?.id || '').trim() === requestedLicenseId)) {
+        return sendJson(res, 403, { ok: false, error: 'Forbidden: tenant scope mismatch' });
+      }
+    }
     const result = await acceptPlatformLicenseLegal({
       licenseId: requiredString(body, 'licenseId'),
       legalDocVersion: requiredString(body, 'legalDocVersion'),
@@ -3465,9 +3733,17 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/platform/apikey') {
+    const tenantId = resolveScopedTenantId(
+      req,
+      res,
+      auth,
+      requiredString(body, 'tenantId'),
+      { required: true },
+    );
+    if (!tenantId) return undefined;
     const result = await createPlatformApiKey({
       id: requiredString(body, 'id'),
-      tenantId: requiredString(body, 'tenantId'),
+      tenantId,
       name: requiredString(body, 'name'),
       status: requiredString(body, 'status'),
       scopes: parseStringArray(body.scopes),
@@ -3479,9 +3755,17 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/platform/webhook') {
+    const tenantId = resolveScopedTenantId(
+      req,
+      res,
+      auth,
+      requiredString(body, 'tenantId'),
+      { required: true },
+    );
+    if (!tenantId) return undefined;
     const result = await createPlatformWebhookEndpoint({
       id: requiredString(body, 'id'),
-      tenantId: requiredString(body, 'tenantId'),
+      tenantId,
       name: requiredString(body, 'name'),
       eventType: requiredString(body, 'eventType'),
       targetUrl: requiredString(body, 'targetUrl'),
@@ -3494,10 +3778,47 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
     return sendJson(res, 200, { ok: true, data: result.webhook });
   }
 
+  if (pathname === '/admin/api/platform/webhook/test') {
+    const tenantId = resolveScopedTenantId(
+      req,
+      res,
+      auth,
+      requiredString(body, 'tenantId'),
+      { required: true },
+    );
+    if (!tenantId) return undefined;
+    return sendJson(res, 200, {
+      ok: true,
+      data: {
+        tenantId,
+        eventType: requiredString(body, 'eventType') || 'platform.admin.test',
+        results: await dispatchPlatformWebhookEvent(
+          requiredString(body, 'eventType') || 'platform.admin.test',
+          body.payload && typeof body.payload === 'object'
+            ? body.payload
+            : {
+              source: 'admin-web',
+              actor: auth?.user || 'unknown',
+              triggeredAt: new Date().toISOString(),
+            },
+          { tenantId },
+        ),
+      },
+    });
+  }
+
   if (pathname === '/admin/api/platform/marketplace') {
+    const tenantId = resolveScopedTenantId(
+      req,
+      res,
+      auth,
+      requiredString(body, 'tenantId'),
+      { required: true },
+    );
+    if (!tenantId) return undefined;
     const result = await createMarketplaceOffer({
       id: requiredString(body, 'id'),
-      tenantId: requiredString(body, 'tenantId'),
+      tenantId,
       title: requiredString(body, 'title'),
       kind: requiredString(body, 'kind'),
       priceCents: body.priceCents,
@@ -3513,7 +3834,17 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/platform/reconcile') {
+    const requestedTenantId = requiredString(body, 'tenantId');
+    const scopedTenantId = resolveScopedTenantId(
+      req,
+      res,
+      auth,
+      requestedTenantId,
+      { required: false },
+    );
+    if (requestedTenantId && !scopedTenantId) return undefined;
     const result = await reconcileDeliveryState({
+      tenantId: scopedTenantId,
       windowMs: body.windowMs,
       pendingOverdueMs: body.pendingOverdueMs,
     });
@@ -3521,6 +3852,9 @@ async function handlePostAction(client, req, pathname, body, res, auth) {
   }
 
   if (pathname === '/admin/api/platform/monitoring/run') {
+    if (getAuthTenantId(auth)) {
+      return sendJson(res, 403, { ok: false, error: 'Tenant-scoped admin cannot run shared platform monitoring directly' });
+    }
     const result = await runPlatformMonitoringCycle({
       client,
       force: true,
@@ -3778,7 +4112,17 @@ function startAdminWebServer(client) {
               tenant: platformAuth.tenant,
               apiKey: platformAuth.apiKey,
               scopes: platformAuth.scopes,
+              quota: await getTenantQuotaSnapshot(platformAuth.tenant?.id),
             },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/platform/api/v1/quota/self') {
+          const platformAuth = await ensurePlatformApiKey(req, res, ['tenant:read']);
+          if (!platformAuth) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: await getTenantQuotaSnapshot(platformAuth.tenant?.id),
           });
         }
 
@@ -3823,6 +4167,29 @@ function startAdminWebServer(client) {
               windowMs: body.windowMs,
               pendingOverdueMs: body.pendingOverdueMs,
             }),
+          });
+        }
+
+        if (req.method === 'POST' && pathname === '/platform/api/v1/webhooks/test') {
+          const platformAuth = await ensurePlatformApiKey(req, res, ['webhook:write']);
+          if (!platformAuth) return undefined;
+          const body = await readJsonBody(req);
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              tenantId: platformAuth.tenant?.id || null,
+              eventType: requiredString(body.eventType) || 'platform.admin.test',
+              results: await dispatchPlatformWebhookEvent(
+                requiredString(body.eventType) || 'platform.admin.test',
+                body.payload && typeof body.payload === 'object'
+                  ? body.payload
+                  : {
+                    source: 'platform-api',
+                    triggeredAt: new Date().toISOString(),
+                  },
+                { tenantId: platformAuth.tenant?.id || null },
+              ),
+            },
           });
         }
 
@@ -3919,6 +4286,7 @@ function startAdminWebServer(client) {
         const username = profile.username && profile.discriminator
           ? `${profile.username}#${profile.discriminator}`
           : String(profile.username || profile.id);
+        req.__pendingAdminTenantId = null;
         const sessionId = createSession(username, resolvedRole, 'discord-sso', req);
         recordAdminSecuritySignal('sso-succeeded', {
           actor: username,
@@ -4003,6 +4371,7 @@ function startAdminWebServer(client) {
           const password = requiredString(body, 'password');
           req.__pendingAdminUser = username || 'unknown';
           req.__pendingAdminAuthMethod = 'password';
+          req.__pendingAdminTenantId = null;
           if (!username || !password) {
             req.__pendingAdminFailureReason = 'invalid-payload';
             return sendJson(res, 400, { ok: false, error: 'Invalid request payload' });
@@ -4035,6 +4404,7 @@ function startAdminWebServer(client) {
 
           req.__pendingAdminUser = user.username;
           req.__pendingAdminAuthMethod = user.authMethod;
+          req.__pendingAdminTenantId = user.tenantId || null;
           recordLoginAttempt(req, true);
           const sessionId = createSession(user.username, user.role, user.authMethod, req);
           return sendJson(
@@ -4045,6 +4415,7 @@ function startAdminWebServer(client) {
               data: {
                 user: user.username,
                 role: user.role,
+                tenantId: user.tenantId || null,
                 sessionTtlHours: Math.round(SESSION_TTL_MS / (60 * 60 * 1000)),
               },
             },
@@ -4181,29 +4552,42 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/auth/sessions') {
           const auth = ensureRole(req, urlObj, 'owner', res);
           if (!auth) return undefined;
+          const authTenantId = getAuthTenantId(auth);
           return sendJson(res, 200, {
             ok: true,
             data: listAdminSessions({
               currentSessionId: getSessionId(req),
-            }),
+            }).filter((row) => !authTenantId || row.tenantId === authTenantId),
           });
         }
 
         if (req.method === 'GET' && pathname === '/admin/api/auth/users') {
           const auth = ensureRole(req, urlObj, 'owner', res);
           if (!auth) return undefined;
+          const authTenantId = getAuthTenantId(auth);
+          const users = await listAdminUsersFromDb(250, { activeOnly: false });
           return sendJson(res, 200, {
             ok: true,
-            data: await listAdminUsersFromDb(250, { activeOnly: false }),
+            data: authTenantId
+              ? users.filter((row) => row.tenantId === authTenantId)
+              : users,
           });
         }
 
         if (req.method === 'GET' && pathname === '/admin/api/control-panel/settings') {
           const auth = ensureRole(req, urlObj, 'admin', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           return sendJson(res, 200, {
             ok: true,
-            data: await buildControlPanelSettings(client, auth),
+            data: await buildControlPanelSettings(client, auth, { tenantId }),
           });
         }
 
@@ -4226,10 +4610,12 @@ function startAdminWebServer(client) {
             data: {
               user: auth.user,
               role: auth.role,
+              tenantId: auth.tenantId || null,
               authMethod: auth.authMethod,
               session: hasValidSession(req),
               stepUpRequired: ADMIN_WEB_STEP_UP_ENABLED && ADMIN_WEB_2FA_ACTIVE,
               stepUpActive: hasFreshStepUp(auth),
+              tenantConfig: auth.tenantId ? await getPlatformTenantConfig(auth.tenantId) : null,
             },
           });
         }
@@ -4262,15 +4648,41 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/platform/overview') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           return sendJson(res, 200, {
             ok: true,
             data: {
-              analytics: await getPlatformAnalyticsOverview(),
+              analytics: await getPlatformAnalyticsOverview(tenantId ? { tenantId } : {}),
               publicOverview: await getPlatformPublicOverview(),
               permissionCatalog: getPlatformPermissionCatalog(),
               plans: getPlanCatalog(),
               opsState: getPlatformOpsState(),
+              tenantConfig: tenantId ? await getPlatformTenantConfig(tenantId) : null,
             },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/quota') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: true },
+          );
+          if (!tenantId) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: await getTenantQuotaSnapshot(tenantId),
           });
         }
 
@@ -4286,20 +4698,66 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/platform/tenants') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
-          const data = await listPlatformTenants({
+          let data = await listPlatformTenants({
             limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
             status: requiredString(urlObj.searchParams.get('status')),
             type: requiredString(urlObj.searchParams.get('type')),
           });
+          data = filterRowsByTenantScope(data, auth);
           return sendJson(res, 200, { ok: true, data });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/tenant-config') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: true },
+          );
+          if (!tenantId) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: await getPlatformTenantConfig(tenantId),
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/tenant-configs') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: await listPlatformTenantConfigs({
+              tenantId,
+              limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
+            }),
+          });
         }
 
         if (req.method === 'GET' && pathname === '/admin/api/platform/subscriptions') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           const data = await listPlatformSubscriptions({
             limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
-            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            tenantId,
             status: requiredString(urlObj.searchParams.get('status')),
           });
           return sendJson(res, 200, { ok: true, data });
@@ -4308,9 +4766,17 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/platform/licenses') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           const data = await listPlatformLicenses({
             limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
-            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            tenantId,
             status: requiredString(urlObj.searchParams.get('status')),
           });
           return sendJson(res, 200, { ok: true, data });
@@ -4319,9 +4785,17 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/platform/apikeys') {
           const auth = ensureRole(req, urlObj, 'owner', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           const data = await listPlatformApiKeys({
             limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
-            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            tenantId,
             status: requiredString(urlObj.searchParams.get('status')),
           });
           return sendJson(res, 200, { ok: true, data });
@@ -4330,9 +4804,17 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/platform/webhooks') {
           const auth = ensureRole(req, urlObj, 'owner', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           const data = await listPlatformWebhookEndpoints({
             limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
-            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            tenantId,
             eventType: requiredString(urlObj.searchParams.get('eventType')),
           });
           return sendJson(res, 200, { ok: true, data });
@@ -4341,9 +4823,17 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/platform/agents') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           const data = await listPlatformAgentRuntimes({
             limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
-            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            tenantId,
             status: requiredString(urlObj.searchParams.get('status')),
           });
           return sendJson(res, 200, { ok: true, data });
@@ -4352,9 +4842,17 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/platform/marketplace') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           const data = await listMarketplaceOffers({
             limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
-            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            tenantId,
             status: requiredString(urlObj.searchParams.get('status')),
             locale: requiredString(urlObj.searchParams.get('locale')),
           });
@@ -4364,7 +4862,16 @@ function startAdminWebServer(client) {
         if (req.method === 'GET' && pathname === '/admin/api/platform/reconcile') {
           const auth = ensureRole(req, urlObj, 'mod', res);
           if (!auth) return undefined;
+          const tenantId = resolveScopedTenantId(
+            req,
+            res,
+            auth,
+            requiredString(urlObj.searchParams.get('tenantId')),
+            { required: false },
+          );
+          if (requiredString(urlObj.searchParams.get('tenantId')) && !tenantId) return undefined;
           const data = await reconcileDeliveryState({
+            tenantId,
             windowMs: asInt(urlObj.searchParams.get('windowMs'), null),
             pendingOverdueMs: asInt(urlObj.searchParams.get('pendingOverdueMs'), null),
           });
@@ -4392,7 +4899,7 @@ function startAdminWebServer(client) {
           );
           return sendJson(res, 200, {
             ok: true,
-            data: getCurrentObservabilitySnapshot({
+            data: await getCurrentObservabilitySnapshot({
               windowMs,
               seriesKeys,
             }),
@@ -4433,7 +4940,7 @@ function startAdminWebServer(client) {
             urlObj.searchParams.get('series'),
           );
           const format = String(urlObj.searchParams.get('format') || 'json').trim().toLowerCase();
-          const data = getCurrentObservabilitySnapshot({
+          const data = await getCurrentObservabilitySnapshot({
             windowMs,
             seriesKeys,
           });
@@ -4997,7 +5504,7 @@ function startAdminWebServer(client) {
           if (!auth) return undefined;
           const data = await buildAdminSnapshot({
             client,
-            observabilitySnapshot: getCurrentObservabilitySnapshot(),
+            observabilitySnapshot: await getCurrentObservabilitySnapshot(),
           });
           return sendJson(res, 200, { ok: true, data });
         }
@@ -5007,7 +5514,7 @@ function startAdminWebServer(client) {
           if (!auth) return undefined;
           const data = await buildAdminSnapshot({
             client,
-            observabilitySnapshot: getCurrentObservabilitySnapshot(),
+            observabilitySnapshot: await getCurrentObservabilitySnapshot(),
           });
           const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
           return sendDownload(
@@ -5186,11 +5693,15 @@ function startAdminWebServer(client) {
     ensureAdminUsersReady()
       .then(async () => {
         const users = await listAdminUsersFromDb(50);
-        console.log(
-          `[admin-web] login users (db): ${users
+        if (String(process.env.NODE_ENV || '').trim().toLowerCase() !== 'test') {
+          const preview = users
+            .slice(0, 5)
             .map((user) => `${user.username}(${user.role})`)
-            .join(', ')}`,
-        );
+            .join(', ');
+          console.log(
+            `[admin-web] login users ready: count=${users.length}${preview ? ` sample=${preview}` : ''}${users.length > 5 ? ', ...' : ''}`,
+          );
+        }
       })
       .catch((error) => {
         console.error('[admin-web] failed to initialize admin users from db', error);

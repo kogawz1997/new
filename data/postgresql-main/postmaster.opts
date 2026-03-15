@@ -1,0 +1,1 @@
+C:/Program Files/PostgreSQL/17/bin/postgres.exe "-D" "C:/new/data/postgresql-main" "-p" "55432" "-h" "127.0.0.1"

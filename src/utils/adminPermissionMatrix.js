@@ -56,6 +56,14 @@ const POST_PERMISSION_MATRIX = Object.freeze([
     description: 'Create or update admin users',
   },
   {
+    path: '/admin/api/runtime/restart-service',
+    permission: 'runtime:service-restart',
+    category: 'runtime',
+    minRole: 'owner',
+    stepUp: true,
+    description: 'Restart managed runtime services',
+  },
+  {
     path: '/admin/api/welcome/clear',
     permission: 'welcome:clear',
     category: 'player-ops',

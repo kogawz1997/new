@@ -86,6 +86,9 @@ function unwrapHealthPayload(payload) {
 // can supervise local, split-runtime, and production topologies.
 function buildRuntimeTargets() {
   const targets = [];
+  const deliveryExecutionMode = String(process.env.DELIVERY_EXECUTION_MODE || '')
+    .trim()
+    .toLowerCase();
   const botEnabled =
     envFlag(process.env.BOT_ENABLE_ADMIN_WEB, true)
     || envFlag(process.env.BOT_ENABLE_SCUM_WEBHOOK, true)
@@ -95,19 +98,33 @@ function buildRuntimeTargets() {
   const workerEnabled =
     envFlag(process.env.WORKER_ENABLE_RENTBIKE, false)
     || envFlag(process.env.WORKER_ENABLE_DELIVERY, false);
+  const watcherConfigured =
+    String(process.env.SCUM_LOG_PATH || '').trim().length > 0;
+  const watcherEnabledRaw = String(process.env.SCUM_WATCHER_ENABLED || '').trim();
   const watcherEnabled =
-    String(process.env.SCUM_LOG_PATH || '').trim().length > 0
-    || asPort(process.env.SCUM_WATCHER_HEALTH_PORT) > 0;
+    watcherEnabledRaw
+      ? envFlag(watcherEnabledRaw, false)
+      : watcherConfigured;
+  const watcherRequired = envFlag(
+    process.env.SCUM_WATCHER_REQUIRED,
+    watcherConfigured,
+  );
   const adminEnabled =
     envFlag(process.env.BOT_ENABLE_ADMIN_WEB, true)
     || asPort(process.env.ADMIN_WEB_PORT) > 0;
   const playerEnabled =
     asPort(process.env.WEB_PORTAL_PORT) > 0
     || String(process.env.WEB_PORTAL_BASE_URL || '').trim().length > 0;
+  const agentModeRequired = deliveryExecutionMode === 'agent';
   const agentEnabled =
-    String(process.env.DELIVERY_EXECUTION_MODE || '').trim().toLowerCase() === 'agent'
+    agentModeRequired
     || asPort(process.env.SCUM_CONSOLE_AGENT_PORT) > 0
-    || String(process.env.SCUM_CONSOLE_AGENT_BASE_URL || '').trim().length > 0;
+    || String(process.env.SCUM_CONSOLE_AGENT_BASE_URL || '').trim().length > 0
+    || envFlag(process.env.SCUM_CONSOLE_AGENT_ENABLED, false);
+  const agentRequired = envFlag(
+    process.env.SCUM_CONSOLE_AGENT_REQUIRED,
+    agentModeRequired,
+  );
 
   targets.push({
     key: 'bot',
@@ -127,7 +144,7 @@ function buildRuntimeTargets() {
     key: 'watcher',
     label: 'SCUM Watcher',
     enabled: watcherEnabled,
-    required: watcherEnabled,
+    required: watcherEnabled && watcherRequired,
     url: buildHttpBaseUrl(
       process.env.SCUM_WATCHER_HEALTH_HOST,
       process.env.SCUM_WATCHER_HEALTH_PORT,
@@ -153,7 +170,7 @@ function buildRuntimeTargets() {
     key: 'console-agent',
     label: 'Console Agent',
     enabled: agentEnabled,
-    required: agentEnabled,
+    required: agentEnabled && agentRequired,
     url:
       buildUrlFromFullBaseUrl(process.env.SCUM_CONSOLE_AGENT_BASE_URL)
       || buildHttpBaseUrl(
@@ -441,6 +458,10 @@ async function getRuntimeSupervisorSnapshot(options = {}) {
   return refreshPromise;
 }
 
+function getCachedRuntimeSupervisorSnapshot() {
+  return cachedSnapshot;
+}
+
 // Monitoring stays passive on purpose: it emits health snapshots/alerts without trying
 // to restart processes itself, leaving orchestration to PM2 or the deploy platform.
 function startRuntimeSupervisorMonitor() {
@@ -464,6 +485,7 @@ function stopRuntimeSupervisorMonitor() {
 module.exports = {
   buildRuntimeTargets,
   collectRuntimeSupervisorSnapshot,
+  getCachedRuntimeSupervisorSnapshot,
   getRuntimeSupervisorSnapshot,
   startRuntimeSupervisorMonitor,
   stopRuntimeSupervisorMonitor,

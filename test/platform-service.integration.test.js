@@ -38,6 +38,20 @@ async function cleanupPlatformTables() {
         },
       },
     }),
+    prisma.shopItem.deleteMany({
+      where: {
+        id: {
+          startsWith: 'platform-test-',
+        },
+      },
+    }),
+    prisma.vipMembership.deleteMany({
+      where: {
+        userId: {
+          startsWith: 'platform-test-',
+        },
+      },
+    }),
   ]);
 }
 
@@ -158,27 +172,65 @@ test('platform service manages tenant lifecycle, webhook delivery, analytics, an
       {
         code: 'PLATFORM-TEST-DELIVERED',
         userId: 'user-platform-1',
-        itemId: 'item-platform-1',
+        itemId: 'platform-test-item-1',
         price: 100,
         status: 'delivered',
       },
       {
         code: 'PLATFORM-TEST-FAILED',
         userId: 'user-platform-1',
-        itemId: 'item-platform-1',
+        itemId: 'platform-test-item-1',
         price: 100,
         status: 'delivery_failed',
       },
       {
         code: 'PLATFORM-TEST-STUCK',
         userId: 'user-platform-2',
-        itemId: 'item-platform-2',
+        itemId: 'platform-test-item-2',
         price: 100,
         status: 'pending',
         createdAt: new Date(Date.now() - 30 * 60 * 1000),
         statusUpdatedAt: new Date(Date.now() - 30 * 60 * 1000),
       },
     ],
+  });
+  await prisma.shopItem.createMany({
+    data: [
+      {
+        id: 'platform-test-item-1',
+        name: 'Platform Item 1',
+        price: 100,
+        description: 'platform item',
+        kind: 'item',
+        gameItemId: 'Weapon_M1911',
+      },
+      {
+        id: 'platform-test-item-2',
+        name: 'Platform Item 2',
+        price: 100,
+        description: 'platform item',
+        kind: 'item',
+        gameItemId: 'Weapon_AK47',
+      },
+      {
+        id: 'platform-test-vip',
+        name: 'Platform VIP',
+        price: 500,
+        description: 'platform vip',
+        kind: 'vip',
+      },
+    ],
+  });
+  await prisma.purchase.create({
+    data: {
+      code: 'PLATFORM-TEST-VIP-PENDING',
+      userId: 'platform-test-vip-user',
+      itemId: 'platform-test-vip',
+      price: 500,
+      status: 'pending',
+      createdAt: new Date(Date.now() - 30 * 60 * 1000),
+      statusUpdatedAt: new Date(Date.now() - 30 * 60 * 1000),
+    },
   });
 
   const analytics = await getPlatformAnalyticsOverview();
@@ -197,6 +249,9 @@ test('platform service manages tenant lifecycle, webhook delivery, analytics, an
   );
   assert.ok(
     reconcile.anomalies.some((entry) => String(entry.type || '') === 'failed-without-dead-letter'),
+  );
+  assert.ok(
+    !reconcile.anomalies.some((entry) => String(entry.code || '') === 'PLATFORM-TEST-VIP-PENDING'),
   );
 
   const publicOverview = await getPlatformPublicOverview();

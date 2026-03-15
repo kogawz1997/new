@@ -109,3 +109,39 @@ test('scum console agent: process backend autostarts child and writes command to
     await runtime.close();
   }
 });
+
+test('scum console agent: window-script preflight exposes actionable stderr details', async () => {
+  const runtime = startScumConsoleAgent({
+    env: {
+      SCUM_CONSOLE_AGENT_HOST: '127.0.0.1',
+      SCUM_CONSOLE_AGENT_PORT: '3315',
+      SCUM_CONSOLE_AGENT_TOKEN: 'window-agent-token-123456',
+      SCUM_CONSOLE_AGENT_BACKEND: 'exec',
+      SCUM_CONSOLE_AGENT_EXEC_TEMPLATE: `powershell -NoProfile -ExecutionPolicy Bypass -File "${path.join(
+        process.cwd(),
+        'scripts',
+        'send-scum-admin-command.ps1',
+      )}" -WindowTitle "THIS_WINDOW_DOES_NOT_EXIST" -Command "{command}"`,
+      SCUM_CONSOLE_AGENT_COMMAND_TIMEOUT_MS: '8000',
+    },
+  });
+
+  try {
+    await runtime.ready;
+    const preflight = await fetchJson('http://127.0.0.1:3315/preflight');
+    assert.equal(preflight.res.status, 500);
+    assert.equal(preflight.payload.ok, false);
+    assert.equal(preflight.payload.errorCode, 'AGENT_PREFLIGHT_FAILED');
+    assert.match(String(preflight.payload.error || ''), /SCUM window not found/i);
+    assert.match(
+      String(preflight.payload.result?.detail?.stderr || ''),
+      /THIS_WINDOW_DOES_NOT_EXIST/i,
+    );
+    assert.match(
+      String(preflight.payload.result?.detail?.shellCommand || ''),
+      /send-scum-admin-command\.ps1/i,
+    );
+  } finally {
+    await runtime.close();
+  }
+});

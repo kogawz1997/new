@@ -1,5 +1,6 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { resolveDatabaseRuntime } = require('../utils/dbEngine');
 
 function isTruthy(value) {
   const text = String(value || '').trim().toLowerCase();
@@ -28,25 +29,21 @@ function atomicWriteJson(filePath, obj) {
   fs.renameSync(tmpPath, filePath);
 }
 
-function resolveDbPath() {
-  const raw = (process.env.DATABASE_URL || 'file:./prisma/dev.db').trim();
-  if (!raw.startsWith('file:')) {
-    throw new Error('Only sqlite file DATABASE_URL is supported in this project');
+function resolveDbRuntime() {
+  const runtime = resolveDatabaseRuntime({
+    projectRoot: PROJECT_ROOT,
+  });
+  if (runtime.isSqlite && runtime.filePath) {
+    const dir = path.dirname(runtime.filePath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
   }
-
-  const filePath = raw.slice('file:'.length).replace(/^"|"$/g, '');
-  const absolute = path.isAbsolute(filePath)
-    ? filePath
-    : path.resolve(PROJECT_ROOT, filePath);
-
-  const dir = path.dirname(absolute);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return absolute;
+  return runtime;
 }
 
-const DB_PATH = resolveDbPath();
+const DB_RUNTIME = resolveDbRuntime();
+const DB_PATH = DB_RUNTIME.filePath || null;
 const REQUIRE_DB = isTruthy(process.env.PERSIST_REQUIRE_DB);
 const IS_PRODUCTION =
   String(process.env.NODE_ENV || '').trim().toLowerCase() === 'production';
@@ -134,6 +131,9 @@ function getPersistenceStatus() {
   return {
     mode: persistenceMode,
     requireDb: REQUIRE_DB,
+    databaseEngine: DB_RUNTIME.engine,
+    databaseProvider: DB_RUNTIME.provider,
+    databaseUrl: DB_RUNTIME.rawUrl,
     dbPath: DB_PATH,
     dataDir: DATA_DIR,
     legacySnapshotsEnabled: LEGACY_SNAPSHOTS_ENABLED,

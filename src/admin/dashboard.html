@@ -1428,9 +1428,10 @@
         </div>
         <div class="showcase-actions">
           <button type="button" class="ghost" data-showcase-tab="delivery">เปิดแท็บ Delivery</button>
+          <button type="button" class="ghost" data-showcase-tab="control">เปิดแท็บ Control Panel</button>
           <button type="button" class="ghost" data-showcase-tab="platform">เปิดแท็บ Platform</button>
           <button type="button" class="ghost" data-showcase-tab="metrics">เปิดแท็บ Metrics</button>
-          <button type="button" class="ghost" data-showcase-tab="config">เปิดแท็บ Config</button>
+          <button type="button" class="ghost" data-showcase-tab="config">เปิดแท็บ Raw Config</button>
           <button type="button" class="ghost" data-showcase-tab="danger">เปิดแท็บ Restore</button>
         </div>
       </div>
@@ -1456,10 +1457,11 @@
               <button class="tab-btn" data-tab="players" data-tab-label="ผู้เล่น player vip redeem link steam code" type="button">ผู้เล่น + VIP + ระบบแลกรางวัล<span class="desc">ลิงก์, VIP, โค้ด</span></button>
               <button class="tab-btn" data-tab="moderation" data-tab-label="ลงโทษ moderation สถิติ stats ต้อนรับ welcome" type="button">ลงโทษ + สถิติ + ต้อนรับ<span class="desc">ดูแล, สถิติ, ต้อนรับ</span></button>
               <button class="tab-btn" data-tab="delivery" data-tab-label="ส่งของ delivery rcon queue เช่ามอไซ rentbike" type="button">ส่งของ RCON + เช่ามอไซ<span class="desc">คิว, ลองใหม่, รีเซ็ต</span></button>
+              <button class="tab-btn" data-tab="control" data-tab-label="control panel discord commands rcon agent webhook portal runtime service restart" type="button">Control Panel<span class="desc">ตั้งค่าระบบหลัก + restart</span></button>
               <button class="tab-btn" data-tab="auth" data-min-role="admin" data-tab-label="auth security session role matrix anomaly step-up revoke" type="button">Auth + Security<span class="desc">session, anomaly, role matrix</span></button>
               <button class="tab-btn" data-tab="platform" data-tab-label="platform tenant billing subscription license webhook api marketplace agent monitoring" type="button">Platform Center<span class="desc">tenant, billing, legal, API</span></button>
               <button class="tab-btn" data-tab="metrics" data-tab-label="metrics observability timeline charts alert webhook login delivery" type="button">Metrics Timeline<span class="desc">กราฟเวลา + แนวโน้มระบบ</span></button>
-              <button class="tab-btn" data-tab="config" data-tab-label="คอนฟิก config setting patch" type="button">แก้ไขคอนฟิก<span class="desc">แก้บางส่วน / ตั้งค่าทั้งหมด</span></button>
+              <button class="tab-btn" data-tab="config" data-tab-label="คอนฟิก config setting patch raw json" type="button">Raw Config<span class="desc">ตั้งค่าง่าย + JSON config</span></button>
               <button class="tab-btn danger" data-tab="danger" data-tab-label="danger โซนอันตราย ลบ รีเซ็ต clear reset" type="button">โซนอันตราย<span class="desc">ลบ / ล้าง / รีเซ็ต</span></button>
             </div>
           </aside>
@@ -3001,7 +3003,7 @@
               </div>
             </section>
 
-            <section class="tab-panel" data-tab-panel="config">
+            <section class="tab-panel" data-tab-panel="control">
               <div class="tab-panel-head">
                 <h3>Control Panel</h3>
                 <p>รวมค่าที่แอดมินใช้บ่อยไว้หน้าเดียว ทั้ง Discord, คำสั่งบอท, delivery, worker, RCON/agent, watcher และ player portal</p>
@@ -3013,12 +3015,20 @@
                 <div id="controlPanelSummary" class="summary"></div>
                 <div class="form-grid">
                   <button type="button" id="controlPanelRefreshBtn" class="ghost">รีโหลด Control Panel</button>
+                  <label class="field">
+                    <span>Restart target หลัง apply env</span>
+                    <select id="controlRestartTargetSelect">
+                      <option value="">ไม่ restart อัตโนมัติ</option>
+                    </select>
+                  </label>
+                  <button type="button" id="controlRestartNowBtn" class="ghost">Restart service ตอนนี้</button>
                   <button type="button" class="ghost" data-control-open-tab="delivery">ไปที่ Delivery Runtime</button>
                   <button type="button" class="ghost" data-control-open-tab="auth">ไปที่ Auth / Security</button>
                   <button type="button" class="ghost" data-control-open-tab="metrics">ไปที่ Metrics</button>
                   <button type="button" class="ghost" data-control-open-tab="platform">ไปที่ Platform</button>
                   <button type="button" class="ghost" data-control-open-tab="danger">ไปที่ Backup / Restore</button>
                 </div>
+                <div id="controlManagedServicesWrap" class="table-wrap"></div>
               </div>
 
               <div class="delivery-grid">
@@ -3350,6 +3360,13 @@
                   <p class="help">ดูรายชื่อแอดมินที่ active/inactive และเปิดไปยังแท็บ log / audit ได้ทันที</p>
                   <div id="controlAdminUsersWrap" class="table-wrap"></div>
                 </div>
+              </div>
+            </section>
+
+            <section class="tab-panel" data-tab-panel="config">
+              <div class="tab-panel-head">
+                <h3>Raw Config</h3>
+                <p>ใช้สำหรับตั้งค่าง่ายหรือแก้ config ทั้งก้อนด้วย JSON โดยตรง เมื่อจำเป็นต้องปรับค่าที่ไม่ได้อยู่ใน Control Panel</p>
               </div>
 
               <form id="simpleConfigForm" class="form-card">
@@ -3772,6 +3789,9 @@
     const cfgDefaultWeaponImage = document.getElementById('cfgDefaultWeaponImage');
     const controlPanelSummary = document.getElementById('controlPanelSummary');
     const controlPanelRefreshBtn = document.getElementById('controlPanelRefreshBtn');
+    const controlRestartTargetSelect = document.getElementById('controlRestartTargetSelect');
+    const controlRestartNowBtn = document.getElementById('controlRestartNowBtn');
+    const controlManagedServicesWrap = document.getElementById('controlManagedServicesWrap');
     const controlDiscordForm = document.getElementById('controlDiscordForm');
     const cpGuildId = document.getElementById('cpGuildId');
     const cpChannelCommands = document.getElementById('cpChannelCommands');
@@ -5197,6 +5217,14 @@
         <tr>
           <td><label><input type="checkbox" data-command-disable value="${escapeHtml(entry.name)}" ${entry.disabled ? 'checked' : ''}> ${escapeHtml(entry.name)}</label></td>
           <td>${escapeHtml(entry.description || '-')}</td>
+          <td>
+            <select data-command-role="${escapeHtml(entry.name)}">
+              <option value="public" ${String(entry.requiredRole || 'public') === 'public' ? 'selected' : ''}>public</option>
+              <option value="mod" ${String(entry.requiredRole || '') === 'mod' ? 'selected' : ''}>mod</option>
+              <option value="admin" ${String(entry.requiredRole || '') === 'admin' ? 'selected' : ''}>admin</option>
+              <option value="owner" ${String(entry.requiredRole || '') === 'owner' ? 'selected' : ''}>owner</option>
+            </select>
+          </td>
           <td>${entry.disabled ? '<span class="badge-text danger">disabled</span>' : '<span class="badge-text ok">enabled</span>'}</td>
         </tr>
       `).join('');
@@ -5206,12 +5234,46 @@
             <tr>
               <th>Command</th>
               <th>Description</th>
+              <th>Required Role</th>
               <th>Status</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
       `;
+    }
+
+    function renderManagedServices() {
+      const services = Array.isArray(controlPanelSettings?.managedServices)
+        ? controlPanelSettings.managedServices
+        : [];
+      if (controlRestartTargetSelect) {
+        const currentValue = String(controlRestartTargetSelect.value || '').trim();
+        const options = [
+          '<option value="">ไม่ restart อัตโนมัติ</option>',
+          '<option value="all">all runtime services</option>',
+          ...services.map((entry) =>
+            `<option value="${escapeHtml(entry.key)}">${escapeHtml(entry.label)} (${escapeHtml(entry.pm2Name)})</option>`),
+        ];
+        controlRestartTargetSelect.innerHTML = options.join('');
+        if (
+          currentValue
+          && (
+            currentValue === 'all'
+            || services.some((entry) => entry.key === currentValue)
+          )
+        ) {
+          controlRestartTargetSelect.value = currentValue;
+        }
+      }
+
+      const rows = services.map((entry) => ({
+        key: entry.key,
+        label: entry.label,
+        pm2: entry.pm2Name,
+        description: entry.description || '-',
+      }));
+      renderRowsToContainer(controlManagedServicesWrap, rows, 'ยังไม่พบ managed services');
     }
 
     function renderControlAdminUsers() {
@@ -5279,6 +5341,7 @@
       setSelectBooleanValue(cpPortalRequireGuild, Boolean(getControlPanelEnvValue('portal', 'WEB_PORTAL_REQUIRE_GUILD_MEMBER', false)));
       if (cpPortalMapUrl) cpPortalMapUrl.value = String(getControlPanelEnvValue('portal', 'WEB_PORTAL_MAP_EXTERNAL_URL', ''));
       renderControlPanelCommandRegistry();
+      renderManagedServices();
       renderControlAdminUsers();
       renderControlPanelSummary();
     }
@@ -5293,6 +5356,27 @@
       if (!silent) {
         toast('รีโหลด Control Panel แล้ว');
       }
+    }
+
+    function getSelectedControlRestartTarget() {
+      return String(controlRestartTargetSelect?.value || '').trim();
+    }
+
+    async function restartManagedServiceSelection(target, contextLabel = 'runtime service') {
+      const normalizedTarget = String(target || '').trim();
+      if (!normalizedTarget) return null;
+      const res = await api('/admin/api/runtime/restart-service', 'POST', {
+        services: [normalizedTarget],
+      });
+      const restartedLabels = Array.isArray(res.data?.services)
+        ? res.data.services.map((entry) => entry.label || entry.key).filter(Boolean)
+        : [];
+      toast(
+        restartedLabels.length > 0
+          ? `${contextLabel}: restart แล้ว (${restartedLabels.join(', ')})`
+          : `${contextLabel}: restart แล้ว`,
+      );
+      return res.data || null;
     }
 
     function buildControlDiscordPatch() {
@@ -5342,9 +5426,19 @@
       const disabled = Array.from(
         document.querySelectorAll('#controlCommandWrap input[data-command-disable]:checked'),
       ).map((entry) => String(entry.value || '').trim()).filter(Boolean);
+      const permissions = {
+        ...(controlPanelSettings?.commandConfig?.permissions || {}),
+      };
+      Array.from(document.querySelectorAll('#controlCommandWrap select[data-command-role]'))
+        .forEach((entry) => {
+          const name = String(entry.getAttribute('data-command-role') || '').trim();
+          if (!name) return;
+          permissions[name] = String(entry.value || 'public').trim() || 'public';
+        });
       return {
         commands: {
           disabled,
+          permissions,
         },
       };
     }
@@ -9024,6 +9118,32 @@
       });
     }
 
+    if (controlRestartNowBtn) {
+      controlRestartNowBtn.addEventListener('click', async () => {
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        if (!hasRoleAtLeast(currentUserRole, 'owner')) {
+          toast('ต้องใช้สิทธิ owner');
+          return;
+        }
+        const target = getSelectedControlRestartTarget();
+        if (!target) {
+          toast('เลือก service ที่ต้องการ restart ก่อน');
+          return;
+        }
+        try {
+          await runWithButtonState(controlRestartNowBtn, 'กำลัง restart...', async () => {
+            await restartManagedServiceSelection(target, 'runtime service');
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: true, forceCardsRefresh: true });
+        } catch (error) {
+          toast(error.message || 'restart service ไม่สำเร็จ');
+        }
+      });
+    }
+
     document.querySelectorAll('[data-control-open-tab]').forEach((button) => {
       button.addEventListener('click', () => {
         const tabKey = String(button.getAttribute('data-control-open-tab') || '').trim();
@@ -9041,6 +9161,7 @@
           return;
         }
         const submitButton = getSubmitButton(controlDiscordForm, event);
+        const restartTarget = getSelectedControlRestartTarget();
         try {
           await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
             await api('/admin/api/config/patch', 'POST', {
@@ -9052,6 +9173,9 @@
                   DISCORD_GUILD_ID: String(cpGuildId?.value || '').trim(),
                 },
               });
+              if (restartTarget) {
+                await restartManagedServiceSelection(restartTarget, 'Discord / Access');
+              }
             }
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true });
@@ -9118,9 +9242,13 @@
           return;
         }
         const submitButton = getSubmitButton(controlEnvRuntimeForm, event);
+        const restartTarget = getSelectedControlRestartTarget();
         try {
           await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
             await api('/admin/api/control-panel/env', 'POST', buildRuntimeEnvPatch());
+            if (restartTarget) {
+              await restartManagedServiceSelection(restartTarget, 'Runtime Flags');
+            }
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true });
           toast('บันทึก Runtime Flags แล้ว');
@@ -9142,9 +9270,13 @@
           return;
         }
         const submitButton = getSubmitButton(controlRconAgentForm, event);
+        const restartTarget = getSelectedControlRestartTarget();
         try {
           await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
             await api('/admin/api/control-panel/env', 'POST', buildRconAgentEnvPatch());
+            if (restartTarget) {
+              await restartManagedServiceSelection(restartTarget, 'RCON / Agent');
+            }
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true });
           toast('บันทึก RCON / Agent แล้ว');
@@ -9166,9 +9298,13 @@
           return;
         }
         const submitButton = getSubmitButton(controlWatcherForm, event);
+        const restartTarget = getSelectedControlRestartTarget();
         try {
           await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
             await api('/admin/api/control-panel/env', 'POST', buildWatcherPortalEnvPatch());
+            if (restartTarget) {
+              await restartManagedServiceSelection(restartTarget, 'Watcher / Portal');
+            }
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true });
           toast('บันทึก Watcher / Portal แล้ว');

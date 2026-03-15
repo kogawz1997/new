@@ -15,10 +15,22 @@ function freshBotModule() {
   const previousBotHealthPort = process.env.BOT_HEALTH_PORT;
   const previousDiscordGuildId = process.env.DISCORD_GUILD_ID;
   const previousDiscordClientId = process.env.DISCORD_CLIENT_ID;
+  const previousBotEnableAdminWeb = process.env.BOT_ENABLE_ADMIN_WEB;
+  const previousBotEnableScumWebhook = process.env.BOT_ENABLE_SCUM_WEBHOOK;
+  const previousBotEnableRestartScheduler = process.env.BOT_ENABLE_RESTART_SCHEDULER;
+  const previousBotEnableRentBikeService = process.env.BOT_ENABLE_RENTBIKE_SERVICE;
+  const previousBotEnableDeliveryWorker = process.env.BOT_ENABLE_DELIVERY_WORKER;
+  const previousBotEnableOpsAlertRoute = process.env.BOT_ENABLE_OPS_ALERT_ROUTE;
   process.env.NODE_ENV = 'test';
   process.env.BOT_HEALTH_PORT = '0';
   process.env.DISCORD_GUILD_ID = '123456789012345678';
   process.env.DISCORD_CLIENT_ID = '123456789012345678';
+  process.env.BOT_ENABLE_ADMIN_WEB = 'false';
+  process.env.BOT_ENABLE_SCUM_WEBHOOK = 'false';
+  process.env.BOT_ENABLE_RESTART_SCHEDULER = 'false';
+  process.env.BOT_ENABLE_RENTBIKE_SERVICE = 'false';
+  process.env.BOT_ENABLE_DELIVERY_WORKER = 'false';
+  process.env.BOT_ENABLE_OPS_ALERT_ROUTE = 'false';
   delete require.cache[botPath];
   const loaded = require(botPath);
   if (previousNodeEnv == null) {
@@ -40,6 +52,36 @@ function freshBotModule() {
     delete process.env.DISCORD_CLIENT_ID;
   } else {
     process.env.DISCORD_CLIENT_ID = previousDiscordClientId;
+  }
+  if (previousBotEnableAdminWeb == null) {
+    delete process.env.BOT_ENABLE_ADMIN_WEB;
+  } else {
+    process.env.BOT_ENABLE_ADMIN_WEB = previousBotEnableAdminWeb;
+  }
+  if (previousBotEnableScumWebhook == null) {
+    delete process.env.BOT_ENABLE_SCUM_WEBHOOK;
+  } else {
+    process.env.BOT_ENABLE_SCUM_WEBHOOK = previousBotEnableScumWebhook;
+  }
+  if (previousBotEnableRestartScheduler == null) {
+    delete process.env.BOT_ENABLE_RESTART_SCHEDULER;
+  } else {
+    process.env.BOT_ENABLE_RESTART_SCHEDULER = previousBotEnableRestartScheduler;
+  }
+  if (previousBotEnableRentBikeService == null) {
+    delete process.env.BOT_ENABLE_RENTBIKE_SERVICE;
+  } else {
+    process.env.BOT_ENABLE_RENTBIKE_SERVICE = previousBotEnableRentBikeService;
+  }
+  if (previousBotEnableDeliveryWorker == null) {
+    delete process.env.BOT_ENABLE_DELIVERY_WORKER;
+  } else {
+    process.env.BOT_ENABLE_DELIVERY_WORKER = previousBotEnableDeliveryWorker;
+  }
+  if (previousBotEnableOpsAlertRoute == null) {
+    delete process.env.BOT_ENABLE_OPS_ALERT_ROUTE;
+  } else {
+    process.env.BOT_ENABLE_OPS_ALERT_ROUTE = previousBotEnableOpsAlertRoute;
   }
   return loaded;
 }
@@ -223,6 +265,102 @@ test('interaction e2e: disabled slash command is blocked by runtime config', asy
     config.updateConfigPatch({
       commands: {
         disabled: [],
+      },
+    });
+  }
+});
+
+test('interaction e2e: command role gate denies member below configured role', async () => {
+  process.env.DISCORD_TOKEN = process.env.DISCORD_TOKEN || 'test-token';
+  config.updateConfigPatch({
+    roles: {
+      owner: 'Owner',
+      admin: 'Admin',
+      moderator: 'Moderator',
+    },
+    commands: {
+      permissions: {
+        'mock-role-gate': 'admin',
+      },
+    },
+  });
+  const { handleInteractionCreate } = freshBotModule();
+  const { interaction, calls } = createMockInteraction();
+
+  try {
+    interaction.isChatInputCommand = () => true;
+    interaction.commandName = 'mock-role-gate';
+    interaction.member = {
+      roles: {
+        cache: new Map(),
+      },
+    };
+    interaction.memberPermissions = {
+      has: () => false,
+    };
+    interaction.client.commands.set('mock-role-gate', {
+      execute: async () => {
+        throw new Error('should not execute when role is insufficient');
+      },
+    });
+
+    await handleInteractionCreate(interaction);
+
+    assert.equal(calls.reply.length, 1);
+    assert.match(String(calls.reply[0]?.content || ''), /ต้องใช้สิทธิ admin/i);
+  } finally {
+    config.updateConfigPatch({
+      commands: {
+        permissions: {},
+      },
+    });
+  }
+});
+
+test('interaction e2e: command role gate allows member with configured admin role', async () => {
+  process.env.DISCORD_TOKEN = process.env.DISCORD_TOKEN || 'test-token';
+  config.updateConfigPatch({
+    roles: {
+      owner: 'Owner',
+      admin: 'Admin',
+      moderator: 'Moderator',
+    },
+    commands: {
+      permissions: {
+        'mock-role-allow': 'admin',
+      },
+    },
+  });
+  const { handleInteractionCreate } = freshBotModule();
+  const { interaction, calls } = createMockInteraction();
+
+  try {
+    interaction.isChatInputCommand = () => true;
+    interaction.commandName = 'mock-role-allow';
+    interaction.member = {
+      roles: {
+        cache: new Map([
+          ['role-admin', { id: 'role-admin', name: 'Admin' }],
+        ]),
+      },
+    };
+    interaction.memberPermissions = {
+      has: () => false,
+    };
+    interaction.client.commands.set('mock-role-allow', {
+      execute: async (ctx) => {
+        await ctx.reply({ content: 'role-ok' });
+      },
+    });
+
+    await handleInteractionCreate(interaction);
+
+    assert.equal(calls.reply.length, 1);
+    assert.equal(calls.reply[0]?.content, 'role-ok');
+  } finally {
+    config.updateConfigPatch({
+      commands: {
+        permissions: {},
       },
     });
   }

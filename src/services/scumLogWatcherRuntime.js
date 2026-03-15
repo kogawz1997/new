@@ -28,7 +28,24 @@ const path = require('node:path');
 const { assertWatcherEnv } = require('../utils/env');
 const { startRuntimeHealthServer } = require('./runtimeHealthServer');
 
-const LOG_PATH = process.env.SCUM_LOG_PATH;
+function envFlag(value, fallback = false) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+function resolveLogPath(env = process.env) {
+  return String(env.SCUM_LOG_PATH || '').trim();
+}
+
+function resolveWatcherEnabled(env = process.env) {
+  const explicit = String(env.SCUM_WATCHER_ENABLED || '').trim();
+  if (explicit) return envFlag(explicit, false);
+  return resolveLogPath(env).length > 0;
+}
+
+const LOG_PATH = resolveLogPath();
+const WATCHER_ENABLED = resolveWatcherEnabled();
 const WEBHOOK_URL =
   process.env.SCUM_WEBHOOK_URL || 'http://127.0.0.1:3100/scum-event';
 const SECRET = process.env.SCUM_WEBHOOK_SECRET || '';
@@ -195,6 +212,54 @@ function getWatcherHealthPayload(now = Date.now()) {
   const snapshot = getWatcherMetricsSnapshot(now);
   const backlogBytes = Math.max(0, lastKnownFileSize - lastReadOffset);
   const backlogAgeMs = lastBacklogAt ? now - lastBacklogAt : 0;
+  if (!WATCHER_ENABLED) {
+    return {
+      ...snapshot,
+      ready: null,
+      status: 'disabled',
+      reason: 'watcher-disabled',
+      watch: {
+        logPath: LOG_PATH || null,
+        fileExists: false,
+        lastFileError: null,
+        lastStatAt: null,
+        lastReadAt: null,
+        lastEventAt: null,
+        lastRotationAt: null,
+        lastKnownFileSize: 0,
+        lastKnownFileMtime: null,
+        lastReadOffset: 0,
+        backlogBytes: 0,
+        backlogSinceAt: null,
+        backlogAgeMs: 0,
+        backlogStaleAfterMs: WATCHER_BACKLOG_STALE_MS,
+      },
+    };
+  }
+  if (!LOG_PATH) {
+    return {
+      ...snapshot,
+      ready: false,
+      status: 'not-configured',
+      reason: 'log-path-missing',
+      watch: {
+        logPath: null,
+        fileExists: false,
+        lastFileError: 'SCUM_LOG_PATH is required when watcher is enabled',
+        lastStatAt: null,
+        lastReadAt: null,
+        lastEventAt: null,
+        lastRotationAt: null,
+        lastKnownFileSize: 0,
+        lastKnownFileMtime: null,
+        lastReadOffset: 0,
+        backlogBytes: 0,
+        backlogSinceAt: null,
+        backlogAgeMs: 0,
+        backlogStaleAfterMs: WATCHER_BACKLOG_STALE_MS,
+      },
+    };
+  }
   const ready =
     lastFileExists
     && !lastFileError
@@ -220,6 +285,36 @@ function getWatcherHealthPayload(now = Date.now()) {
       backlogStaleAfterMs: WATCHER_BACKLOG_STALE_MS,
     },
   };
+}
+
+function createHealthServer() {
+  return startRuntimeHealthServer({
+    name: 'watcher',
+    host: WATCHER_HEALTH_HOST,
+    port: WATCHER_HEALTH_PORT,
+    getPayload: () => getWatcherHealthPayload(),
+  });
+}
+
+function registerShutdown(healthServer, stopWatcher = null) {
+  const shutdown = () => {
+    console.log('stopping SCUM log watcher...');
+    if (typeof stopWatcher === 'function') {
+      stopWatcher();
+    }
+    if (watcherFileStatTimer) {
+      clearInterval(watcherFileStatTimer);
+      watcherFileStatTimer = null;
+    }
+    if (healthServer) {
+      healthServer.close();
+    }
+    process.exit(0);
+  };
+
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+  return shutdown;
 }
 
 function getWatcherMetricsSnapshot(now = Date.now()) {
@@ -636,7 +731,6 @@ function tailFile(filePath, onLine) {
   } catch (error) {
     markFileError(error);
     console.error('log file not found at path:', filePath);
-    process.exit(1);
   }
 
   console.log('watching log file:', filePath);
@@ -657,8 +751,16 @@ function tailFile(filePath, onLine) {
         pending = false;
         let stat;
         try {
+          const filePreviouslyAvailable = lastFileExists;
           stat = fs.statSync(filePath);
           updateFileStateFromStat(stat);
+          if (!filePreviouslyAvailable) {
+            offset = stat.size;
+            lastReadOffset = offset;
+            lastFileReadAt = Date.now();
+            console.log('log file became available, start tailing from file end:', filePath);
+            return;
+          }
         } catch (error) {
           markFileError(error);
           console.warn('failed to stat log file, waiting for next round:', error.message);
@@ -705,39 +807,40 @@ function tailFile(filePath, onLine) {
 
   fs.watchFile(filePath, { interval: WATCH_INTERVAL_MS }, watcherCallback);
 
-  return () => {
+  const stop = () => {
     fs.unwatchFile(filePath, watcherCallback);
     flushPartialLine(bufferState, onLine);
   };
+  stop.sync = readNewBytes;
+  return stop;
 }
 
 function startWatcher() {
-  assertWatcherEnv();
-  if (!LOG_PATH) {
-    throw new Error('SCUM_LOG_PATH is required');
+  const healthServer = createHealthServer();
+  if (!WATCHER_ENABLED) {
+    console.log('SCUM log watcher is disabled');
+    registerShutdown(healthServer);
+    return { healthServer, mode: 'disabled' };
   }
-
-  const healthServer = startRuntimeHealthServer({
-    name: 'watcher',
-    host: WATCHER_HEALTH_HOST,
-    port: WATCHER_HEALTH_PORT,
-    getPayload: () => getWatcherHealthPayload(),
-  });
+  if (!LOG_PATH) {
+    console.warn('SCUM log watcher is enabled but SCUM_LOG_PATH is missing');
+    registerShutdown(healthServer);
+    return { healthServer, mode: 'not-configured' };
+  }
+  assertWatcherEnv();
 
   const pollLogFileState = () => {
     try {
+      const filePreviouslyAvailable = lastFileExists;
       const stat = fs.statSync(LOG_PATH);
       updateFileStateFromStat(stat);
+      if (!filePreviouslyAvailable && typeof stop.sync === 'function') {
+        void stop.sync();
+      }
     } catch (error) {
       markFileError(error);
     }
   };
-  pollLogFileState();
-  watcherFileStatTimer = setInterval(pollLogFileState, WATCHER_FILE_STAT_INTERVAL_MS);
-  if (typeof watcherFileStatTimer.unref === 'function') {
-    watcherFileStatTimer.unref();
-  }
-
   const stop = tailFile(LOG_PATH, (line) => {
     const event = parseLine(line);
     if (!event) return;
@@ -745,22 +848,14 @@ function startWatcher() {
     console.log('event:', event);
     enqueueEvent(event);
   });
+  pollLogFileState();
+  watcherFileStatTimer = setInterval(pollLogFileState, WATCHER_FILE_STAT_INTERVAL_MS);
+  if (typeof watcherFileStatTimer.unref === 'function') {
+    watcherFileStatTimer.unref();
+  }
 
-  const shutdown = () => {
-    console.log('stopping SCUM log watcher...');
-    stop();
-    if (watcherFileStatTimer) {
-      clearInterval(watcherFileStatTimer);
-      watcherFileStatTimer = null;
-    }
-    if (healthServer) {
-      healthServer.close();
-    }
-    process.exit(0);
-  };
-
-  process.once('SIGINT', shutdown);
-  process.once('SIGTERM', shutdown);
+  registerShutdown(healthServer, stop);
+  return { healthServer, mode: 'watching', stop };
 }
 
 if (require.main === module) {
@@ -773,5 +868,8 @@ module.exports = {
   sendEvent,
   enqueueEvent,
   getWatcherMetricsSnapshot,
+  getWatcherHealthPayload,
+  resolveLogPath,
+  resolveWatcherEnabled,
   startWatcher,
 };
