@@ -7,9 +7,13 @@ const { execFileSync } = require('node:child_process');
 const ROOT_DIR = path.resolve(__dirname, '..');
 const SAFE_ENV_EXAMPLES = new Set([
   '.env.example',
+  '.env.development.example',
   '.env.production.example',
+  '.env.test.example',
   'apps/web-portal-standalone/.env.example',
+  'apps/web-portal-standalone/.env.development.example',
   'apps/web-portal-standalone/.env.production.example',
+  'apps/web-portal-standalone/.env.test.example',
 ]);
 const IGNORED_DIRS = new Set([
   '.git',

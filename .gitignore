@@ -136,6 +136,7 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*.split
 .envrc
 .env.backup-*
 .venv
@@ -225,9 +226,13 @@ _compare/
 
 # Runtime app artifacts
 data/backups/
+data/env-backups/
+data/env-profile-backups/
+data/evidence/
 backups/
 data/*.json
 logs/
+artifacts/
 tmp-*.log
 tmp-*.txt
 

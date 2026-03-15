@@ -225,9 +225,21 @@ const {
   isAdminRestoreMaintenanceActive,
 } = require('./store/adminRestoreStateStore');
 const { getWebhookMetricsSnapshot } = require('./scumWebhookServer');
+const { parseEnvFile } = require('./utils/loadEnvFiles');
+const { updateEnvFile } = require('./utils/envFileEditor');
 
 const dashboardHtmlPath = path.join(__dirname, 'admin', 'dashboard.html');
 const loginHtmlPath = path.join(__dirname, 'admin', 'login.html');
+const rootEnvFilePath = path.resolve(
+  String(process.env.ADMIN_WEB_ENV_FILE_PATH || path.join(process.cwd(), '.env')).trim()
+    || path.join(process.cwd(), '.env'),
+);
+const portalEnvFilePath = path.resolve(
+  String(
+    process.env.ADMIN_WEB_PORTAL_ENV_FILE_PATH
+      || path.join(process.cwd(), 'apps', 'web-portal-standalone', '.env'),
+  ).trim() || path.join(process.cwd(), 'apps', 'web-portal-standalone', '.env'),
+);
 const defaultScumItemsDirPath = path.resolve(process.cwd(), 'scum_items-main');
 const scumItemsDirPath = path.resolve(
   String(process.env.SCUM_ITEMS_DIR_PATH || defaultScumItemsDirPath).trim()
@@ -314,6 +326,37 @@ let liveBusBound = false;
 let metricsSeriesTimer = null;
 const metricsSeries = createObservabilitySeriesState();
 const METRICS_SERIES_KEYS = Object.freeze(Object.keys(metricsSeries));
+const CONTROL_PANEL_ENV_FIELDS = Object.freeze([
+  { file: 'root', key: 'DISCORD_GUILD_ID', type: 'text', secret: false },
+  { file: 'root', key: 'BOT_ENABLE_ADMIN_WEB', type: 'boolean', secret: false },
+  { file: 'root', key: 'BOT_ENABLE_SCUM_WEBHOOK', type: 'boolean', secret: false },
+  { file: 'root', key: 'BOT_ENABLE_RENTBIKE_SERVICE', type: 'boolean', secret: false },
+  { file: 'root', key: 'BOT_ENABLE_DELIVERY_WORKER', type: 'boolean', secret: false },
+  { file: 'root', key: 'WORKER_ENABLE_DELIVERY', type: 'boolean', secret: false },
+  { file: 'root', key: 'WORKER_ENABLE_RENTBIKE', type: 'boolean', secret: false },
+  { file: 'root', key: 'DELIVERY_EXECUTION_MODE', type: 'text', secret: false },
+  { file: 'root', key: 'RCON_HOST', type: 'text', secret: false },
+  { file: 'root', key: 'RCON_PORT', type: 'number', secret: false },
+  { file: 'root', key: 'RCON_PROTOCOL', type: 'text', secret: false },
+  { file: 'root', key: 'RCON_EXEC_TEMPLATE', type: 'text', secret: false },
+  { file: 'root', key: 'RCON_PASSWORD', type: 'secret', secret: true },
+  { file: 'root', key: 'SCUM_CONSOLE_AGENT_BASE_URL', type: 'text', secret: false },
+  { file: 'root', key: 'SCUM_CONSOLE_AGENT_HOST', type: 'text', secret: false },
+  { file: 'root', key: 'SCUM_CONSOLE_AGENT_PORT', type: 'number', secret: false },
+  { file: 'root', key: 'SCUM_CONSOLE_AGENT_BACKEND', type: 'text', secret: false },
+  { file: 'root', key: 'SCUM_CONSOLE_AGENT_EXEC_TEMPLATE', type: 'text', secret: false },
+  { file: 'root', key: 'SCUM_CONSOLE_AGENT_TOKEN', type: 'secret', secret: true },
+  { file: 'root', key: 'SCUM_WEBHOOK_URL', type: 'text', secret: false },
+  { file: 'root', key: 'SCUM_WEBHOOK_PORT', type: 'number', secret: false },
+  { file: 'root', key: 'SCUM_LOG_PATH', type: 'text', secret: false },
+  { file: 'portal', key: 'WEB_PORTAL_BASE_URL', type: 'text', secret: false },
+  { file: 'portal', key: 'WEB_PORTAL_PLAYER_OPEN_ACCESS', type: 'boolean', secret: false },
+  { file: 'portal', key: 'WEB_PORTAL_REQUIRE_GUILD_MEMBER', type: 'boolean', secret: false },
+  { file: 'portal', key: 'WEB_PORTAL_MAP_EXTERNAL_URL', type: 'text', secret: false },
+]);
+const CONTROL_PANEL_ENV_INDEX = new Map(
+  CONTROL_PANEL_ENV_FIELDS.map((field) => [field.key, Object.freeze({ ...field })]),
+);
 const loginAttemptsByIp = new Map();
 const loginFailureEvents = [];
 const discordOauthStates = new Map();
@@ -994,15 +1037,19 @@ async function seedAdminUsersFromEnv() {
   }
 }
 
-async function listAdminUsersFromDb(limit = 100) {
+async function listAdminUsersFromDb(limit = 100, options = {}) {
+  const { activeOnly = true } = options;
+  const whereSql = activeOnly ? 'WHERE is_active = 1' : '';
   const rows = await prisma.$queryRawUnsafe(
     `
     SELECT
       username,
       role,
-      is_active AS isActive
+      is_active AS isActive,
+      created_at AS createdAt,
+      updated_at AS updatedAt
     FROM admin_web_users
-    WHERE is_active = 1
+    ${whereSql}
     ORDER BY username ASC
     LIMIT ?;
     `,
@@ -1014,7 +1061,140 @@ async function listAdminUsersFromDb(limit = 100) {
     username: String(row?.username || '').trim(),
     role: normalizeRole(row?.role || 'mod'),
     isActive: Number(row?.isActive || 0) === 1,
+    createdAt: row?.createdAt ? new Date(row.createdAt).toISOString() : null,
+    updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
   }));
+}
+
+async function getAdminUserByUsername(username) {
+  const name = String(username || '').trim();
+  if (!name) return null;
+  const rows = await prisma.$queryRawUnsafe(
+    `
+    SELECT
+      username,
+      password_hash AS passwordHash,
+      role,
+      is_active AS isActive,
+      created_at AS createdAt,
+      updated_at AS updatedAt
+    FROM admin_web_users
+    WHERE username = ?
+    LIMIT 1;
+    `,
+    name,
+  );
+  const row = Array.isArray(rows) && rows.length > 0 ? rows[0] : null;
+  if (!row) return null;
+  return {
+    username: String(row.username || '').trim(),
+    passwordHash: String(row.passwordHash || '').trim(),
+    role: normalizeRole(row.role || 'mod'),
+    isActive: Number(row.isActive || 0) === 1,
+    createdAt: row?.createdAt ? new Date(row.createdAt).toISOString() : null,
+    updatedAt: row?.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+  };
+}
+
+async function countActiveOwnerUsers() {
+  const rows = await prisma.$queryRawUnsafe(
+    `
+    SELECT COUNT(*) AS total
+    FROM admin_web_users
+    WHERE is_active = 1
+      AND lower(role) = 'owner';
+    `,
+  );
+  const total = Array.isArray(rows) && rows.length > 0
+    ? Number(rows[0]?.total || 0)
+    : 0;
+  return Number.isFinite(total) ? total : 0;
+}
+
+function normalizeAdminUsername(value) {
+  const username = String(value || '').trim();
+  if (!username) return '';
+  if (!/^[a-zA-Z0-9._-]{3,64}$/.test(username)) return '';
+  return username;
+}
+
+async function upsertAdminUserInDb(input = {}) {
+  const username = normalizeAdminUsername(input.username);
+  const role = normalizeRole(input.role || 'mod');
+  const isActive = input.isActive !== false;
+  const password = String(input.password || '').trim();
+  if (!username) {
+    throw new Error('Invalid username');
+  }
+
+  await ensureAdminUsersReady();
+  const existing = await getAdminUserByUsername(username);
+  if (!existing && !password) {
+    throw new Error('Password is required for a new admin user');
+  }
+
+  const willRemainOwner = role === 'owner' && isActive;
+  if (
+    existing
+    && existing.role === 'owner'
+    && existing.isActive
+    && !willRemainOwner
+  ) {
+    const ownerCount = await countActiveOwnerUsers();
+    if (ownerCount <= 1) {
+      throw new Error('Cannot remove the last active owner');
+    }
+  }
+
+  if (!existing) {
+    await prisma.$executeRawUnsafe(
+      `
+      INSERT INTO admin_web_users (
+        username,
+        password_hash,
+        role,
+        is_active,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, datetime('now'), datetime('now'));
+      `,
+      username,
+      createAdminPasswordHash(password),
+      role,
+      isActive ? 1 : 0,
+    );
+  } else if (password) {
+    await prisma.$executeRawUnsafe(
+      `
+      UPDATE admin_web_users
+      SET password_hash = ?,
+          role = ?,
+          is_active = ?,
+          updated_at = datetime('now')
+      WHERE username = ?;
+      `,
+      createAdminPasswordHash(password),
+      role,
+      isActive ? 1 : 0,
+      username,
+    );
+  } else {
+    await prisma.$executeRawUnsafe(
+      `
+      UPDATE admin_web_users
+      SET role = ?,
+          is_active = ?,
+          updated_at = datetime('now')
+      WHERE username = ?;
+      `,
+      role,
+      isActive ? 1 : 0,
+      username,
+    );
+  }
+
+  return getAdminUserByUsername(username);
 }
 
 async function ensureAdminUsersReady() {
@@ -1068,6 +1248,162 @@ async function getUserByCredentials(username, password) {
 function getSsoDiscordRole(roleIds = []) {
   const mappingSummary = getAdminSsoRoleMappingSummary(process.env);
   return resolveMappedMemberRole(roleIds, [], mappingSummary);
+}
+
+function getControlPanelEnvFileValues() {
+  return {
+    root: parseEnvFile(rootEnvFilePath),
+    portal: parseEnvFile(portalEnvFilePath),
+  };
+}
+
+function normalizeBooleanEnvValue(value, fallback = false) {
+  const raw = String(value || '').trim().toLowerCase();
+  if (!raw) return fallback;
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+function buildControlPanelEnvSection(fileKey, values = {}) {
+  const section = {};
+  for (const field of CONTROL_PANEL_ENV_FIELDS) {
+    if (field.file !== fileKey) continue;
+    const fileValue = Object.prototype.hasOwnProperty.call(values, field.key)
+      ? values[field.key]
+      : process.env[field.key];
+    const configured = String(fileValue || '').trim().length > 0;
+    if (field.secret) {
+      section[field.key] = {
+        type: field.type,
+        configured,
+        value: '',
+      };
+      continue;
+    }
+    if (field.type === 'boolean') {
+      section[field.key] = {
+        type: field.type,
+        configured,
+        value: normalizeBooleanEnvValue(fileValue, false),
+      };
+      continue;
+    }
+    if (field.type === 'number') {
+      const text = String(fileValue || '').trim();
+      const parsed = text ? Number(text) : null;
+      section[field.key] = {
+        type: field.type,
+        configured,
+        value: Number.isFinite(parsed) ? parsed : text,
+      };
+      continue;
+    }
+    section[field.key] = {
+      type: field.type,
+      configured,
+      value: String(fileValue || ''),
+    };
+  }
+  return section;
+}
+
+function buildCommandRegistry(client) {
+  const disabled = Array.isArray(config.commands?.disabled)
+    ? new Set(
+      config.commands.disabled
+        .map((entry) => String(entry || '').trim())
+        .filter(Boolean),
+    )
+    : new Set();
+  const commandEntries = client?.commands instanceof Map
+    ? Array.from(client.commands.values())
+    : Array.isArray(client?.commands)
+      ? client.commands
+      : [];
+
+  return commandEntries
+    .map((entry) => {
+      const json = typeof entry?.data?.toJSON === 'function'
+        ? entry.data.toJSON()
+        : null;
+      const name = String(
+        json?.name || entry?.data?.name || entry?.name || '',
+      ).trim();
+      if (!name) return null;
+      return {
+        name,
+        description: String(
+          json?.description || entry?.description || '',
+        ).trim(),
+        disabled: disabled.has(name),
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function buildControlPanelSettings(client, auth = null) {
+  const envValues = getControlPanelEnvFileValues();
+  return {
+    env: {
+      root: buildControlPanelEnvSection('root', envValues.root),
+      portal: buildControlPanelEnvSection('portal', envValues.portal),
+    },
+    commands: buildCommandRegistry(client),
+    adminUsers: auth && hasRoleAtLeast(auth.role, 'owner')
+      ? await listAdminUsersFromDb(250, { activeOnly: false })
+      : [],
+    commandConfig: {
+      disabled: Array.isArray(config.commands?.disabled)
+        ? config.commands.disabled.map((entry) => String(entry || '').trim()).filter(Boolean)
+        : [],
+    },
+    files: {
+      root: rootEnvFilePath,
+      portal: portalEnvFilePath,
+    },
+    reloadRequired: true,
+  };
+}
+
+function normalizeEnvPatchValue(field, value) {
+  if (!field) return null;
+  if (field.type === 'boolean') {
+    return normalizeBooleanEnvValue(value, false) ? 'true' : 'false';
+  }
+  if (field.type === 'number') {
+    const text = String(value ?? '').trim();
+    if (!text) return '';
+    const parsed = Number(text);
+    if (!Number.isFinite(parsed)) {
+      throw new Error(`Invalid number for ${field.key}`);
+    }
+    return String(Math.trunc(parsed));
+  }
+  return String(value ?? '').trim();
+}
+
+function buildControlPanelEnvPatch(body = {}) {
+  const patch = {
+    root: {},
+    portal: {},
+  };
+
+  for (const fileKey of ['root', 'portal']) {
+    const input = body?.[fileKey];
+    if (!input || typeof input !== 'object' || Array.isArray(input)) {
+      continue;
+    }
+    for (const [key, rawValue] of Object.entries(input)) {
+      const field = CONTROL_PANEL_ENV_INDEX.get(String(key || '').trim());
+      if (!field || field.file !== fileKey) continue;
+      if (field.secret && String(rawValue || '').trim() === '') {
+        continue;
+      }
+      patch[fileKey][field.key] = normalizeEnvPatchValue(field, rawValue);
+    }
+  }
+
+  return patch;
 }
 
 function getDiscordRedirectUri(host, port) {
@@ -2033,7 +2369,7 @@ async function tryNotifyTicket(client, ticket, action, staffId) {
 
 // POST actions are centralized here so restore-maintenance gating, RBAC, validation,
 // and audit/live-update hooks stay consistent across the admin surface.
-async function handlePostAction(client, pathname, body, res, auth) {
+async function handlePostAction(client, req, pathname, body, res, auth) {
   if (pathname === '/admin/api/auth/session/revoke') {
     const reason = requiredString(body, 'reason') || 'manual-revoke';
     const sessionId = requiredString(body, 'sessionId');
@@ -2553,6 +2889,83 @@ async function handlePostAction(client, pathname, body, res, auth) {
     if (!result.ok) return sendJson(res, 400, { ok: false, error: result.reason || 'Request failed' });
     queueLeaderboardRefreshForAllGuilds(client, 'admin-add-playtime');
     return sendJson(res, 200, { ok: true, data: result.stat });
+  }
+
+  if (pathname === '/admin/api/control-panel/env') {
+    const envPatch = buildControlPanelEnvPatch(body);
+    const hasRootPatch = Object.keys(envPatch.root).length > 0;
+    const hasPortalPatch = Object.keys(envPatch.portal).length > 0;
+    if (!hasRootPatch && !hasPortalPatch) {
+      return sendJson(res, 400, { ok: false, error: 'No allowed environment settings were provided' });
+    }
+
+    const rootWrite = hasRootPatch
+      ? updateEnvFile(rootEnvFilePath, envPatch.root)
+      : { changedKeys: [] };
+    const portalWrite = hasPortalPatch
+      ? updateEnvFile(portalEnvFilePath, envPatch.portal)
+      : { changedKeys: [] };
+    Object.assign(process.env, envPatch.root, envPatch.portal);
+
+    recordAdminSecuritySignal('control-panel-env-updated', {
+      actor: auth?.user || null,
+      role: auth?.role || null,
+      authMethod: auth?.authMethod || null,
+      sessionId: auth?.sessionId || null,
+      ip: getClientIp(req),
+      path: pathname,
+      detail: 'Control panel environment settings updated',
+      data: {
+        rootChanged: rootWrite.changedKeys,
+        portalChanged: portalWrite.changedKeys,
+      },
+    });
+
+    return sendJson(res, 200, {
+      ok: true,
+      data: {
+        rootChanged: rootWrite.changedKeys,
+        portalChanged: portalWrite.changedKeys,
+        reloadRequired: true,
+      },
+    });
+  }
+
+  if (pathname === '/admin/api/auth/user') {
+    const username = requiredString(body, 'username');
+    const role = requiredString(body, 'role') || 'mod';
+    const password = String(body?.password || '').trim();
+    const isActive = body?.isActive !== false;
+    const saved = await upsertAdminUserInDb({
+      username,
+      role,
+      password,
+      isActive,
+    });
+
+    recordAdminSecuritySignal('admin-user-updated', {
+      actor: auth?.user || null,
+      role: auth?.role || null,
+      authMethod: auth?.authMethod || null,
+      sessionId: auth?.sessionId || null,
+      ip: getClientIp(req),
+      path: pathname,
+      targetUser: saved?.username || username,
+      detail: 'Admin user credentials or role updated',
+      data: {
+        username: saved?.username || username,
+        role: saved?.role || role,
+        isActive: saved?.isActive ?? isActive,
+        passwordUpdated: Boolean(password),
+      },
+      notify: true,
+      title: 'Admin User Updated',
+    });
+
+    return sendJson(res, 200, {
+      ok: true,
+      data: saved,
+    });
   }
 
   if (pathname === '/admin/api/config/patch') {
@@ -3776,6 +4189,33 @@ function startAdminWebServer(client) {
           });
         }
 
+        if (req.method === 'GET' && pathname === '/admin/api/auth/users') {
+          const auth = ensureRole(req, urlObj, 'owner', res);
+          if (!auth) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: await listAdminUsersFromDb(250, { activeOnly: false }),
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/control-panel/settings') {
+          const auth = ensureRole(req, urlObj, 'admin', res);
+          if (!auth) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: await buildControlPanelSettings(client, auth),
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/control-panel/commands') {
+          const auth = ensureRole(req, urlObj, 'admin', res);
+          if (!auth) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: buildCommandRegistry(client),
+          });
+        }
+
         if (req.method === 'GET' && pathname === '/admin/api/me') {
           const auth = getAuthContext(req, urlObj);
           if (!auth) {
@@ -4683,7 +5123,7 @@ function startAdminWebServer(client) {
           const body = await readJsonBody(req);
           const elevatedAuth = ensureStepUpAuth(req, res, auth, body, permission);
           if (!elevatedAuth) return undefined;
-          const out = await handlePostAction(client, pathname, body, res, auth);
+          const out = await handlePostAction(client, req, pathname, body, res, auth);
           if (
             res.statusCode >= 200 &&
             res.statusCode < 300 &&

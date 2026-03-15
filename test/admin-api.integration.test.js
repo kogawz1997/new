@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
 const { once } = require('node:events');
 const { createPurchase, listShopItems } = require('../src/store/memoryStore');
 const { setLink } = require('../src/store/linkStore');
@@ -106,6 +108,8 @@ function resetAdminIntegrationRuntimeState() {
   process.env.ADMIN_WEB_SSO_DISCORD_MOD_ROLE_NAMES = '';
   process.env.ADMIN_WEB_STEP_UP_ENABLED = 'false';
   process.env.ADMIN_WEB_STEP_UP_TTL_MINUTES = '15';
+  delete process.env.ADMIN_WEB_ENV_FILE_PATH;
+  delete process.env.ADMIN_WEB_PORTAL_ENV_FILE_PATH;
 }
 
 resetAdminIntegrationRuntimeState();
@@ -1603,6 +1607,239 @@ test('admin API delivery detail + test send routes work with local console agent
   assert.equal(deadRetryManyRes.data.ok, true);
   assert.equal(Number(deadRetryManyRes.data.data?.total || 0), 1);
   assert.equal(Number(deadRetryManyRes.data.data?.queued || 0), 0);
+});
+
+test('admin API control panel settings, env patching, and admin user management', async (t) => {
+  resetAdminIntegrationRuntimeState();
+  const port = randomPort(38500, 1000);
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'scum-admin-control-'));
+  const rootEnvPath = path.join(tempDir, 'root.env');
+  const portalEnvPath = path.join(tempDir, 'portal.env');
+  fs.writeFileSync(
+    rootEnvPath,
+    [
+      'DISCORD_GUILD_ID=111111111111111111',
+      'BOT_ENABLE_ADMIN_WEB=true',
+      'BOT_ENABLE_DELIVERY_WORKER=true',
+      'WORKER_ENABLE_DELIVERY=true',
+      'BOT_ENABLE_RENTBIKE_SERVICE=false',
+      'WORKER_ENABLE_RENTBIKE=false',
+      'BOT_ENABLE_SCUM_WEBHOOK=true',
+      'DELIVERY_EXECUTION_MODE=agent',
+      'RCON_HOST=127.0.0.1',
+      'RCON_PORT=27015',
+      'RCON_PROTOCOL=telnet',
+      'RCON_EXEC_TEMPLATE=powershell -File bridge.ps1',
+      'RCON_PASSWORD=old-secret',
+      'SCUM_CONSOLE_AGENT_BASE_URL=http://127.0.0.1:3300',
+      'SCUM_CONSOLE_AGENT_HOST=127.0.0.1',
+      'SCUM_CONSOLE_AGENT_PORT=3300',
+      'SCUM_CONSOLE_AGENT_BACKEND=powershell-bridge',
+      'SCUM_CONSOLE_AGENT_EXEC_TEMPLATE=powershell -File agent.ps1',
+      'SCUM_CONSOLE_AGENT_TOKEN=agent-old',
+      'SCUM_WEBHOOK_URL=http://127.0.0.1:3001/scum/webhook',
+      'SCUM_WEBHOOK_PORT=3001',
+      'SCUM_LOG_PATH=C:\\SCUM\\Saved\\Logs\\SCUM.log',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  fs.writeFileSync(
+    portalEnvPath,
+    [
+      'WEB_PORTAL_BASE_URL=https://player.example.com',
+      'WEB_PORTAL_PLAYER_OPEN_ACCESS=false',
+      'WEB_PORTAL_REQUIRE_GUILD_MEMBER=true',
+      'WEB_PORTAL_MAP_EXTERNAL_URL=https://map.example.com',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  process.env.ADMIN_WEB_HOST = '127.0.0.1';
+  process.env.ADMIN_WEB_PORT = String(port);
+  process.env.ADMIN_WEB_USER = 'owner_control';
+  process.env.ADMIN_WEB_PASSWORD = 'pass_control';
+  process.env.ADMIN_WEB_TOKEN = 'token_control';
+  process.env.ADMIN_WEB_USERS_JSON = '';
+  process.env.ADMIN_WEB_2FA_ENABLED = 'false';
+  process.env.ADMIN_WEB_ENV_FILE_PATH = rootEnvPath;
+  process.env.ADMIN_WEB_PORTAL_ENV_FILE_PATH = portalEnvPath;
+
+  const preservedEnv = new Map(
+    [
+      'DISCORD_GUILD_ID',
+      'BOT_ENABLE_ADMIN_WEB',
+      'RCON_HOST',
+      'RCON_PASSWORD',
+      'WEB_PORTAL_BASE_URL',
+      'WEB_PORTAL_PLAYER_OPEN_ACCESS',
+    ].map((key) => [key, process.env[key]]),
+  );
+
+  const fakeClient = {
+    guilds: {
+      cache: new Map(),
+    },
+    channels: {
+      fetch: async () => null,
+    },
+    commands: new Map([
+      [
+        'alpha',
+        {
+          data: {
+            toJSON: () => ({
+              name: 'alpha',
+              description: 'alpha command',
+            }),
+          },
+        },
+      ],
+      [
+        'beta',
+        {
+          data: {
+            toJSON: () => ({
+              name: 'beta',
+              description: 'beta command',
+            }),
+          },
+        },
+      ],
+    ]),
+  };
+
+  const { startAdminWebServer } = freshAdminWebServerModule();
+  const server = startAdminWebServer(fakeClient);
+  if (!server.listening) {
+    await once(server, 'listening');
+  }
+
+  t.after(async () => {
+    for (const [key, value] of preservedEnv.entries()) {
+      if (value == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    resetAdminIntegrationRuntimeState();
+    await new Promise((resolve) => server.close(resolve));
+    fs.rmSync(tempDir, { recursive: true, force: true });
+    delete require.cache[adminWebServerPath];
+  });
+
+  const baseUrl = `http://127.0.0.1:${port}`;
+  async function request(pathname, method = 'GET', body = null, cookie = '') {
+    const headers = {};
+    if (body != null) headers['content-type'] = 'application/json';
+    if (cookie) headers.cookie = cookie;
+    const res = await fetch(`${baseUrl}${pathname}`, {
+      method,
+      headers,
+      body: body == null ? undefined : JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  }
+
+  const login = await request('/admin/api/login', 'POST', {
+    username: 'owner_control',
+    password: 'pass_control',
+  });
+  assert.equal(login.res.status, 200);
+  const cookie = String(login.res.headers.get('set-cookie') || '').split(';')[0];
+  assert.ok(cookie);
+
+  const settings = await request('/admin/api/control-panel/settings', 'GET', null, cookie);
+  assert.equal(settings.res.status, 200);
+  assert.equal(settings.data.ok, true);
+  assert.equal(
+    String(settings.data.data?.env?.root?.DISCORD_GUILD_ID?.value || ''),
+    '111111111111111111',
+  );
+  assert.equal(Boolean(settings.data.data?.env?.root?.RCON_PASSWORD?.configured), true);
+  assert.ok(
+    Array.isArray(settings.data.data?.commands)
+      && settings.data.data.commands.some((entry) => entry.name === 'alpha'),
+  );
+  assert.ok(Array.isArray(settings.data.data?.adminUsers));
+
+  const commands = await request('/admin/api/control-panel/commands', 'GET', null, cookie);
+  assert.equal(commands.res.status, 200);
+  assert.equal(commands.data.ok, true);
+  assert.ok(commands.data.data.some((entry) => entry.name === 'beta'));
+
+  const commandPatch = await request('/admin/api/config/patch', 'POST', {
+    patch: {
+      commands: {
+        disabled: ['alpha'],
+      },
+    },
+  }, cookie);
+  assert.equal(commandPatch.res.status, 200);
+  assert.equal(commandPatch.data.ok, true);
+
+  const envWrite = await request('/admin/api/control-panel/env', 'POST', {
+    root: {
+      DISCORD_GUILD_ID: '222222222222222222',
+      BOT_ENABLE_ADMIN_WEB: false,
+      RCON_HOST: '10.0.0.5',
+      RCON_PASSWORD: 'new-secret',
+      SCUM_CONSOLE_AGENT_TOKEN: '',
+    },
+    portal: {
+      WEB_PORTAL_BASE_URL: 'https://player-new.example.com',
+      WEB_PORTAL_PLAYER_OPEN_ACCESS: true,
+    },
+  }, cookie);
+  assert.equal(envWrite.res.status, 200);
+  assert.equal(envWrite.data.ok, true);
+  assert.ok(envWrite.data.data.rootChanged.includes('DISCORD_GUILD_ID'));
+  assert.ok(envWrite.data.data.rootChanged.includes('RCON_HOST'));
+  assert.ok(envWrite.data.data.portalChanged.includes('WEB_PORTAL_BASE_URL'));
+
+  const rootEnvText = fs.readFileSync(rootEnvPath, 'utf8');
+  const portalEnvText = fs.readFileSync(portalEnvPath, 'utf8');
+  assert.match(rootEnvText, /DISCORD_GUILD_ID=222222222222222222/i);
+  assert.match(rootEnvText, /BOT_ENABLE_ADMIN_WEB=false/i);
+  assert.match(rootEnvText, /RCON_HOST=10\.0\.0\.5/i);
+  assert.match(rootEnvText, /RCON_PASSWORD=new-secret/i);
+  assert.doesNotMatch(rootEnvText, /SCUM_CONSOLE_AGENT_TOKEN=\"\"/i);
+  assert.match(portalEnvText, /WEB_PORTAL_BASE_URL=https:\/\/player-new\.example\.com/i);
+  assert.match(portalEnvText, /WEB_PORTAL_PLAYER_OPEN_ACCESS=true/i);
+
+  const createAdminUser = await request('/admin/api/auth/user', 'POST', {
+    username: 'ops_control',
+    role: 'admin',
+    isActive: true,
+    password: 'ops-password',
+  }, cookie);
+  assert.equal(createAdminUser.res.status, 200);
+  assert.equal(createAdminUser.data.ok, true);
+  assert.equal(String(createAdminUser.data.data?.username || ''), 'ops_control');
+
+  const users = await request('/admin/api/auth/users', 'GET', null, cookie);
+  assert.equal(users.res.status, 200);
+  assert.equal(users.data.ok, true);
+  assert.ok(users.data.data.some((entry) => entry.username === 'ops_control' && entry.role === 'admin'));
+
+  const updatedSettings = await request('/admin/api/control-panel/settings', 'GET', null, cookie);
+  assert.equal(updatedSettings.res.status, 200);
+  assert.equal(updatedSettings.data.ok, true);
+  assert.equal(
+    String(updatedSettings.data.data?.env?.root?.RCON_HOST?.value || ''),
+    '10.0.0.5',
+  );
+  assert.equal(Boolean(updatedSettings.data.data?.env?.portal?.WEB_PORTAL_PLAYER_OPEN_ACCESS?.value), true);
+  assert.ok(
+    Array.isArray(updatedSettings.data.data?.commandConfig?.disabled)
+      && updatedSettings.data.data.commandConfig.disabled.includes('alpha'),
+  );
+  assert.ok(
+    Array.isArray(updatedSettings.data.data?.adminUsers)
+      && updatedSettings.data.data.adminUsers.some((entry) => entry.username === 'ops_control'),
+  );
 });
 
 test('admin API step-up, session revoke, and security event flow', async (t) => {

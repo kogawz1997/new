@@ -40,6 +40,22 @@ const POST_PERMISSION_MATRIX = Object.freeze([
     description: 'Reset runtime config to defaults',
   },
   {
+    path: '/admin/api/control-panel/env',
+    permission: 'env:write',
+    category: 'config',
+    minRole: 'owner',
+    stepUp: true,
+    description: 'Update environment-backed control panel settings',
+  },
+  {
+    path: '/admin/api/auth/user',
+    permission: 'auth:user-write',
+    category: 'auth',
+    minRole: 'owner',
+    stepUp: true,
+    description: 'Create or update admin users',
+  },
+  {
     path: '/admin/api/welcome/clear',
     permission: 'welcome:clear',
     category: 'player-ops',

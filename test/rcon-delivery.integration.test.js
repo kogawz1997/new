@@ -11,6 +11,7 @@ const depPaths = {
   prisma: path.join(rootDir, 'src', 'prisma.js'),
   linkStore: path.join(rootDir, 'src', 'store', 'linkStore.js'),
   deliveryAuditStore: path.join(rootDir, 'src', 'store', 'deliveryAuditStore.js'),
+  deliveryEvidenceStore: path.join(rootDir, 'src', 'store', 'deliveryEvidenceStore.js'),
   memoryStore: path.join(rootDir, 'src', 'store', 'memoryStore.js'),
   adminLiveBus: path.join(rootDir, 'src', 'services', 'adminLiveBus.js'),
   itemIconService: path.join(rootDir, 'src', 'services', 'itemIconService.js'),
@@ -93,6 +94,7 @@ function loadRconDeliveryWithMocks(mocks) {
   installMock(depPaths.prisma, mocks.prisma);
   installMock(depPaths.linkStore, mocks.linkStore);
   installMock(depPaths.deliveryAuditStore, mocks.deliveryAuditStore);
+  installMock(depPaths.deliveryEvidenceStore, mocks.deliveryEvidenceStore);
   installMock(depPaths.memoryStore, mocks.memoryStore);
   installMock(depPaths.adminLiveBus, mocks.adminLiveBus);
   installMock(depPaths.itemIconService, mocks.itemIconService);
@@ -108,6 +110,7 @@ function makeTestContext(overrides = {}) {
     ['u-1', { steamId: '76561198000000001' }],
   ]);
   const audits = [];
+  const evidenceByCode = new Map();
   const liveEvents = [];
   const statuses = [];
 
@@ -162,6 +165,38 @@ function makeTestContext(overrides = {}) {
       },
       listDeliveryAudit: () => audits.slice(),
     },
+    deliveryEvidenceStore: {
+      appendDeliveryEvidenceEvent: (purchaseCode, payload = {}) => {
+        const code = String(purchaseCode || '').trim();
+        if (!code) return null;
+        const current = evidenceByCode.get(code) || {
+          purchaseCode: code,
+          events: [],
+        };
+        current.updatedAt = payload.at || new Date().toISOString();
+        current.status = payload.status || current.status || null;
+        current.execution = payload.execution || current.execution || null;
+        current.latestOutputs = Array.isArray(payload.latestOutputs) ? payload.latestOutputs : [];
+        current.latestCommandSummary = payload.latestCommandSummary || null;
+        current.events.push({
+          at: payload.at || current.updatedAt,
+          level: payload.level || 'info',
+          action: payload.action || 'event',
+          message: payload.message || null,
+          meta: payload.meta || null,
+        });
+        evidenceByCode.set(code, current);
+        return { ...current, filePath: `mock://delivery-evidence/${code}.json` };
+      },
+      getDeliveryEvidence: (purchaseCode) => {
+        const code = String(purchaseCode || '').trim();
+        if (!code || !evidenceByCode.has(code)) return null;
+        return {
+          ...evidenceByCode.get(code),
+          filePath: `mock://delivery-evidence/${code}.json`,
+        };
+      },
+    },
     memoryStore: {
       findPurchaseByCode: async (code) => purchases.get(String(code)) || null,
       setPurchaseStatusByCode: async (code, status) => {
@@ -172,6 +207,14 @@ function makeTestContext(overrides = {}) {
         return { ...item };
       },
       getShopItemById: async (id) => shopItems.get(String(id)) || null,
+      listPurchaseStatusHistory: async (code) =>
+        statuses
+          .filter((entry) => entry.code === String(code))
+          .map((entry) => ({
+            purchaseCode: entry.code,
+            toStatus: entry.status,
+            createdAt: new Date().toISOString(),
+          })),
     },
     adminLiveBus: {
       publishAdminLiveUpdate: (type, payload) => {
@@ -204,6 +247,7 @@ function makeTestContext(overrides = {}) {
     shopItems,
     links,
     audits,
+    evidenceByCode,
     liveEvents,
     statuses,
   };
@@ -377,6 +421,15 @@ test('purchase -> queue -> auto-delivery success for bundle item', async () => {
       );
     }),
     true,
+  );
+
+  const detail = await api.getDeliveryDetailsByPurchaseCode('P-100');
+  assert.equal(detail.evidence?.purchaseCode, 'P-100');
+  assert.match(String(detail.evidence?.filePath || ''), /delivery-evidence/i);
+  assert.equal(String(detail.evidence?.execution?.executionMode || ''), 'rcon');
+  assert.ok(Array.isArray(detail.evidence?.events));
+  assert.ok(
+    detail.evidence.events.some((entry) => String(entry?.action || '') === 'success'),
   );
 });
 

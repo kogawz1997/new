@@ -178,6 +178,9 @@ const defaultConfig = {
       },
     ],
   },
+  commands: {
+    disabled: [],
+  },
   serverInfo: {
     name: 'SCUM TH เซิร์ฟเวอร์',
     ip: '127.0.0.1',

@@ -11,7 +11,9 @@ test('secret scan blocks sensitive filenames but allows checked-in examples', ()
   assert.equal(isBlockedFilename('nested/server.pem'), true);
   assert.equal(isBlockedFilename('keys/admin.key'), true);
   assert.equal(isBlockedFilename('.env.example'), false);
+  assert.equal(isBlockedFilename('.env.test.example'), false);
   assert.equal(isBlockedFilename('apps/web-portal-standalone/.env.production.example'), false);
+  assert.equal(isBlockedFilename('apps/web-portal-standalone/.env.test.example'), false);
 });
 
 test('secret scan finds risky content patterns in non-example files', () => {
@@ -35,6 +37,14 @@ test('secret scan skips content findings for approved example env files', () => 
   const findings = scanFileContents(
     '.env.example',
     'DISCORD_TOKEN=ROTATE_IN_DISCORD_DEVELOPER_PORTAL',
+  );
+  assert.deepEqual(findings, []);
+});
+
+test('secret scan skips content findings for tracked test example env files', () => {
+  const findings = scanFileContents(
+    '.env.test.example',
+    'DISCORD_TOKEN=ci_ci_ci_ci_ci_ci_ci_ci.ABCDEF.ci_ci_ci_ci_ci_ci_ci_ci_ci',
   );
   assert.deepEqual(findings, []);
 });

@@ -3,6 +3,10 @@ const { prisma } = require('../prisma');
 const { getLinkByUserId } = require('../store/linkStore');
 const { addDeliveryAudit, listDeliveryAudit } = require('../store/deliveryAuditStore');
 const {
+  appendDeliveryEvidenceEvent,
+  getDeliveryEvidence,
+} = require('../store/deliveryEvidenceStore');
+const {
   findPurchaseByCode,
   setPurchaseStatusByCode,
   getShopItemById,
@@ -3468,6 +3472,7 @@ async function getDeliveryDetailsByPurchaseCode(purchaseCode, limit = 50) {
       };
     });
   const timeline = buildDeliveryTimeline(statusHistory, auditRows);
+  const evidence = getDeliveryEvidence(code);
 
   return {
     purchaseCode: code,
@@ -3483,6 +3488,7 @@ async function getDeliveryDetailsByPurchaseCode(purchaseCode, limit = 50) {
     latestOutputs: Array.isArray(latestCommandAudit?.meta?.outputs)
       ? latestCommandAudit.meta.outputs
       : [],
+    evidence,
     preview,
   };
 }
@@ -4271,6 +4277,7 @@ function publishQueueLiveUpdate(action, job) {
 }
 
 function queueAudit(level, action, job, message, meta = null) {
+  const executionMeta = buildExecutionAuditMeta(job, meta);
   addDeliveryAudit({
     level,
     action,
@@ -4279,7 +4286,35 @@ function queueAudit(level, action, job, message, meta = null) {
     userId: job?.userId || null,
     attempt: job?.attempts == null ? null : job.attempts,
     message,
-    meta: buildExecutionAuditMeta(job, meta),
+    meta: executionMeta,
+  });
+  appendDeliveryEvidenceEvent(job?.purchaseCode, {
+    at: new Date().toISOString(),
+    level,
+    action,
+    message,
+    status:
+      String(executionMeta?.status || job?.status || '').trim()
+      || String(job?.lastStatus || '').trim()
+      || null,
+    execution: {
+      executionMode: executionMeta?.executionMode || job?.executionMode || null,
+      backend:
+        executionMeta?.backend
+        || job?.executionBackend
+        || job?.backend
+        || null,
+      commandPath: executionMeta?.commandPath || job?.commandPath || null,
+      retryCount:
+        executionMeta?.retryCount != null
+          ? executionMeta.retryCount
+          : job?.attempts != null
+            ? job.attempts
+            : null,
+    },
+    latestOutputs: Array.isArray(executionMeta?.outputs) ? executionMeta.outputs : [],
+    latestCommandSummary: executionMeta?.commandSummary || null,
+    meta: executionMeta,
   });
   publishQueueLiveUpdate(action, job);
 }

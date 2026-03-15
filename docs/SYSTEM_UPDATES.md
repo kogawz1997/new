@@ -40,3 +40,12 @@ Production rollout update:
 - Added restore preview token / expiry / schema guard as an extra restore safety layer
 - Moved admin web bootstrap out of the Discord-ready path so `/admin` stays available during Discord login degradation
 - Added [REPO_STRUCTURE_TH.md](./REPO_STRUCTURE_TH.md) and [LIMITATIONS_AND_SLA_TH.md](./LIMITATIONS_AND_SLA_TH.md) for long-term handoff quality
+- Added workflow-backed CI badge/release badge, Node matrix testing, clean-room install checks, and verification artifacts instead of hardcoded test counts
+- Added env profile overlays plus `npm run env:prepare:*` for development/test/production separation
+- Added `npm run smoke:local-ci`, `npm run ci:verify`, and local smoke stack automation for clean-room verification
+- Added package metadata cleanup, commercial license file, release-please workflow, and changelog automation baseline
+- Added delivery evidence bundle persistence per order plus a dedicated capability matrix for `RCON` vs `agent mode`
+- Hardened `ci:verify` to inject deterministic test-safe env values instead of depending on the developer machine `.env`
+- Updated tracked env profile examples so topology doctor passes cleanly in `test` profile without bot/worker overlap
+- Removed hardcoded test totals from operations docs and pointed status references at CI artifacts instead
+- Extended secret scanning allowlist for tracked `development/test` env examples while still blocking generated `.env.*.split` and backup paths

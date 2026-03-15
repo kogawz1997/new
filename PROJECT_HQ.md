@@ -1,247 +1,112 @@
-﻿# SCUM TH Bot - Project HQ
+# Project HQ
 
-![Node.js](https://img.shields.io/badge/Node.js-20%2B-2f7d32?style=for-the-badge&logo=node.js&logoColor=white)
-![discord.js](https://img.shields.io/badge/discord.js-v14.25.1-5865F2?style=for-the-badge&logo=discord&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-5.22.0-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-135%2F135%20passing-15803d?style=for-the-badge)
-![Status](https://img.shields.io/badge/status-production%20baseline%20ready-0f766e?style=for-the-badge)
+[![CI](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/ci.yml/badge.svg)](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/ci.yml)
+[![Release](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/release.yml/badge.svg)](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/release.yml)
 
-เอกสารนี้คือศูนย์กลางสถานะของโปรเจกต์ ใช้สรุปสิ่งที่เสร็จแล้ว, สิ่งที่ยืนยันใช้งานได้จริง, ความเสี่ยงที่ยังเหลือ, และแผนถัดไป
+เอกสารนี้ใช้สรุปสถานะระบบ, ข้อจำกัด, และหลักฐานอ้างอิงของ repo
 
-อัปเดตล่าสุด: **2026-03-15 08:42 +07:00**
+อัปเดตล่าสุด: **2026-03-15**
 
 อ้างอิงหลัก
-- ภาพรวม/วิธีใช้: [README.md](./README.md)
-- เอกสารโชว์งาน/ภาพรวมเชิง commercial: [docs/SHOWCASE_TH.md](./docs/SHOWCASE_TH.md)
-- เช็กลิสต์ก่อนขึ้นจริง: [docs/GO_LIVE_CHECKLIST_TH.md](./docs/GO_LIVE_CHECKLIST_TH.md)
-- คู่มือปฏิบัติการ: [docs/OPERATIONS_MANUAL_TH.md](./docs/OPERATIONS_MANUAL_TH.md)
-- policy การ migration / rollback / restore: [docs/MIGRATION_ROLLBACK_POLICY_TH.md](./docs/MIGRATION_ROLLBACK_POLICY_TH.md)
-- คู่มือ `.env` ทุกไฟล์: [docs/ENV_REFERENCE_TH.md](./docs/ENV_REFERENCE_TH.md)
-- คู่มือตั้งค่า admin SSO role mapping: [docs/ADMIN_SSO_ROLE_MAPPING_TH.md](./docs/ADMIN_SSO_ROLE_MAPPING_TH.md)
-- รายงาน gap ของ env ปัจจุบัน: [docs/PRODUCTION_ENV_GAP_TH.md](./docs/PRODUCTION_ENV_GAP_TH.md)
-- คู่มือแอดมินใช้งานประจำวัน: [docs/ADMIN_DAILY_OPERATIONS_TH.md](./docs/ADMIN_DAILY_OPERATIONS_TH.md)
-- โครงสร้าง repo และแนวทาง monorepo ระยะยาว: [docs/REPO_STRUCTURE_TH.md](./docs/REPO_STRUCTURE_TH.md)
-- ข้อจำกัดและ SLA production: [docs/LIMITATIONS_AND_SLA_TH.md](./docs/LIMITATIONS_AND_SLA_TH.md)
+- ภาพรวม repo: [README.md](./README.md)
+- verification status: [docs/VERIFICATION_STATUS_TH.md](./docs/VERIFICATION_STATUS_TH.md)
+- evidence map: [docs/EVIDENCE_MAP_TH.md](./docs/EVIDENCE_MAP_TH.md)
+- release notes: [docs/releases/README.md](./docs/releases/README.md)
+- delivery capability matrix: [docs/DELIVERY_CAPABILITY_MATRIX_TH.md](./docs/DELIVERY_CAPABILITY_MATRIX_TH.md)
+- architecture: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- limitations / SLA: [docs/LIMITATIONS_AND_SLA_TH.md](./docs/LIMITATIONS_AND_SLA_TH.md)
+- migration / rollback / restore: [docs/MIGRATION_ROLLBACK_POLICY_TH.md](./docs/MIGRATION_ROLLBACK_POLICY_TH.md)
 
----
+## 1. What Works Now
 
-## 1. สถานะระบบปัจจุบัน
+### Core system
+- bot, worker, watcher, admin web, player portal, console-agent แยก runtime ได้
+- health, topology checks, readiness, smoke ใช้งานได้
+- Prisma persistence เป็นเส้นทางหลักของระบบแล้ว
 
-### ภาพรวม
-- ระบบหลักพร้อมใช้งานจริงแล้ว
-- data layer ฝั่งหลักย้ายเข้าชั้น service และ Prisma แล้วในระดับที่ใช้งาน production ได้
-- split runtime `bot / worker / watcher / web / console-agent` ใช้งานได้จริง
-- delivery ที่ใช้งานได้จริงใน environment นี้คือ `agent mode`
-- agent failover/circuit breaker และ tenant-scoped platform API ถูกเพิ่มแล้ว
-- admin web ถูกแยกให้บูตได้ก่อน Discord ready แล้ว ลดความเสี่ยง control plane หายตอน bot login ผิดพลาด
-
-### ผลตรวจล่าสุด
-- `npm run lint` ผ่าน
-- `npm test` ผ่าน `135/135`
-- `npm run smoke:postdeploy` ผ่านบน stack ที่รันจริงแล้ว
-- admin Discord SSO redirect ผ่านบน runtime จริงแล้ว
-- doctor / topology / portal doctor / readiness tooling มีครบ
-
-### สถานะ production baseline
-- `PERSIST_REQUIRE_DB=true` รองรับแล้ว
-- `PERSIST_LEGACY_SNAPSHOTS=false` รองรับแล้ว
-- startup guard / topology guard / security check มีแล้ว
-- one-click / PM2 / Windows helper มีแล้ว
-
-### Showcase / commercial posture
-- admin dashboard มี landing showcase สรุป topology, delivery runtime, restore guardrails และ operational evidence แล้ว
-- มีเอกสารโชว์งานแยกที่ [docs/SHOWCASE_TH.md](./docs/SHOWCASE_TH.md) สำหรับใช้ present ลูกค้าหรือทีม
-- มี public landing / showcase / trial route แยกจาก player login แล้ว
-- สิ่งที่นำเสนอได้ชัดแล้วคือ delivery timeline, preflight, simulator, capability test, notification center, player portal และ platform layer เชิง commercial
-
----
-
-## 2. สิ่งที่ยืนยันใช้ได้จริงแล้ว
-
-### Discord / Core economy
-- wallet / ledger
-- shop / cart / purchase
-- VIP / redeem / refund / gift
-- daily / weekly / welcome pack / wheel
-- ticket / bounty / event / giveaway
-
-### SCUM integration
-- watcher parse `join / leave / kill / restart`
-- kill feed มี `weapon / distance / hit zone / sector`
-- webhook retry / dead-letter / dedupe
-- restart scheduler / announce
-
-### Rent Bike
-- queue ทีละออเดอร์
-- daily limit 1 ครั้ง/วัน
-- midnight reset / cleanup
-- Prisma persistence
-
-### Admin Web
-- login / RBAC
-- session revoke / security event trail / step-up auth สำหรับงานเสี่ยง
-- backup / restore / snapshot export
-- safe restore guardrails: dry-run diff + confirm + maintenance gate + rollback backup + restore status
-- safe restore extra layer: preview token + preview expiry + schema guard
-- Audit Center
-- observability / metrics / cards / recent request trace
-- delivery runtime / preview / detail / test-send
-- delivery timeline / step log รายออเดอร์
-- delivery preflight / simulator / dry run
-- SCUM admin capability tester + capability preset catalog
-- alert / notification center
-- item command editor + command template override preview
-- deep filters / exact match / sort / cursor pagination / shared presets
-- platform overview / tenant / subscription / license / API key / webhook / marketplace / reconcile endpoints
-
-### Player Portal
-- Discord login
-- dashboard / wallet / purchase history
-- shop / redeem / profile / steam link
-- player-only mode แยกจาก admin web แล้ว
+### Admin / auth
+- DB login, Discord SSO, 2FA, step-up auth
+- security events, session revoke, role matrix, permission matrix
+- audit, observability, request trace
 
 ### Delivery
-- queue + retry + dead-letter + audit + watchdog
-- worker hydrate queue จาก Prisma ข้าม process ได้
-- command preview / simulate / dry run ใช้งานได้
-- per-order timeline / status history / step log ใช้งานได้
-- runtime supervisor / watcher freshness / restore maintenance guard ใช้งานได้
-- delivery-specific preflight readiness ใช้งานได้
-- agent circuit breaker + RCon failover ใช้งานได้
-- post-spawn verification policy `basic | output-match | observer | strict` ใช้งานได้
-- SCUM admin capability smoke test `announce / teleport / spawn` ใช้งานได้
-- delivery profile รายสินค้าใช้งานได้
-- teleport mode `player | vehicle`
-- multi-item delivery ใช้งานได้
-- magazine auto `StackCount 100` ใช้งานได้
+- queue, retry, dead-letter, watchdog
+- execution abstraction แยก `rcon` กับ `agent`
+- preflight ก่อน enqueue สำหรับ agent mode
+- timeline, step log, audit, evidence bundle ต่อ order
+- simulator, preview, capability test
+- circuit breaker และ failover policy ฝั่ง agent
 
-### Platform / commercial foundation
-- billing plan catalog + subscription records
-- license + legal acceptance records ต่อ tenant
-- multi-tenant foundation พร้อม `tenant type`, `parentTenantId`, reseller-ready shape
-- tenant-scoped analytics / reconcile / API key guard ทำงานตาม tenant isolation แล้ว
-- tenant API key scopes + public platform API
-- outbound platform webhooks
-- agent heartbeat + version drift detection
-- marketplace offer records
-- public overview analytics + landing/trial route
-- legal docs + subscription policy + privacy policy
-- one-click bootstrap script + schema upgrade fallback
+### Restore / config safety
+- restore preview
+- preview token + expiry
+- maintenance gate
+- rollback backup
+- compatibility layer กับ backup shape รุ่นเก่า
 
----
+## 2. What Is Partial
 
-## 3. สิ่งที่พิสูจน์สดใน environment นี้แล้ว
+- RCON ใช้ได้เป็น execution backend แต่ `spawn` ไม่ได้พิสูจน์ว่าทำงานได้กับทุกเซิร์ฟเวอร์
+- admin web ครอบ operational setting ส่วนใหญ่แล้ว แต่ยังไม่ใช่ทุกค่าที่มีใน env/config
+- multi-tenant มี foundation, tenant-scoped guard, subscription/license shape แล้ว แต่ยังไม่ใช่ full isolation per tenant
 
-### พิสูจน์กับ SCUM จริง
-ผ่าน `agent mode` และ SCUM admin client ที่เปิดค้างไว้
+## 3. What Is Experimental Or Ops-Dependent
 
-สิ่งที่ทดสอบผ่านแล้ว
-- `#Announce ...`
-- `#TeleportToVehicle 50118`
-- `#SpawnItem Weapon_M1911 1`
-- multi-item ต่อเนื่อง:
-  - `Weapon_M1911`
-  - `Magazine_M1911`
-  - `Cal_45_Ammobox`
-- magazine spawn พร้อม `StackCount 100`
+- agent mode ยังขึ้นกับ Windows session, SCUM admin client, admin channel state, และอาจเปราะกับ patch เกม
+- migration path ไป PostgreSQL/MySQL ยังเป็นแผนรองรับระยะต่อไป ไม่ใช่สิ่งที่ switched over แล้ว
+- restore แม้จะมี guardrails มากขึ้น แต่ยังควรทำใน maintenance window และยังต้อง manual confirmation
 
-ข้อสรุปเชิงเทคนิค
-- `BattlEye RCon` ในเซิร์ฟเวอร์นี้ใช้เช็ก transport / players ได้
-- แต่ `#SpawnItem` ไม่ execute ได้จริงผ่าน RCon ตรง
-- ดังนั้น runtime ที่ใช้จริงต้องเป็น `agent mode`
+## 4. Known Limitations
 
----
+- SQLite ใช้ได้ระดับ single instance / single host มากกว่าระบบหลายเครื่อง
+- admin web ยังไม่ครบทุก setting
+- game-side verification หลัง spawn ยังไม่ใช่ proof ระดับ inventory/native API ทุกกรณี
+- screenshot dashboard จริงและ demo GIF ยังไม่ได้ถูก track ใน repo
 
-## 4. สิ่งที่ปิดงานแล้วระดับสถาปัตยกรรม
+## 5. Current Production Constraints
 
-### Data layer
-- ถอด JSON fallback จาก flow หลักที่เสี่ยง split-brain แล้ว
-- `_persist` ไม่ทำหน้าที่เป็น DB backend แฝงแล้ว
-- service layer กลางถูกแยกชัดขึ้นสำหรับ
-  - shop
-  - vip
-  - rewards
-  - events
-  - player ops
-  - purchase state machine
-  - snapshot / observability / audit
+- ถ้าใช้ `agent mode` ต้องเปิด SCUM admin client ค้างไว้
+- ถ้าใช้ `agent mode` ห้าม lock Windows session
+- ห้ามเปิด delivery worker ซ้ำทั้ง `bot` และ `worker`
+- production ต้องใช้ `PERSIST_REQUIRE_DB=true` และ `PERSIST_LEGACY_SNAPSHOTS=false`
+- ทุก deploy ควรผ่าน `doctor`, `security:check`, `readiness:prod`, `smoke:postdeploy`
 
-### Runtime separation
-- topology guard กัน bot/worker เปิด service ซ้ำ
-- health endpoint แยกตาม runtime
-- PM2 manifest แยกชัด
-- Windows helper สำหรับ start/stop/reload มีแล้ว
-- ปิด mismatch ของ player portal callback path แล้ว
-  - default ปัจจุบันคือ `/auth/discord/callback`
-  - admin SSO คงเป็น `/admin/auth/discord/callback`
+## 6. Evidence And Verification
 
-### Audit / Observability
-- audit query/export แยกเป็น service layer แล้ว
-- observability query/export แยกเป็น service layer แล้ว
-- dashboard cards ใช้ aggregate endpoint + cache window
-- shared audit presets เก็บใน DB พร้อม visibility `private / role / public`
-- admin notification center เก็บสถานะ alert แบบ persist + acknowledge ได้แล้ว
+หลักฐานที่ควรใช้อ้างอิง:
+- `artifacts/ci/verification-summary.json`
+- `artifacts/ci/verification-summary.md`
+- `artifacts/ci/test.log`
+- `artifacts/ci/smoke.log`
+- `test/admin-api.integration.test.js`
+- `test/rcon-delivery.integration.test.js`
+- `test/scum-webhook.integration.test.js`
+- `test/web-portal-standalone.player-mode.integration.test.js`
 
----
+เอกสารที่สรุปจากหลักฐาน:
+- [docs/VERIFICATION_STATUS_TH.md](./docs/VERIFICATION_STATUS_TH.md)
+- [docs/EVIDENCE_MAP_TH.md](./docs/EVIDENCE_MAP_TH.md)
 
-## 5. ความเสี่ยงที่ยังเหลือ
+## 7. งานถัดไป
 
-### 5.1 Agent mode เป็น pragmatic automation ไม่ใช่ API แท้
-ความเสี่ยง
-- พึ่งพา SCUM client window จริง
-- Windows session ต้องไม่ lock
-- keyboard/channel state ยังมี sensitivity ตาม client จริง
+### P1
+- เพิ่ม screenshot dashboard จริงและ demo GIF
+- เพิ่ม architecture image แบบ export เป็นภาพ
+- เพิ่ม game-side evidence ที่ลึกกว่า command-level verification ถ้าทำได้
 
-สถานะ
-- ตอนนี้ทำให้เสถียรขึ้นแล้วด้วย
-  - serialized execution queue
-  - teleport delay แยก
-  - submit logic แยกตามชนิดคำสั่ง
-  - admin channel switching
+### P2
+- ปิด setting ที่ยังต้องแก้ผ่าน env ให้มาอยู่ใน admin web มากขึ้น
+- วาง migration path จาก SQLite ไป PostgreSQL/MySQL ให้ลงมือได้จริง
+- เพิ่ม release notes ต่อ release
 
-### 5.2 ยังไม่ใช่ headless server-side delivery 100%
-- ถ้าในอนาคต SCUM รองรับ remote execution channel ที่ดีกว่านี้ ควรย้ายออกจาก admin client bridge
-
-### 5.3 เอกสาร deploy ยังต้องอิง env จริงก่อนใช้งาน production
-- ต้องใส่ OAuth secrets / tokens จริงก่อน `readiness:prod`
-
-### 5.4 Agent mode ยังขึ้นกับ Windows session และ SCUM client จริง
-- preflight ช่วยบอก readiness ได้ แต่ยังไม่สามารถกำจัดข้อจำกัดของ client automation ออกไปได้ทั้งหมด
-
----
-
-## 6. งานที่คุ้มสุดถัดไป
-
-### P1 - Delivery hardening เพิ่ม
-1. เพิ่ม command profile รายชนิด item มากขึ้น
-- magazine / ammo box / consumable / armor
-2. เพิ่ม server-side command log analytics
-- success/fail by item
-- retry hotspots
-3. เพิ่ม admin tools สำหรับ bulk retry / selective resend
-
-### P1 - Portal completion
-1. เก็บ feature ผู้เล่นให้สมบูรณ์ขึ้น
-- missions
-- notification center
-- richer profile / steam binding UX
-2. ปิด BigInt / serialization / API consistency ทุกจุดที่เหลือ
-
-### P2 - Commercial polish
-1. architecture image / screenshots / demo GIF
-2. repo presentation ให้ขายของได้เร็วขึ้น
-3. customer deployment story แบบ one-click/panel-based ให้จบกว่าเดิม
-
----
-
-## 7. Checklist ก่อนขึ้นจริง
+## 8. Checklist ก่อนขึ้นจริง
 
 - หมุน secret/token ทั้งหมด
-- ใส่ Discord OAuth secret จริง
+- ตรวจ OAuth redirect และ split-origin ให้ตรง env จริง
 - ใช้ `NODE_ENV=production`
 - ใช้ `PERSIST_REQUIRE_DB=true`
 - ใช้ `PERSIST_LEGACY_SNAPSHOTS=false`
-- รัน
+- รัน:
   - `npm run doctor`
   - `npm run doctor:topology:prod`
   - `npm run doctor:web-standalone:prod`
@@ -253,24 +118,12 @@
 - เปิด SCUM admin client ค้างไว้
 - อย่า lock Windows session
 - ตรวจว่าอยู่ admin channel ถูก
-- ตรวจว่า teleport target จริงยังใช้ได้ เช่น `50118`
+- ตรวจว่า teleport target ที่ใช้อยู่ยังถูกต้อง
 
----
+## 9. สรุป
 
-## 8. สรุปสุดท้าย
-
-ถ้าถามว่าโปรเจกต์ตอนนี้อยู่ระดับไหน:
-- ไม่ใช่แค่ Discord bot แล้ว
-- เป็น operations platform สำหรับเซิร์ฟเวอร์ SCUM ที่มี
-  - bot
-  - worker
-  - watcher
-  - admin web
-  - player portal
-  - observability
-  - automated delivery ผ่าน agent mode
-
-ถ้าถามว่าอะไรคือสถานะจริงที่สุดตอนนี้:
-- ระบบหลักพร้อมใช้งาน
-- delivery ใช้งานได้จริงแล้วใน `agent mode`
-- production baseline พร้อม แต่ยังต้องใส่ secret จริงของ environment ก่อนเปิดใช้งานเต็มรูปแบบ
+สรุปสถานะปัจจุบัน:
+- ระบบหลักใช้งานได้
+- delivery ใช้งานได้ใน `agent mode`
+- เอกสารถูกแยกเป็น `works now / partial / experimental / limitations`
+- หลักฐานหลักยังเป็น code path, tests, CI artifacts, และ smoke/readiness output

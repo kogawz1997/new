@@ -1,171 +1,129 @@
-# SCUM TH Bot
-SCUM Discord Bot + Admin Web + Player Portal + Delivery Worker
+# SCUM TH Platform
+SCUM control plane with Discord bot, admin web, player portal, delivery worker, and SCUM runtime tooling
 
+[![CI](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/ci.yml/badge.svg)](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/ci.yml)
+[![Release](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/release.yml/badge.svg)](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/release.yml)
 ![Node.js](https://img.shields.io/badge/Node.js-20%2B-2f7d32?style=for-the-badge&logo=node.js&logoColor=white)
 ![discord.js](https://img.shields.io/badge/discord.js-v14.25.1-5865F2?style=for-the-badge&logo=discord&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-5.22.0-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-135%2F135%20passing-15803d?style=for-the-badge)
-![Mode](https://img.shields.io/badge/delivery-agent%20mode%20validated-c2410c?style=for-the-badge)
 
-ระบบนี้เป็นแพลตฟอร์มจัดการเซิร์ฟเวอร์ SCUM แบบครบชุดในโปรเจกต์เดียว ประกอบด้วย Discord Bot, Worker, Log Watcher, Admin Web, Player Portal และระบบส่งของอัตโนมัติที่รองรับทั้ง `RCon` และ `agent mode`.
+ถ้าข้อความใดไม่มีไฟล์, test, หรือ artifact รองรับ ให้ถือว่าเป็นคำอธิบายประกอบ ไม่ใช่หลักฐานหลัก
 
-สถานะปัจจุบัน ณ วันที่ **2026-03-15**
-- `npm test` ผ่าน `135/135`
-- `npm run lint` ผ่าน
-- `agent mode` ส่งของจริงผ่าน SCUM admin client ได้แล้ว
-- flow ที่ยืนยันใช้งานจริงแล้ว: `announce -> teleport -> spawn -> multi-item -> magazine StackCount`
+อัปเดตล่าสุด: **2026-03-15**
 
-เอกสารหลัก
-- เอกสารโชว์งาน/ภาพรวมเชิง commercial: [docs/SHOWCASE_TH.md](./docs/SHOWCASE_TH.md)
-- เช็กลิสต์ก่อนขึ้นจริง: [docs/GO_LIVE_CHECKLIST_TH.md](./docs/GO_LIVE_CHECKLIST_TH.md)
-- คู่มือปฏิบัติการ: [docs/OPERATIONS_MANUAL_TH.md](./docs/OPERATIONS_MANUAL_TH.md)
-- policy การ migration / rollback / restore: [docs/MIGRATION_ROLLBACK_POLICY_TH.md](./docs/MIGRATION_ROLLBACK_POLICY_TH.md)
-- คู่มืออธิบายตัวแปร `.env`: [docs/ENV_REFERENCE_TH.md](./docs/ENV_REFERENCE_TH.md)
-- รายงานเทียบ `.env` จริงกับ production baseline: [docs/PRODUCTION_ENV_GAP_TH.md](./docs/PRODUCTION_ENV_GAP_TH.md)
-- คู่มือแอดมินใช้งานประจำวัน: [docs/ADMIN_DAILY_OPERATIONS_TH.md](./docs/ADMIN_DAILY_OPERATIONS_TH.md)
-- โครงสร้าง repo และแนวทาง monorepo ระยะยาว: [docs/REPO_STRUCTURE_TH.md](./docs/REPO_STRUCTURE_TH.md)
-- ข้อจำกัดและ SLA สำหรับ production handoff: [docs/LIMITATIONS_AND_SLA_TH.md](./docs/LIMITATIONS_AND_SLA_TH.md)
-- สถานะระบบ/roadmap: [PROJECT_HQ.md](./PROJECT_HQ.md)
-- สถาปัตยกรรม: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+## 1. วิธีอ่าน repo นี้
 
----
+- ภาพรวมสถานะและความเสี่ยง: [PROJECT_HQ.md](./PROJECT_HQ.md)
+- source of truth สำหรับการตรวจคุณภาพ: [docs/VERIFICATION_STATUS_TH.md](./docs/VERIFICATION_STATUS_TH.md)
+- หลักฐานราย feature: [docs/EVIDENCE_MAP_TH.md](./docs/EVIDENCE_MAP_TH.md)
+- release notes: [docs/releases/README.md](./docs/releases/README.md)
+- capability matrix ของ delivery: [docs/DELIVERY_CAPABILITY_MATRIX_TH.md](./docs/DELIVERY_CAPABILITY_MATRIX_TH.md)
+- สถาปัตยกรรมที่โยงกับไฟล์จริง: [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
+- migration / rollback / restore policy: [docs/MIGRATION_ROLLBACK_POLICY_TH.md](./docs/MIGRATION_ROLLBACK_POLICY_TH.md)
+- ข้อจำกัดและ SLA: [docs/LIMITATIONS_AND_SLA_TH.md](./docs/LIMITATIONS_AND_SLA_TH.md)
+- changelog: [CHANGELOG.md](./CHANGELOG.md)
+- release notes ปัจจุบัน: [docs/releases/v1.0.0.md](./docs/releases/v1.0.0.md)
+- เอกสารสาธิตประกอบ: [docs/SHOWCASE_TH.md](./docs/SHOWCASE_TH.md)
 
-## 1. ทำไมระบบนี้ดูเป็นแพลตฟอร์ม ไม่ใช่แค่บอท
+## 2. What Works Now
 
-สิ่งที่ยกระดับโปรเจกต์นี้จาก “Discord bot ทั่วไป” ไปเป็น control plane สำหรับ SCUM server:
+### Core bot / economy
+- wallet / ledger / transfer / gift
+- shop / cart / purchase / refund / redeem / VIP
+- daily / weekly / welcome pack / wheel
+- ticket / bounty / event / giveaway
 
-- split runtime ชัดเจน `bot / worker / watcher / web / console-agent`
-- มี delivery timeline, step log, preflight, simulator, capability test และ post-spawn verification
-- มี admin web สำหรับ config, audit, restore, observability, request trace และ incident response
-- admin web บูตได้แยกจาก Discord readiness แล้ว ทำให้ยังเข้า control plane ได้แม้ bot login มีปัญหา
-- มี player portal แยกให้ผู้เล่นเห็น wallet, history, redeem และ profile ของตัวเอง
-- มี production guardrails เช่น `doctor`, `security:check`, `readiness:prod`, `smoke:postdeploy`
+### Runtime / operations
+- split runtime `bot / worker / watcher / admin web / player portal / console-agent`
+- health checks, topology checks, readiness, smoke
+- PM2 / Windows helper / production guardrails
 
-ถ้าต้องการเอกสารที่ใช้พรีเซนต์หรือส่งลูกค้าโดยตรง ให้ดู [docs/SHOWCASE_TH.md](./docs/SHOWCASE_TH.md)
-
----
-
-## 2. สิ่งที่ระบบทำได้แล้ว
-
-### Discord / Economy
-- wallet / balance / transfer / gift
-- daily / weekly / welcome pack / wheel reward
-- shop / cart / inventory / purchase log
-- VIP / redeem / refund
-- bounty / event / giveaway / ticket
-
-### SCUM / Server Operations
-- watcher อ่าน `SCUM.log` และส่ง event เข้า bot
-- kill feed แบบ realtime พร้อม weapon / distance / hit zone / sector
-- restart scheduler / restart announce
-- rent bike queue + daily limit + midnight reset/cleanup
-
-### Admin / Web
-- Admin Web พร้อม RBAC `owner / admin / mod`
-- login จาก DB + Discord SSO + 2FA baseline + step-up auth สำหรับงานเสี่ยง
-- config editor / backup / restore / snapshot export
-- safe restore guardrails: dry-run diff, confirmation, maintenance gate, auto rollback backup, restore status
-- Audit Center พร้อม filter ลึก, sort/order, pagination, cursor, shared presets
-- observability, dashboard cards, metrics export, health endpoints
-- delivery timeline / step log รายออเดอร์
-- delivery preflight check / simulator / dry run
-- SCUM admin capability tester + capability preset catalog
-- notification center + item command editor พร้อม preview override
-- player portal แยกที่ `/player`
+### Admin / portal
+- admin web มี RBAC, DB login, Discord SSO, 2FA, step-up auth
+- admin web มี audit, observability, backup / restore preview, notification center
+- player portal แยก path และ runtime ออกจาก admin แล้ว
 
 ### Delivery
-- queue + retry + dead-letter + audit + watchdog
-- split runtime `bot / worker / watcher / web / console-agent`
-- runtime supervisor + watcher freshness / backlog topology checks
-- preview command จาก `itemId` หรือ `gameItemId`
-- per-order timeline / status history / step log
-- preflight readiness ก่อน test-send หรือ enqueue
-- delivery simulator / dry run แบบไม่ยิงคำสั่งจริง
-- post-spawn verification policy `basic | output-match | observer | strict`
-- SCUM admin capability catalog / preset สำหรับ smoke test `announce / teleport / spawn`
-- fallback command จาก
-  - `itemCommands`
-  - `scum_weapons_from_wiki.json`
-  - `scum_item_category_manifest.json`
-- icon mapping จาก `scum_items-main`
-- bundle/multi-item delivery ใช้งานได้
-- delivery profile รายสินค้า:
-  - `spawn_only`
-  - `teleport_spawn`
-  - `announce_teleport_spawn`
-- teleport mode รายสินค้า:
-  - `player`
-  - `vehicle`
-- magazine auto modifier:
-  - `Magazine_...` -> เติม `StackCount 100` อัตโนมัติ ถ้า template ยังไม่ใส่มาเอง
+- queue / retry / dead-letter / watchdog / audit
+- timeline / status history / step log ต่อ order
+- preflight / simulator / capability test
+- execution backend split เป็น `rcon` หรือ `agent`
+- post-spawn verification policy
+- evidence bundle ต่อ order
 
----
-
-## 3. สภาพระบบส่งของปัจจุบัน
-
-ระบบส่งของรองรับ 2 โหมด
-
-### 2.1 RCon mode
-ใช้เมื่อเซิร์ฟเวอร์ SCUM รับ `#SpawnItem` ผ่าน remote command ได้จริง
-
-ใช้ค่า env หลัก
-- `DELIVERY_EXECUTION_MODE=rcon`
-- `RCON_HOST`
-- `RCON_PORT`
-- `RCON_PASSWORD`
-- `RCON_PROTOCOL=source|battleye`
-
-### 2.2 Agent mode
-ใช้เมื่อ `BattlEye login ได้ แต่ #SpawnItem ไม่ execute`
-
-flow ที่ใช้จริงตอนนี้:
-
-```text
-Purchase
--> Delivery Queue
--> Worker
--> Console Agent
--> PowerShell Bridge
--> SCUM Admin Client
--> Admin Channel Command
-```
-
-โหมดนี้เป็นโหมดที่ยืนยันใช้งานจริงแล้วในเครื่องปัจจุบัน
-
-สิ่งที่ยืนยันแล้ว
-- `#Announce ...`
+### Agent mode ที่ทดสอบผ่านใน environment นี้
+- `#Announce`
 - `#TeleportToVehicle 50118`
 - `#SpawnItem Weapon_M1911 1`
-- multi-item delivery หลายคำสั่งต่อเนื่อง
-- magazine spawn พร้อม `StackCount 100`
+- multi-item delivery
+- magazine `StackCount 100`
 
-ข้อจำกัดของ agent mode
-- ต้องเปิด SCUM client ค้างไว้ด้วยบัญชีแอดมิน
-- ต้องอยู่ในเซิร์ฟเวอร์
-- Windows session ต้องไม่ lock
-- ช่องคำสั่งต้องเป็น admin channel ที่ script จับได้ถูก
+## 3. What Is Partial
 
----
+- `RCON delivery` ใช้ได้เป็น backend แต่ความสามารถเรื่อง `#SpawnItem` ยังขึ้นกับพฤติกรรมของเซิร์ฟเวอร์ปลายทาง
+- `admin web` ครอบ setting เชิงปฏิบัติการส่วนใหญ่แล้ว แต่ยังไม่ใช่ทุก setting ในระบบ
+- `multi-tenant` มี foundation และ tenant-scoped guard แล้ว แต่ยังไม่ใช่ isolation แบบแยกฐานข้อมูลต่อ tenant
+- `post-spawn verification` แข็งแรงในระดับ command, audit, output, timeline แต่ยังไม่ใช่ game-native inventory proof ทุกกรณี
 
-## 4. สถาปัตยกรรมย่อ
+## 4. What Is Experimental Or Ops-Dependent
+
+- `agent mode` ยังพึ่ง Windows session, SCUM admin client, focus ของช่อง command, และอาจเปราะกับ patch เกม
+- การย้ายจาก SQLite ไป PostgreSQL/MySQL ยังเป็น migration path ไม่ใช่สิ่งที่ implement แล้วใน production path
+- restore flow ปลอดภัยขึ้นมาก แต่ยังควรทำใน maintenance window และยังมี manual confirmation หลายจุด
+
+## 5. Known Limitations
+
+- SQLite เหมาะกับ single-host / low-concurrency มากกว่าการ scale หลายเครื่อง
+- admin web ยังไม่ครบทุก setting ที่มีใน env/config
+- screenshot dashboard จริงยังไม่ได้ถูก commit ใน repo ตอนนี้
+- demo GIF ยังไม่มีใน repo ตอนนี้
+- architecture diagram แบบไฟล์ภาพยังไม่มีใน repo ตอนนี้
+
+## 6. Current Production Constraints
+
+- ถ้าใช้ `agent mode` ต้องเปิด SCUM admin client ค้างไว้
+- ถ้าใช้ `agent mode` ห้าม lock Windows session
+- ถ้าจะแยก `bot` กับ `worker` จริง ห้ามเปิด delivery worker ซ้ำทั้งสองฝั่ง
+- production ต้องใช้:
+  - `NODE_ENV=production`
+  - `PERSIST_REQUIRE_DB=true`
+  - `PERSIST_LEGACY_SNAPSHOTS=false`
+- ทุก deploy ควรรัน:
+  - `npm run doctor`
+  - `npm run security:check`
+  - `npm run readiness:prod`
+  - `npm run smoke:postdeploy`
+
+## 7. Evidence
+
+หลักฐานที่มีใน repo ตอนนี้:
+- CI summary: [`artifacts/ci/verification-summary.json`](./artifacts/ci/verification-summary.json)
+- human-readable CI report: [`artifacts/ci/verification-summary.md`](./artifacts/ci/verification-summary.md)
+- smoke logs: [`artifacts/ci/smoke.log`](./artifacts/ci/smoke.log)
+- test logs: [`artifacts/ci/test.log`](./artifacts/ci/test.log)
+- delivery capability matrix: [docs/DELIVERY_CAPABILITY_MATRIX_TH.md](./docs/DELIVERY_CAPABILITY_MATRIX_TH.md)
+- evidence map: [docs/EVIDENCE_MAP_TH.md](./docs/EVIDENCE_MAP_TH.md)
+
+หลักฐานที่ยังไม่มีใน repo ตอนนี้:
+- screenshot dashboard จริง
+- demo GIF
+- architecture diagram export เป็นภาพ
+
+## 8. Architecture Summary
 
 ```mermaid
 flowchart LR
-  A[SCUM.log] --> B[Watcher]
-  B --> C[Webhook /scum-event]
-  C --> D[Discord Bot]
+  A[SCUM.log] --> B[Watcher runtime]
+  B --> C[/scum-event webhook]
+  C --> D[Bot / Admin Web]
   D --> E[(Prisma / SQLite)]
-  D --> F[Discord Channels]
-  G[Worker] --> E
-  G --> H[Delivery Queue]
-  H --> I[Console Agent]
-  I --> J[SCUM Admin Client]
-  K[Admin Web] --> E
-  K --> D
-  L[Player Portal] --> E
+  F[Worker] --> E
+  F --> G[Delivery runtime]
+  G --> H[RCON or Console Agent]
+  I[Player Portal] --> E
 ```
 
-runtime ที่ควรแยกจริง
+runtime ที่ใช้จริง:
 - `bot`
 - `worker`
 - `watcher`
@@ -173,9 +131,9 @@ runtime ที่ควรแยกจริง
 - `player portal`
 - `console agent`
 
----
+รายละเอียดแบบโยงกับไฟล์จริงดูที่ [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
-## 5. Quick Start
+## 9. Quick Start
 
 ### Windows แบบเร็ว
 
@@ -183,13 +141,13 @@ runtime ที่ควรแยกจริง
 npm run setup:easy
 ```
 
-สคริปต์จะช่วย
+สคริปต์จะช่วย:
 - copy env template
 - ติดตั้ง dependencies
 - generate Prisma client
 - db push
 
-### ติดตั้งเองแบบ manual
+### ติดตั้งแบบ manual
 
 ```bash
 npm install
@@ -197,15 +155,13 @@ copy .env.example .env
 npm run doctor
 ```
 
-ถ้าจะขึ้น production
+ถ้าจะเตรียมขึ้น production:
 
 ```bash
 copy .env.production.example .env
 ```
 
----
-
-## 5. ค่า `.env` สำคัญ
+## 10. ค่า `.env` สำคัญ
 
 ### Discord
 
@@ -223,91 +179,29 @@ PERSIST_REQUIRE_DB=true
 PERSIST_LEGACY_SNAPSHOTS=false
 ```
 
-- โปรดทราบ:
-  - ใน `NODE_ENV=production` ระบบจะ **ไม่ยอมรัน** ถ้า `PERSIST_REQUIRE_DB` ไม่ได้ตั้งเป็น `true`
-  - ใน production ต้องตั้ง `PERSIST_LEGACY_SNAPSHOTS=false` เสมอ (ห้ามใช้โหมด snapshot ไฟล์)
-  - ฐานข้อมูลหลักปัจจุบันคือ SQLite (ไฟล์ในโฟลเดอร์ `prisma/`) ซึ่งเหมาะกับ single‑host / low‑concurrency
-  - ถ้าเตรียมขยายระบบหรือมี worker หลายตัว ควรวางแผนย้ายไป DB server เช่น Postgres/MySQL แล้วปรับ `DATABASE_URL` กับ Prisma schema ให้สอดคล้อง
+หมายเหตุ:
+- production ต้องใช้ `PERSIST_REQUIRE_DB=true`
+- production ไม่ควรใช้ legacy snapshot เป็น persistence หลัก
+- SQLite เหมาะกับ single-host มากกว่า multi-node
 
-### Config lifecycle (runtime)
-
-- ไฟล์ `src/config.js` จะ:
-  - โหลดค่า default config เข้าหน่วยความจำ
-  - เรียก `initConfigStore()` อัตโนมัติ เพื่อ hydrate config จากตาราง `BotConfig` ใน Prisma แบบ async
-- ผลลัพธ์:
-  - โค้ดส่วนใหญ่สามารถ `require('./config')` และใช้งานค่า default ได้ทันที
-  - ถ้าเป็นสคริปต์/เครื่องมือที่ **ต้องการ** ค่า config จาก DB ก่อนเริ่มงาน (เช่น งาน admin บางอย่าง) แนะนำให้เรียก:
-
-```js
-const config = require('./src/config');
-await config.initConfigStore?.();
-```
-
-ก่อนอ่านค่า config เพื่อลดโอกาสค่า default ไปทับค่าที่ override ไว้ใน DB
-
-### Watcher / Webhook
-
-```env
-SCUM_LOG_PATH=C:\\Path\\To\\SCUM.log
-SCUM_WEBHOOK_PORT=3100
-SCUM_WEBHOOK_SECRET=
-SCUM_WEBHOOK_URL=http://127.0.0.1:3100/scum-event
-```
-
-### Runtime split ที่แนะนำ
-
-```env
-BOT_ENABLE_SCUM_WEBHOOK=true
-BOT_ENABLE_RESTART_SCHEDULER=true
-BOT_ENABLE_ADMIN_WEB=true
-BOT_ENABLE_RENTBIKE_SERVICE=false
-BOT_ENABLE_DELIVERY_WORKER=false
-BOT_ENABLE_OPS_ALERT_ROUTE=true
-
-WORKER_ENABLE_RENTBIKE=true
-WORKER_ENABLE_DELIVERY=true
-```
-
-### Agent mode ที่ใช้งานจริงตอนนี้
+### Agent mode
 
 ```env
 DELIVERY_EXECUTION_MODE=agent
-
 SCUM_CONSOLE_AGENT_BASE_URL=http://127.0.0.1:3213
-SCUM_CONSOLE_AGENT_HOST=127.0.0.1
-SCUM_CONSOLE_AGENT_PORT=3213
 SCUM_CONSOLE_AGENT_TOKEN=put_a_strong_agent_token_here
-SCUM_CONSOLE_AGENT_BACKEND=exec
-SCUM_CONSOLE_AGENT_COMMAND_TIMEOUT_MS=15000
-SCUM_CONSOLE_AGENT_ALLOW_NON_HASH=false
-
-DELIVERY_AGENT_PRE_COMMANDS_JSON=["#TeleportToVehicle {teleportTargetRaw}"]
-DELIVERY_AGENT_POST_COMMANDS_JSON=[]
 DELIVERY_AGENT_COMMAND_DELAY_MS=600
 DELIVERY_AGENT_POST_TELEPORT_DELAY_MS=2000
 DELIVERY_MAGAZINE_STACKCOUNT=100
 DELIVERY_AGENT_TELEPORT_MODE=vehicle
 DELIVERY_AGENT_TELEPORT_TARGET=50118
-DELIVERY_AGENT_RETURN_TARGET=
-
-SCUM_CONSOLE_AGENT_EXEC_TEMPLATE=powershell -NoProfile -ExecutionPolicy Bypass -File scripts/send-scum-admin-command.ps1 -WindowTitle "SCUM" -SwitchToAdminChannel -AdminChannelTabs 3 -Command "{command}"
 ```
 
-### ความหมายของค่าหลักใน delivery
-- `DELIVERY_AGENT_COMMAND_DELAY_MS`
-  - delay ปกติระหว่างคำสั่ง
-- `DELIVERY_AGENT_POST_TELEPORT_DELAY_MS`
-  - delay หลัง teleport ก่อนเริ่ม spawn
-- `DELIVERY_MAGAZINE_STACKCOUNT`
-  - ถ้า item เป็น `Magazine_...` ระบบจะเติม `StackCount` ให้
-- `DELIVERY_AGENT_TELEPORT_TARGET`
-  - จุดส่งของคงที่ เช่นรถ id/alias
+ดูตัวแปรเต็มที่ [docs/ENV_REFERENCE_TH.md](./docs/ENV_REFERENCE_TH.md)
 
----
+## 11. การรันระบบ
 
-## 6. การรันระบบ
-
-### รันแยก process
+### แยก process
 
 ```bash
 npm run start:bot
@@ -317,26 +211,19 @@ npm run start:scum-agent
 npm run start:web-standalone
 ```
 
-### รันด้วย PM2
+### PM2
 
 ```bash
 npm run pm2:start:local
-```
-
-production
-
-```bash
 npm run pm2:start:prod
 ```
 
-Windows helpers
-- `deploy\start-production-stack.cmd`
-- `deploy\reload-production-stack.cmd`
-- `deploy\stop-production-stack.cmd`
+Windows helpers:
+- `deploy\\start-production-stack.cmd`
+- `deploy\\reload-production-stack.cmd`
+- `deploy\\stop-production-stack.cmd`
 
----
-
-## 7. การทดสอบระบบส่งของ
+## 12. การทดสอบระบบส่งของ
 
 ### preview command
 
@@ -350,14 +237,9 @@ npm run preview:spawn -- --game-item-id Weapon_M1911 --quantity 1
 npm run scum:agent:exec -- --command "#Announce HELLO"
 npm run scum:agent:exec -- --command "#TeleportToVehicle 50118"
 npm run scum:agent:exec -- --command "#SpawnItem Weapon_M1911 1"
-npm run scum:agent:exec -- --command "#SpawnItem Magazine_M1911 1 StackCount 100"
 ```
 
-### พรีวิวคำสั่งส่งของจากระบบจริง
-ใช้หน้าแอดมินแท็บ `Delivery Preview`
-
-### ทดสอบ multi-item
-ตัวอย่างที่ยืนยันแล้ว:
+### multi-item ตัวอย่าง
 
 ```text
 #TeleportToVehicle 50118
@@ -366,71 +248,40 @@ npm run scum:agent:exec -- --command "#SpawnItem Magazine_M1911 1 StackCount 100
 #SpawnItem Cal_45_Ammobox 1
 ```
 
----
+## 13. Admin Web
 
-## 8. Admin Web
-
-ความสามารถหลัก
+สิ่งที่มีตอนนี้:
 - config editor
 - delivery runtime
-- delivery preview
-- delivery timeline / step log
-- delivery preflight / simulator / dry run
-- capability tester / preset catalog / verification policy
+- delivery preview / timeline / step log
+- preflight / simulator / capability tester
 - queue / dead-letter / detail / command log
-- alert / notification center
-- item command editor + template override preview
-- wallet / reward / event audit
-- deep filters + exact filters + sort/order + pagination + cursor
-- shared presets ผ่าน DB (`private / role / public`)
-- export
-  - `audit`
-  - `snapshot`
-  - `observability`
-- dashboard cards aggregate endpoint พร้อม cache window
+- notification center
+- backup / restore / snapshot export
+- audit / observability / request trace
 
-เส้นทางหลัก
-- `http://127.0.0.1:3200/admin`
-- production ปัจจุบันอ้างอิงโดเมน `https://admin.genz.noah-dns.online/admin`
+## 14. Player Portal
 
----
-
-## 9. Player Portal
-
-เส้นทางหลัก
-- `http://127.0.0.1:3300/player`
-- production ปัจจุบันอ้างอิงโดเมน `https://player.genz.noah-dns.online`
-
-รองรับ
+รองรับ:
 - Discord login
 - profile / steam link
-- dashboard
 - wallet / purchase history
 - shop / redeem
-- rent bike / reward / leaderboard บางส่วน
+- player-only mode แยกจาก admin
 
----
+## 15. Item / Icon / Command Mapping
 
-## 10. Item / Icon / Command Mapping
-
-แหล่งข้อมูลหลัก
+แหล่งข้อมูลหลัก:
 - [scum_weapons_from_wiki.json](./scum_weapons_from_wiki.json)
 - [scum_item_category_manifest.json](./scum_item_category_manifest.json)
 - [scum_items-main/index.json](./scum_items-main/index.json)
 
-ลำดับ resolve command
+ลำดับ resolve command:
 1. `delivery.auto.itemCommands`
 2. wiki weapon fallback
 3. manifest fallback
 
-ลำดับ resolve icon
-1. `scum_items-main/index.json`
-2. alias/canonical normalization
-3. directory fallback
-
----
-
-## 11. การตรวจสุขภาพ / readiness
+## 16. Health / Readiness
 
 ```bash
 npm run doctor
@@ -441,49 +292,28 @@ npm run readiness:prod
 npm run smoke:postdeploy
 ```
 
-หมายเหตุ `smoke:postdeploy`
-- ค่า default ตอนนี้เช็ก `admin` ผ่าน local admin web (`127.0.0.1:3200`) และยอมรับ `player portal` ที่ตอบกลับแบบ canonical redirect ไปโดเมนจริง
-- ถ้าต้องการบังคับเช็กผ่าน reverse proxy/public URL โดยตรง ให้ตั้ง `SMOKE_ADMIN_BASE_URL` และ `SMOKE_PLAYER_BASE_URL`
+ดูสถานะจริงจาก CI ที่ [docs/VERIFICATION_STATUS_TH.md](./docs/VERIFICATION_STATUS_TH.md)
 
-health endpoint ที่มี
-- bot
-- worker
-- watcher
-- console agent
+## 17. Verification Status
 
----
+source of truth สำหรับผลตรวจคือ:
+- [docs/VERIFICATION_STATUS_TH.md](./docs/VERIFICATION_STATUS_TH.md)
+- [`artifacts/ci/verification-summary.json`](./artifacts/ci/verification-summary.json)
+- [`artifacts/ci/verification-summary.md`](./artifacts/ci/verification-summary.md)
 
-## 12. ผลทดสอบล่าสุด
+อย่าใช้ตัวเลข test count ที่เขียนค้างในเอกสารอื่นเป็นหลักฐานหลัก
 
-ล่าสุดที่รันจริง:
-
-```bash
-npm run lint
-npm test
-```
-
-ผลล่าสุด
-- `npm run lint` ผ่าน
-- `npm test` ผ่าน `135/135`
-
----
-
-## 13. ข้อควรระวัง production
+## 18. Production Cautions
 
 - หมุน token/secret จริงทั้งหมดก่อนเปิดใช้งาน
 - ถ้าใช้ `agent mode` อย่า lock session Windows
-- อย่ารัน SCUM server หลาย instance ใช้ save path เดียวกัน
-- ถ้าจะแยก `bot/worker` จริง อย่าเปิด delivery ทั้งสองฝั่งพร้อมกัน
-- production ควรใช้:
-  - `NODE_ENV=production`
-  - `PERSIST_REQUIRE_DB=true`
-  - `PERSIST_LEGACY_SNAPSHOTS=false`
+- อย่ารัน delivery worker ซ้ำทั้ง `bot` และ `worker`
+- ถ้าจะ restore production ให้ใช้ preview, confirmation, maintenance gate ทุกครั้ง
 
----
+## 19. เอกสารเสริม
 
-## 14. เอกสารเสริม
-
-- คู่มือปฏิบัติการเต็ม: [docs/OPERATIONS_MANUAL_TH.md](./docs/OPERATIONS_MANUAL_TH.md)
-- สถานะระบบ/roadmap: [PROJECT_HQ.md](./PROJECT_HQ.md)
-- deployment story: [docs/DEPLOYMENT_STORY.md](./docs/DEPLOYMENT_STORY.md)
+- คู่มือปฏิบัติการ: [docs/OPERATIONS_MANUAL_TH.md](./docs/OPERATIONS_MANUAL_TH.md)
 - customer onboarding: [docs/CUSTOMER_ONBOARDING.md](./docs/CUSTOMER_ONBOARDING.md)
+- deployment story: [docs/DEPLOYMENT_STORY.md](./docs/DEPLOYMENT_STORY.md)
+- repo structure: [docs/REPO_STRUCTURE_TH.md](./docs/REPO_STRUCTURE_TH.md)
+- env profiles: [docs/ENV_PROFILES_TH.md](./docs/ENV_PROFILES_TH.md)

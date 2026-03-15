@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
+const config = require('../src/config');
 const {
   setLink,
   unlinkByUserId,
@@ -12,8 +13,12 @@ const botPath = path.resolve(__dirname, '../src/bot.js');
 function freshBotModule() {
   const previousNodeEnv = process.env.NODE_ENV;
   const previousBotHealthPort = process.env.BOT_HEALTH_PORT;
+  const previousDiscordGuildId = process.env.DISCORD_GUILD_ID;
+  const previousDiscordClientId = process.env.DISCORD_CLIENT_ID;
   process.env.NODE_ENV = 'test';
   process.env.BOT_HEALTH_PORT = '0';
+  process.env.DISCORD_GUILD_ID = '123456789012345678';
+  process.env.DISCORD_CLIENT_ID = '123456789012345678';
   delete require.cache[botPath];
   const loaded = require(botPath);
   if (previousNodeEnv == null) {
@@ -25,6 +30,16 @@ function freshBotModule() {
     delete process.env.BOT_HEALTH_PORT;
   } else {
     process.env.BOT_HEALTH_PORT = previousBotHealthPort;
+  }
+  if (previousDiscordGuildId == null) {
+    delete process.env.DISCORD_GUILD_ID;
+  } else {
+    process.env.DISCORD_GUILD_ID = previousDiscordGuildId;
+  }
+  if (previousDiscordClientId == null) {
+    delete process.env.DISCORD_CLIENT_ID;
+  } else {
+    process.env.DISCORD_CLIENT_ID = previousDiscordClientId;
   }
   return loaded;
 }
@@ -179,4 +194,36 @@ test('interaction e2e: slash command dispatch executes command and replies', asy
   assert.equal(executed, true);
   assert.equal(calls.reply.length, 1);
   assert.equal(calls.reply[0]?.content, 'slash-ok');
+});
+
+test('interaction e2e: disabled slash command is blocked by runtime config', async () => {
+  process.env.DISCORD_TOKEN = process.env.DISCORD_TOKEN || 'test-token';
+  config.updateConfigPatch({
+    commands: {
+      disabled: ['mock-disabled'],
+    },
+  });
+  const { handleInteractionCreate } = freshBotModule();
+  const { interaction, calls } = createMockInteraction();
+
+  try {
+    interaction.isChatInputCommand = () => true;
+    interaction.commandName = 'mock-disabled';
+    interaction.client.commands.set('mock-disabled', {
+      execute: async () => {
+        throw new Error('should not execute when disabled');
+      },
+    });
+
+    await handleInteractionCreate(interaction);
+
+    assert.equal(calls.reply.length, 1);
+    assert.match(String(calls.reply[0]?.content || ''), /ปิดใช้งานชั่วคราว/i);
+  } finally {
+    config.updateConfigPatch({
+      commands: {
+        disabled: [],
+      },
+    });
+  }
 });

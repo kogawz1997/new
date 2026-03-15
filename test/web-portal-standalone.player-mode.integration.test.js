@@ -31,6 +31,22 @@ async function waitForHealth(baseUrl, timeoutMs = 12000) {
   throw new Error('portal did not become healthy in time');
 }
 
+async function waitForRoute(path, baseUrl, timeoutMs = 12000) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const res = await request(path, baseUrl);
+      if (res.status > 0) {
+        return;
+      }
+    } catch {
+      // keep waiting
+    }
+    await delay(250);
+  }
+  throw new Error(`route ${path} did not respond in time`);
+}
+
 async function request(path, baseUrl) {
   return fetch(`${baseUrl}${path}`, { redirect: 'manual' });
 }
@@ -173,6 +189,8 @@ test('web-portal-standalone routes local /admin traffic to legacy admin before p
       WEB_PORTAL_PLAYER_OPEN_ACCESS: 'true',
       WEB_PORTAL_SECURE_COOKIE: 'true',
       WEB_PORTAL_ENFORCE_ORIGIN_CHECK: 'true',
+      PERSIST_REQUIRE_DB: 'true',
+      PERSIST_LEGACY_SNAPSHOTS: 'false',
       BOT_ENABLE_ADMIN_WEB: 'false',
     },
   });
@@ -183,7 +201,7 @@ test('web-portal-standalone routes local /admin traffic to legacy admin before p
   });
 
   try {
-    await delay(1200);
+    await waitForRoute('/admin', localBase);
 
     const admin = await request('/admin', localBase);
     assert.equal(admin.status, 302);

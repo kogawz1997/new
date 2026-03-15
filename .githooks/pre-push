@@ -1,4 +1,4 @@
 #!/bin/sh
 set -eu
 
-node scripts/secret-scan.js --staged
+node scripts/secret-scan.js

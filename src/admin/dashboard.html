@@ -736,6 +736,8 @@
     .field span { font-size: 13px; color: #b8caf0; }
     .field.wide { grid-column: 1 / -1; }
     .field.hidden { display: none !important; }
+    .badge-text.ok { color: #7dcc83; font-weight: 700; }
+    .badge-text.danger { color: #e98e84; font-weight: 700; }
 
     .catalog-picker {
       display: grid;
@@ -3001,8 +3003,353 @@
 
             <section class="tab-panel" data-tab-panel="config">
               <div class="tab-panel-head">
-                <h3>แก้ไขคอนฟิก</h3>
-                <p>แก้ค่าทุกคีย์ของบอทแบบรวมในที่เดียว (แพตช์หรือบันทึกทั้งก้อน)</p>
+                <h3>Control Panel</h3>
+                <p>รวมค่าที่แอดมินใช้บ่อยไว้หน้าเดียว ทั้ง Discord, คำสั่งบอท, delivery, worker, RCON/agent, watcher และ player portal</p>
+              </div>
+
+              <div class="form-card">
+                <h4>ภาพรวมและทางลัด</h4>
+                <p class="help">ใช้หน้านี้ตั้งค่าระบบหลัก ส่วน log, audit และ runtime detail เปิดต่อในแท็บเฉพาะได้ทันที</p>
+                <div id="controlPanelSummary" class="summary"></div>
+                <div class="form-grid">
+                  <button type="button" id="controlPanelRefreshBtn" class="ghost">รีโหลด Control Panel</button>
+                  <button type="button" class="ghost" data-control-open-tab="delivery">ไปที่ Delivery Runtime</button>
+                  <button type="button" class="ghost" data-control-open-tab="auth">ไปที่ Auth / Security</button>
+                  <button type="button" class="ghost" data-control-open-tab="metrics">ไปที่ Metrics</button>
+                  <button type="button" class="ghost" data-control-open-tab="platform">ไปที่ Platform</button>
+                  <button type="button" class="ghost" data-control-open-tab="danger">ไปที่ Backup / Restore</button>
+                </div>
+              </div>
+
+              <div class="delivery-grid">
+                <form id="controlDiscordForm" class="form-card">
+                  <h4>Discord Server / Channel / Role</h4>
+                  <p class="help">ตั้งค่า guild, channel และ role หลักของบอทจากฟอร์มเดียว</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Discord Guild ID</span>
+                      <input id="cpGuildId" placeholder="123456789012345678">
+                    </label>
+                    <label class="field">
+                      <span>Channel คำสั่งบอท</span>
+                      <input id="cpChannelCommands" placeholder="commands-channel">
+                    </label>
+                    <label class="field">
+                      <span>Channel admin log</span>
+                      <input id="cpChannelAdminLog" placeholder="admin-log">
+                    </label>
+                    <label class="field">
+                      <span>Channel shop log</span>
+                      <input id="cpChannelShopLog" placeholder="shop-log">
+                    </label>
+                    <label class="field">
+                      <span>Channel evidence</span>
+                      <input id="cpChannelEvidence" placeholder="evidence">
+                    </label>
+                    <label class="field">
+                      <span>Channel in-server</span>
+                      <input id="cpChannelInServer" placeholder="in-server">
+                    </label>
+                    <label class="field">
+                      <span>Role owner</span>
+                      <input id="cpRoleOwner" placeholder="owner">
+                    </label>
+                    <label class="field">
+                      <span>Role admin</span>
+                      <input id="cpRoleAdmin" placeholder="admin">
+                    </label>
+                    <label class="field">
+                      <span>Role moderator</span>
+                      <input id="cpRoleModerator" placeholder="moderator">
+                    </label>
+                    <label class="field">
+                      <span>Role helper</span>
+                      <input id="cpRoleHelper" placeholder="helper">
+                    </label>
+                    <label class="field">
+                      <span>Role VIP</span>
+                      <input id="cpRoleVip" placeholder="vip">
+                    </label>
+                    <label class="field">
+                      <span>Role verified</span>
+                      <input id="cpRoleVerified" placeholder="verified">
+                    </label>
+                    <button type="submit">บันทึก Discord / Access</button>
+                  </div>
+                </form>
+
+                <form id="controlCommandForm" class="form-card">
+                  <h4>ตั้งค่าคำสั่งบอท</h4>
+                  <p class="help">ดู command registry ที่โหลดอยู่จริง แล้วเลือกปิดคำสั่งเป็นรายคำสั่ง</p>
+                  <div id="controlCommandWrap" class="table-wrap"></div>
+                  <div class="form-grid">
+                    <button type="submit">บันทึกสถานะคำสั่ง</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="delivery-grid">
+                <form id="controlDeliveryForm" class="form-card">
+                  <h4>Delivery / Spawn / Teleport / Queue</h4>
+                  <p class="help">ตั้งค่า flow ส่งของ, retry, verify, teleport target และ command hooks</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>เปิดระบบ delivery</span>
+                      <select id="cpDeliveryEnabled">
+                        <option value="true">เปิด</option>
+                        <option value="false">ปิด</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Execution mode (config)</span>
+                      <select id="cpDeliveryMode">
+                        <option value="rcon">rcon</option>
+                        <option value="agent">agent</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Verify mode</span>
+                      <input id="cpDeliveryVerifyMode" placeholder="command-output">
+                    </label>
+                    <label class="field">
+                      <span>Queue interval (ms)</span>
+                      <input id="cpDeliveryQueueInterval" type="number" placeholder="3000">
+                    </label>
+                    <label class="field">
+                      <span>Max retries</span>
+                      <input id="cpDeliveryMaxRetries" type="number" placeholder="3">
+                    </label>
+                    <label class="field">
+                      <span>Retry delay (ms)</span>
+                      <input id="cpDeliveryRetryDelay" type="number" placeholder="5000">
+                    </label>
+                    <label class="field">
+                      <span>Retry backoff</span>
+                      <input id="cpDeliveryRetryBackoff" type="number" placeholder="2">
+                    </label>
+                    <label class="field">
+                      <span>Command timeout (ms)</span>
+                      <input id="cpDeliveryCommandTimeout" type="number" placeholder="10000">
+                    </label>
+                    <label class="field">
+                      <span>Magazine StackCount</span>
+                      <input id="cpDeliveryMagazineStackCount" type="number" placeholder="100">
+                    </label>
+                    <label class="field">
+                      <span>Teleport mode</span>
+                      <input id="cpDeliveryTeleportMode" placeholder="player">
+                    </label>
+                    <label class="field">
+                      <span>Teleport target</span>
+                      <input id="cpDeliveryTeleportTarget" placeholder="{playerName}">
+                    </label>
+                    <label class="field">
+                      <span>Return target</span>
+                      <input id="cpDeliveryReturnTarget" placeholder="{adminReturn}">
+                    </label>
+                    <label class="field wide">
+                      <span>Pre-commands (บรรทัดละ 1 คำสั่ง)</span>
+                      <textarea id="cpDeliveryPreCommands" rows="4" placeholder="#Announce ..."></textarea>
+                    </label>
+                    <label class="field wide">
+                      <span>Post-commands (บรรทัดละ 1 คำสั่ง)</span>
+                      <textarea id="cpDeliveryPostCommands" rows="4" placeholder="#TeleportTo ..."></textarea>
+                    </label>
+                    <button type="submit">บันทึก Delivery Flow</button>
+                  </div>
+                </form>
+
+                <form id="controlEnvRuntimeForm" class="form-card">
+                  <h4>Feature Flags / Worker Queue</h4>
+                  <p class="help">เปิดปิด service หลักและตั้ง runtime override ที่ต้องอ่านจาก env</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>เปิด Admin Web</span>
+                      <select id="cpFeatureAdminWeb">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>เปิด delivery worker ฝั่ง bot</span>
+                      <select id="cpFeatureDeliveryWorker">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>เปิด worker ส่งของ</span>
+                      <select id="cpFeatureWorkerDelivery">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>เปิด rent bike service</span>
+                      <select id="cpFeatureRentBikeService">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>เปิด worker rent bike</span>
+                      <select id="cpFeatureWorkerRentBike">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>เปิด webhook watcher</span>
+                      <select id="cpFeatureWebhook">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Delivery execution mode (env override)</span>
+                      <select id="cpRuntimeDeliveryExecutionMode">
+                        <option value="rcon">rcon</option>
+                        <option value="agent">agent</option>
+                      </select>
+                    </label>
+                    <button type="submit">บันทึก Runtime Flags</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="delivery-grid">
+                <form id="controlRconAgentForm" class="form-card">
+                  <h4>RCON / Agent</h4>
+                  <p class="help">แก้ host, port, exec template และ token ของ backend ส่งคำสั่ง</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>RCON host</span>
+                      <input id="cpRconHost" placeholder="127.0.0.1">
+                    </label>
+                    <label class="field">
+                      <span>RCON port</span>
+                      <input id="cpRconPort" type="number" placeholder="27015">
+                    </label>
+                    <label class="field">
+                      <span>RCON protocol</span>
+                      <input id="cpRconProtocol" placeholder="telnet">
+                    </label>
+                    <label class="field wide">
+                      <span>RCON exec template</span>
+                      <input id="cpRconTemplate" placeholder="powershell -File ...">
+                    </label>
+                    <label class="field">
+                      <span>RCON password (ใส่เมื่อจะเปลี่ยน)</span>
+                      <input id="cpRconPassword" type="password" placeholder="leave blank to keep current">
+                    </label>
+                    <label class="field">
+                      <span>Agent base URL</span>
+                      <input id="cpAgentBaseUrl" placeholder="http://127.0.0.1:3300">
+                    </label>
+                    <label class="field">
+                      <span>Agent host</span>
+                      <input id="cpAgentHost" placeholder="127.0.0.1">
+                    </label>
+                    <label class="field">
+                      <span>Agent port</span>
+                      <input id="cpAgentPort" type="number" placeholder="3300">
+                    </label>
+                    <label class="field">
+                      <span>Agent backend</span>
+                      <input id="cpAgentBackend" placeholder="powershell-bridge">
+                    </label>
+                    <label class="field wide">
+                      <span>Agent exec template</span>
+                      <input id="cpAgentTemplate" placeholder="powershell -File ...">
+                    </label>
+                    <label class="field">
+                      <span>Agent token (ใส่เมื่อจะเปลี่ยน)</span>
+                      <input id="cpAgentToken" type="password" placeholder="leave blank to keep current">
+                    </label>
+                    <button type="submit">บันทึก RCON / Agent</button>
+                  </div>
+                </form>
+
+                <form id="controlWatcherForm" class="form-card">
+                  <h4>Webhook / Log Watcher / Player Portal</h4>
+                  <p class="help">ค่าฝั่ง ingest log และหน้า player portal ที่ควรแก้จากเว็บได้</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Webhook URL</span>
+                      <input id="cpWebhookUrl" placeholder="http://127.0.0.1:3001/scum/webhook">
+                    </label>
+                    <label class="field">
+                      <span>Webhook port</span>
+                      <input id="cpWebhookPort" type="number" placeholder="3001">
+                    </label>
+                    <label class="field wide">
+                      <span>SCUM log path</span>
+                      <input id="cpLogPath" placeholder="C:\\SCUM\\Saved\\Logs\\SCUM.log">
+                    </label>
+                    <label class="field wide">
+                      <span>Player portal base URL</span>
+                      <input id="cpPortalBaseUrl" placeholder="https://player.example.com">
+                    </label>
+                    <label class="field">
+                      <span>Player portal open access</span>
+                      <select id="cpPortalOpenAccess">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Require guild member</span>
+                      <select id="cpPortalRequireGuild">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field wide">
+                      <span>Map external URL</span>
+                      <input id="cpPortalMapUrl" placeholder="https://map.example.com">
+                    </label>
+                    <button type="submit">บันทึก Watcher / Portal</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="delivery-grid">
+                <form id="controlAdminUserForm" class="form-card">
+                  <h4>Permission ของแอดมิน</h4>
+                  <p class="help">สร้างหรืออัปเดตผู้ใช้แอดมินในระบบ พร้อม role และสถานะ active</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Username</span>
+                      <input id="cpAdminUserName" placeholder="เช่น noah-admin">
+                    </label>
+                    <label class="field">
+                      <span>Role</span>
+                      <select id="cpAdminUserRole">
+                        <option value="mod">mod</option>
+                        <option value="admin">admin</option>
+                        <option value="owner">owner</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Active</span>
+                      <select id="cpAdminUserActive">
+                        <option value="true">true</option>
+                        <option value="false">false</option>
+                      </select>
+                    </label>
+                    <label class="field wide">
+                      <span>Password (เว้นว่างเพื่อคงของเดิม)</span>
+                      <input id="cpAdminUserPassword" type="password" placeholder="required for new user">
+                    </label>
+                    <button type="submit">บันทึก Admin User</button>
+                  </div>
+                </form>
+
+                <div class="form-card">
+                  <h4>Admin Users / Audit Shortcuts</h4>
+                  <p class="help">ดูรายชื่อแอดมินที่ active/inactive และเปิดไปยังแท็บ log / audit ได้ทันที</p>
+                  <div id="controlAdminUsersWrap" class="table-wrap"></div>
+                </div>
               </div>
 
               <form id="simpleConfigForm" class="form-card">
@@ -3423,6 +3770,72 @@
     const cfgRaidTimes = document.getElementById('cfgRaidTimes');
     const cfgUnknownWeaponLabel = document.getElementById('cfgUnknownWeaponLabel');
     const cfgDefaultWeaponImage = document.getElementById('cfgDefaultWeaponImage');
+    const controlPanelSummary = document.getElementById('controlPanelSummary');
+    const controlPanelRefreshBtn = document.getElementById('controlPanelRefreshBtn');
+    const controlDiscordForm = document.getElementById('controlDiscordForm');
+    const cpGuildId = document.getElementById('cpGuildId');
+    const cpChannelCommands = document.getElementById('cpChannelCommands');
+    const cpChannelAdminLog = document.getElementById('cpChannelAdminLog');
+    const cpChannelShopLog = document.getElementById('cpChannelShopLog');
+    const cpChannelEvidence = document.getElementById('cpChannelEvidence');
+    const cpChannelInServer = document.getElementById('cpChannelInServer');
+    const cpRoleOwner = document.getElementById('cpRoleOwner');
+    const cpRoleAdmin = document.getElementById('cpRoleAdmin');
+    const cpRoleModerator = document.getElementById('cpRoleModerator');
+    const cpRoleHelper = document.getElementById('cpRoleHelper');
+    const cpRoleVip = document.getElementById('cpRoleVip');
+    const cpRoleVerified = document.getElementById('cpRoleVerified');
+    const controlCommandForm = document.getElementById('controlCommandForm');
+    const controlCommandWrap = document.getElementById('controlCommandWrap');
+    const controlDeliveryForm = document.getElementById('controlDeliveryForm');
+    const cpDeliveryEnabled = document.getElementById('cpDeliveryEnabled');
+    const cpDeliveryMode = document.getElementById('cpDeliveryMode');
+    const cpDeliveryVerifyMode = document.getElementById('cpDeliveryVerifyMode');
+    const cpDeliveryQueueInterval = document.getElementById('cpDeliveryQueueInterval');
+    const cpDeliveryMaxRetries = document.getElementById('cpDeliveryMaxRetries');
+    const cpDeliveryRetryDelay = document.getElementById('cpDeliveryRetryDelay');
+    const cpDeliveryRetryBackoff = document.getElementById('cpDeliveryRetryBackoff');
+    const cpDeliveryCommandTimeout = document.getElementById('cpDeliveryCommandTimeout');
+    const cpDeliveryMagazineStackCount = document.getElementById('cpDeliveryMagazineStackCount');
+    const cpDeliveryTeleportMode = document.getElementById('cpDeliveryTeleportMode');
+    const cpDeliveryTeleportTarget = document.getElementById('cpDeliveryTeleportTarget');
+    const cpDeliveryReturnTarget = document.getElementById('cpDeliveryReturnTarget');
+    const cpDeliveryPreCommands = document.getElementById('cpDeliveryPreCommands');
+    const cpDeliveryPostCommands = document.getElementById('cpDeliveryPostCommands');
+    const controlEnvRuntimeForm = document.getElementById('controlEnvRuntimeForm');
+    const cpFeatureAdminWeb = document.getElementById('cpFeatureAdminWeb');
+    const cpFeatureDeliveryWorker = document.getElementById('cpFeatureDeliveryWorker');
+    const cpFeatureWorkerDelivery = document.getElementById('cpFeatureWorkerDelivery');
+    const cpFeatureRentBikeService = document.getElementById('cpFeatureRentBikeService');
+    const cpFeatureWorkerRentBike = document.getElementById('cpFeatureWorkerRentBike');
+    const cpFeatureWebhook = document.getElementById('cpFeatureWebhook');
+    const cpRuntimeDeliveryExecutionMode = document.getElementById('cpRuntimeDeliveryExecutionMode');
+    const controlRconAgentForm = document.getElementById('controlRconAgentForm');
+    const cpRconHost = document.getElementById('cpRconHost');
+    const cpRconPort = document.getElementById('cpRconPort');
+    const cpRconProtocol = document.getElementById('cpRconProtocol');
+    const cpRconTemplate = document.getElementById('cpRconTemplate');
+    const cpRconPassword = document.getElementById('cpRconPassword');
+    const cpAgentBaseUrl = document.getElementById('cpAgentBaseUrl');
+    const cpAgentHost = document.getElementById('cpAgentHost');
+    const cpAgentPort = document.getElementById('cpAgentPort');
+    const cpAgentBackend = document.getElementById('cpAgentBackend');
+    const cpAgentTemplate = document.getElementById('cpAgentTemplate');
+    const cpAgentToken = document.getElementById('cpAgentToken');
+    const controlWatcherForm = document.getElementById('controlWatcherForm');
+    const cpWebhookUrl = document.getElementById('cpWebhookUrl');
+    const cpWebhookPort = document.getElementById('cpWebhookPort');
+    const cpLogPath = document.getElementById('cpLogPath');
+    const cpPortalBaseUrl = document.getElementById('cpPortalBaseUrl');
+    const cpPortalOpenAccess = document.getElementById('cpPortalOpenAccess');
+    const cpPortalRequireGuild = document.getElementById('cpPortalRequireGuild');
+    const cpPortalMapUrl = document.getElementById('cpPortalMapUrl');
+    const controlAdminUserForm = document.getElementById('controlAdminUserForm');
+    const cpAdminUserName = document.getElementById('cpAdminUserName');
+    const cpAdminUserRole = document.getElementById('cpAdminUserRole');
+    const cpAdminUserActive = document.getElementById('cpAdminUserActive');
+    const cpAdminUserPassword = document.getElementById('cpAdminUserPassword');
+    const controlAdminUsersWrap = document.getElementById('controlAdminUsersWrap');
     const shopAddForm = document.getElementById('shopAddForm');
     const shopKindSelect = document.getElementById('shopKindSelect');
     const shopGameItemPickerField = document.getElementById('shopGameItemPickerField');
@@ -3561,6 +3974,7 @@
     );
 
     let snapshot = null;
+    let controlPanelSettings = null;
     let isAuthed = false;
     let currentUserRole = 'mod';
     let currentUserName = '';
@@ -4379,6 +4793,7 @@
         currentDeliveryRuntime = null;
         currentDeliveryCapabilities = { builtin: [], presets: [] };
         currentDeliveryCapabilityResult = null;
+        controlPanelSettings = null;
         auditPresets = [];
         currentAuditPresetId = '';
         currentAuditPresetVisibility = 'public';
@@ -4419,6 +4834,14 @@
         currentDeliveryDetailData = null;
         renderDeliveryRuntime(null);
         renderDeliveryDetail(null);
+        renderRowsToContainer(controlAdminUsersWrap, [], 'กำลังนำไปหน้าเข้าสู่ระบบ...');
+        if (controlCommandWrap) {
+          controlCommandWrap.innerHTML = '<div style="padding:12px; color:#9eb0d9;">กำลังนำไปหน้าเข้าสู่ระบบ...</div>';
+        }
+        if (controlPanelSummary) {
+          controlPanelSummary.innerHTML =
+            '<div class="metric"><div class="k">Control Panel</div><div class="v">ต้องเข้าสู่ระบบก่อน</div></div>';
+        }
         renderAuditPresetOptions('');
         if (auditPresetNameInput) auditPresetNameInput.value = '';
         updateAuditPresetSharingControls();
@@ -4704,6 +5127,275 @@
       if (Object.keys(patch.killFeed).length === 0) delete patch.killFeed;
 
       return patch;
+    }
+
+    function getControlPanelEnvEntry(scope, key) {
+      return controlPanelSettings?.env?.[scope]?.[key] || null;
+    }
+
+    function getControlPanelEnvValue(scope, key, fallback = '') {
+      const entry = getControlPanelEnvEntry(scope, key);
+      if (!entry) return fallback;
+      return entry.value ?? fallback;
+    }
+
+    function setSelectBooleanValue(element, value) {
+      if (!element) return;
+      element.value = value ? 'true' : 'false';
+    }
+
+    function fillControlPanelConfigFromSnapshot() {
+      if (!snapshot?.config) return;
+      const cfg = snapshot.config;
+      if (cpChannelCommands) cpChannelCommands.value = String(cfg.channels?.commandsChannel || '');
+      if (cpChannelAdminLog) cpChannelAdminLog.value = String(cfg.channels?.adminLog || '');
+      if (cpChannelShopLog) cpChannelShopLog.value = String(cfg.channels?.shopLog || '');
+      if (cpChannelEvidence) cpChannelEvidence.value = String(cfg.channels?.evidence || '');
+      if (cpChannelInServer) cpChannelInServer.value = String(cfg.channels?.inServer || '');
+      if (cpRoleOwner) cpRoleOwner.value = String(cfg.roles?.owner || '');
+      if (cpRoleAdmin) cpRoleAdmin.value = String(cfg.roles?.admin || '');
+      if (cpRoleModerator) cpRoleModerator.value = String(cfg.roles?.moderator || '');
+      if (cpRoleHelper) cpRoleHelper.value = String(cfg.roles?.helper || '');
+      if (cpRoleVip) cpRoleVip.value = String(cfg.roles?.vip || '');
+      if (cpRoleVerified) cpRoleVerified.value = String(cfg.roles?.verified || '');
+
+      const delivery = cfg.delivery?.auto || {};
+      setSelectBooleanValue(cpDeliveryEnabled, delivery.enabled !== false);
+      if (cpDeliveryMode) cpDeliveryMode.value = String(delivery.executionMode || 'rcon');
+      if (cpDeliveryVerifyMode) cpDeliveryVerifyMode.value = String(delivery.verifyMode || '');
+      if (cpDeliveryQueueInterval) cpDeliveryQueueInterval.value = delivery.queueIntervalMs ?? '';
+      if (cpDeliveryMaxRetries) cpDeliveryMaxRetries.value = delivery.maxRetries ?? '';
+      if (cpDeliveryRetryDelay) cpDeliveryRetryDelay.value = delivery.retryDelayMs ?? '';
+      if (cpDeliveryRetryBackoff) cpDeliveryRetryBackoff.value = delivery.retryBackoff ?? '';
+      if (cpDeliveryCommandTimeout) cpDeliveryCommandTimeout.value = delivery.commandTimeoutMs ?? '';
+      if (cpDeliveryMagazineStackCount) cpDeliveryMagazineStackCount.value = delivery.magazineStackCount ?? '';
+      if (cpDeliveryTeleportMode) cpDeliveryTeleportMode.value = String(delivery.agentTeleportMode || '');
+      if (cpDeliveryTeleportTarget) cpDeliveryTeleportTarget.value = String(delivery.agentTeleportTarget || '');
+      if (cpDeliveryReturnTarget) cpDeliveryReturnTarget.value = String(delivery.agentReturnTarget || '');
+      if (cpDeliveryPreCommands) {
+        cpDeliveryPreCommands.value = Array.isArray(delivery.agentPreCommands)
+          ? delivery.agentPreCommands.join('\n')
+          : '';
+      }
+      if (cpDeliveryPostCommands) {
+        cpDeliveryPostCommands.value = Array.isArray(delivery.agentPostCommands)
+          ? delivery.agentPostCommands.join('\n')
+          : '';
+      }
+    }
+
+    function renderControlPanelCommandRegistry() {
+      if (!controlCommandWrap) return;
+      const commands = Array.isArray(controlPanelSettings?.commands)
+        ? controlPanelSettings.commands
+        : [];
+      if (commands.length === 0) {
+        controlCommandWrap.innerHTML = '<div style="padding:12px; color:#9eb0d9;">ยังไม่พบ command registry</div>';
+        return;
+      }
+      const rows = commands.map((entry) => `
+        <tr>
+          <td><label><input type="checkbox" data-command-disable value="${escapeHtml(entry.name)}" ${entry.disabled ? 'checked' : ''}> ${escapeHtml(entry.name)}</label></td>
+          <td>${escapeHtml(entry.description || '-')}</td>
+          <td>${entry.disabled ? '<span class="badge-text danger">disabled</span>' : '<span class="badge-text ok">enabled</span>'}</td>
+        </tr>
+      `).join('');
+      controlCommandWrap.innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Description</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    function renderControlAdminUsers() {
+      const rows = Array.isArray(controlPanelSettings?.adminUsers)
+        ? controlPanelSettings.adminUsers.map((entry) => ({
+          username: entry.username,
+          role: entry.role,
+          isActive: entry.isActive,
+          createdAt: entry.createdAt || '-',
+          updatedAt: entry.updatedAt || '-',
+        }))
+        : [];
+      renderRowsToContainer(controlAdminUsersWrap, rows, 'เฉพาะ owner จะเห็นรายชื่อแอดมิน');
+    }
+
+    function renderControlPanelSummary() {
+      if (!controlPanelSummary) return;
+      const commandCount = Array.isArray(controlPanelSettings?.commands)
+        ? controlPanelSettings.commands.length
+        : 0;
+      const disabledCount = Array.isArray(controlPanelSettings?.commandConfig?.disabled)
+        ? controlPanelSettings.commandConfig.disabled.length
+        : 0;
+      const adminCount = Array.isArray(controlPanelSettings?.adminUsers)
+        ? controlPanelSettings.adminUsers.length
+        : 0;
+      const mode = String(snapshot?.config?.delivery?.auto?.executionMode || 'rcon');
+      const runtimeMode = String(getControlPanelEnvValue('root', 'DELIVERY_EXECUTION_MODE', mode) || mode);
+      controlPanelSummary.innerHTML = `
+        <div class="metric"><div class="k">commands</div><div class="v">${commandCount}</div></div>
+        <div class="metric"><div class="k">disabled</div><div class="v">${disabledCount}</div></div>
+        <div class="metric"><div class="k">admins</div><div class="v">${adminCount}</div></div>
+        <div class="metric"><div class="k">delivery</div><div class="v">${escapeHtml(mode)}</div></div>
+        <div class="metric"><div class="k">runtime override</div><div class="v">${escapeHtml(runtimeMode)}</div></div>
+        <div class="metric"><div class="k">reload</div><div class="v">${controlPanelSettings?.reloadRequired ? 'required for env changes' : 'not required'}</div></div>
+      `;
+    }
+
+    function fillControlPanelEnvFromSettings() {
+      if (!controlPanelSettings) return;
+      if (cpGuildId) cpGuildId.value = String(getControlPanelEnvValue('root', 'DISCORD_GUILD_ID', ''));
+      setSelectBooleanValue(cpFeatureAdminWeb, Boolean(getControlPanelEnvValue('root', 'BOT_ENABLE_ADMIN_WEB', false)));
+      setSelectBooleanValue(cpFeatureDeliveryWorker, Boolean(getControlPanelEnvValue('root', 'BOT_ENABLE_DELIVERY_WORKER', false)));
+      setSelectBooleanValue(cpFeatureWorkerDelivery, Boolean(getControlPanelEnvValue('root', 'WORKER_ENABLE_DELIVERY', false)));
+      setSelectBooleanValue(cpFeatureRentBikeService, Boolean(getControlPanelEnvValue('root', 'BOT_ENABLE_RENTBIKE_SERVICE', false)));
+      setSelectBooleanValue(cpFeatureWorkerRentBike, Boolean(getControlPanelEnvValue('root', 'WORKER_ENABLE_RENTBIKE', false)));
+      setSelectBooleanValue(cpFeatureWebhook, Boolean(getControlPanelEnvValue('root', 'BOT_ENABLE_SCUM_WEBHOOK', false)));
+      if (cpRuntimeDeliveryExecutionMode) cpRuntimeDeliveryExecutionMode.value = String(getControlPanelEnvValue('root', 'DELIVERY_EXECUTION_MODE', 'rcon'));
+      if (cpRconHost) cpRconHost.value = String(getControlPanelEnvValue('root', 'RCON_HOST', ''));
+      if (cpRconPort) cpRconPort.value = getControlPanelEnvValue('root', 'RCON_PORT', '');
+      if (cpRconProtocol) cpRconProtocol.value = String(getControlPanelEnvValue('root', 'RCON_PROTOCOL', ''));
+      if (cpRconTemplate) cpRconTemplate.value = String(getControlPanelEnvValue('root', 'RCON_EXEC_TEMPLATE', ''));
+      if (cpRconPassword) cpRconPassword.value = '';
+      if (cpAgentBaseUrl) cpAgentBaseUrl.value = String(getControlPanelEnvValue('root', 'SCUM_CONSOLE_AGENT_BASE_URL', ''));
+      if (cpAgentHost) cpAgentHost.value = String(getControlPanelEnvValue('root', 'SCUM_CONSOLE_AGENT_HOST', ''));
+      if (cpAgentPort) cpAgentPort.value = getControlPanelEnvValue('root', 'SCUM_CONSOLE_AGENT_PORT', '');
+      if (cpAgentBackend) cpAgentBackend.value = String(getControlPanelEnvValue('root', 'SCUM_CONSOLE_AGENT_BACKEND', ''));
+      if (cpAgentTemplate) cpAgentTemplate.value = String(getControlPanelEnvValue('root', 'SCUM_CONSOLE_AGENT_EXEC_TEMPLATE', ''));
+      if (cpAgentToken) cpAgentToken.value = '';
+      if (cpWebhookUrl) cpWebhookUrl.value = String(getControlPanelEnvValue('root', 'SCUM_WEBHOOK_URL', ''));
+      if (cpWebhookPort) cpWebhookPort.value = getControlPanelEnvValue('root', 'SCUM_WEBHOOK_PORT', '');
+      if (cpLogPath) cpLogPath.value = String(getControlPanelEnvValue('root', 'SCUM_LOG_PATH', ''));
+      if (cpPortalBaseUrl) cpPortalBaseUrl.value = String(getControlPanelEnvValue('portal', 'WEB_PORTAL_BASE_URL', ''));
+      setSelectBooleanValue(cpPortalOpenAccess, Boolean(getControlPanelEnvValue('portal', 'WEB_PORTAL_PLAYER_OPEN_ACCESS', false)));
+      setSelectBooleanValue(cpPortalRequireGuild, Boolean(getControlPanelEnvValue('portal', 'WEB_PORTAL_REQUIRE_GUILD_MEMBER', false)));
+      if (cpPortalMapUrl) cpPortalMapUrl.value = String(getControlPanelEnvValue('portal', 'WEB_PORTAL_MAP_EXTERNAL_URL', ''));
+      renderControlPanelCommandRegistry();
+      renderControlAdminUsers();
+      renderControlPanelSummary();
+    }
+
+    async function refreshControlPanel(options = {}) {
+      if (!isAuthed || !hasRoleAtLeast(currentUserRole, 'admin')) return;
+      const { silent = true } = options;
+      const res = await api('/admin/api/control-panel/settings');
+      controlPanelSettings = res.data || null;
+      fillControlPanelEnvFromSettings();
+      fillControlPanelConfigFromSnapshot();
+      if (!silent) {
+        toast('รีโหลด Control Panel แล้ว');
+      }
+    }
+
+    function buildControlDiscordPatch() {
+      return {
+        channels: {
+          commandsChannel: String(cpChannelCommands?.value || '').trim(),
+          adminLog: String(cpChannelAdminLog?.value || '').trim(),
+          shopLog: String(cpChannelShopLog?.value || '').trim(),
+          evidence: String(cpChannelEvidence?.value || '').trim(),
+          inServer: String(cpChannelInServer?.value || '').trim(),
+        },
+        roles: {
+          owner: String(cpRoleOwner?.value || '').trim(),
+          admin: String(cpRoleAdmin?.value || '').trim(),
+          moderator: String(cpRoleModerator?.value || '').trim(),
+          helper: String(cpRoleHelper?.value || '').trim(),
+          vip: String(cpRoleVip?.value || '').trim(),
+          verified: String(cpRoleVerified?.value || '').trim(),
+        },
+      };
+    }
+
+    function buildControlDeliveryPatch() {
+      return {
+        delivery: {
+          auto: {
+            enabled: String(cpDeliveryEnabled?.value || 'true') === 'true',
+            executionMode: String(cpDeliveryMode?.value || 'rcon').trim() || 'rcon',
+            verifyMode: String(cpDeliveryVerifyMode?.value || '').trim(),
+            queueIntervalMs: parseNullableInt(cpDeliveryQueueInterval?.value),
+            maxRetries: parseNullableInt(cpDeliveryMaxRetries?.value),
+            retryDelayMs: parseNullableInt(cpDeliveryRetryDelay?.value),
+            retryBackoff: parseNullableInt(cpDeliveryRetryBackoff?.value),
+            commandTimeoutMs: parseNullableInt(cpDeliveryCommandTimeout?.value),
+            magazineStackCount: parseNullableInt(cpDeliveryMagazineStackCount?.value),
+            agentTeleportMode: String(cpDeliveryTeleportMode?.value || '').trim(),
+            agentTeleportTarget: String(cpDeliveryTeleportTarget?.value || '').trim(),
+            agentReturnTarget: String(cpDeliveryReturnTarget?.value || '').trim(),
+            agentPreCommands: splitLines(cpDeliveryPreCommands?.value || ''),
+            agentPostCommands: splitLines(cpDeliveryPostCommands?.value || ''),
+          },
+        },
+      };
+    }
+
+    function buildControlCommandPatch() {
+      const disabled = Array.from(
+        document.querySelectorAll('#controlCommandWrap input[data-command-disable]:checked'),
+      ).map((entry) => String(entry.value || '').trim()).filter(Boolean);
+      return {
+        commands: {
+          disabled,
+        },
+      };
+    }
+
+    function buildRuntimeEnvPatch() {
+      return {
+        root: {
+          DISCORD_GUILD_ID: String(cpGuildId?.value || '').trim(),
+          BOT_ENABLE_ADMIN_WEB: String(cpFeatureAdminWeb?.value || 'false') === 'true',
+          BOT_ENABLE_DELIVERY_WORKER: String(cpFeatureDeliveryWorker?.value || 'false') === 'true',
+          WORKER_ENABLE_DELIVERY: String(cpFeatureWorkerDelivery?.value || 'false') === 'true',
+          BOT_ENABLE_RENTBIKE_SERVICE: String(cpFeatureRentBikeService?.value || 'false') === 'true',
+          WORKER_ENABLE_RENTBIKE: String(cpFeatureWorkerRentBike?.value || 'false') === 'true',
+          BOT_ENABLE_SCUM_WEBHOOK: String(cpFeatureWebhook?.value || 'false') === 'true',
+          DELIVERY_EXECUTION_MODE: String(cpRuntimeDeliveryExecutionMode?.value || 'rcon').trim() || 'rcon',
+        },
+      };
+    }
+
+    function buildRconAgentEnvPatch() {
+      return {
+        root: {
+          RCON_HOST: String(cpRconHost?.value || '').trim(),
+          RCON_PORT: String(cpRconPort?.value || '').trim(),
+          RCON_PROTOCOL: String(cpRconProtocol?.value || '').trim(),
+          RCON_EXEC_TEMPLATE: String(cpRconTemplate?.value || '').trim(),
+          RCON_PASSWORD: String(cpRconPassword?.value || '').trim(),
+          SCUM_CONSOLE_AGENT_BASE_URL: String(cpAgentBaseUrl?.value || '').trim(),
+          SCUM_CONSOLE_AGENT_HOST: String(cpAgentHost?.value || '').trim(),
+          SCUM_CONSOLE_AGENT_PORT: String(cpAgentPort?.value || '').trim(),
+          SCUM_CONSOLE_AGENT_BACKEND: String(cpAgentBackend?.value || '').trim(),
+          SCUM_CONSOLE_AGENT_EXEC_TEMPLATE: String(cpAgentTemplate?.value || '').trim(),
+          SCUM_CONSOLE_AGENT_TOKEN: String(cpAgentToken?.value || '').trim(),
+        },
+      };
+    }
+
+    function buildWatcherPortalEnvPatch() {
+      return {
+        root: {
+          SCUM_WEBHOOK_URL: String(cpWebhookUrl?.value || '').trim(),
+          SCUM_WEBHOOK_PORT: String(cpWebhookPort?.value || '').trim(),
+          SCUM_LOG_PATH: String(cpLogPath?.value || '').trim(),
+        },
+        portal: {
+          WEB_PORTAL_BASE_URL: String(cpPortalBaseUrl?.value || '').trim(),
+          WEB_PORTAL_PLAYER_OPEN_ACCESS: String(cpPortalOpenAccess?.value || 'false') === 'true',
+          WEB_PORTAL_REQUIRE_GUILD_MEMBER: String(cpPortalRequireGuild?.value || 'false') === 'true',
+          WEB_PORTAL_MAP_EXTERNAL_URL: String(cpPortalMapUrl?.value || '').trim(),
+        },
+      };
     }
 
     function makeSuggestedItemId(itemId) {
@@ -7034,6 +7726,7 @@
       const queueJob = detail.queueJob || null;
       const deadLetter = detail.deadLetter || null;
       const latestOutputs = Array.isArray(detail.latestOutputs) ? detail.latestOutputs : [];
+      const evidence = detail.evidence && typeof detail.evidence === 'object' ? detail.evidence : null;
       const timeline = Array.isArray(detail.timeline) && detail.timeline.length > 0
         ? detail.timeline
         : Array.isArray(detail.stepLog)
@@ -7048,6 +7741,7 @@
         ['Audit Rows', Number(detail.auditRows?.length || 0).toLocaleString()],
         ['Timeline', Number(timeline.length || 0).toLocaleString()],
         ['Command Outputs', Number(latestOutputs.length || 0).toLocaleString()],
+        ['Evidence Events', Number(evidence?.events?.length || 0).toLocaleString()],
       ];
       deliveryDetailSummary.innerHTML = metrics
         .map(([k, v]) => `<div class="metric"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(String(v))}</div></div>`)
@@ -7066,6 +7760,7 @@
           stepLog: Array.isArray(detail.stepLog) ? detail.stepLog : [],
           latestCommandSummary: detail.latestCommandSummary || null,
           latestOutputs,
+          evidence,
           preview: detail.preview || null,
           auditRows: Array.isArray(detail.auditRows) ? detail.auditRows : [],
         },
@@ -7405,6 +8100,7 @@
           snapshot.adminSessions = [];
           snapshot.adminAuthProviders = null;
         }
+        await refreshControlPanel({ silent: true }).catch(() => null);
         currentDashboardCards = dashboardCardsRes?.data || null;
         renderSummary();
         renderRuntimeSupervisor(snapshot?.runtimeSupervisor || null);
@@ -8307,6 +9003,209 @@
           toast(`revoke session แล้ว: ${sessionId}`);
         } catch (error) {
           toast(error.message || 'revoke session ไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (controlPanelRefreshBtn) {
+      controlPanelRefreshBtn.addEventListener('click', async () => {
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        try {
+          await runWithButtonState(controlPanelRefreshBtn, 'กำลังโหลด...', async () => {
+            await refreshSnapshot({ silent: true, syncConfigInputs: true, forceCardsRefresh: true });
+          });
+          toast('รีโหลด Control Panel แล้ว');
+        } catch (error) {
+          toast(error.message || 'รีโหลด Control Panel ไม่สำเร็จ');
+        }
+      });
+    }
+
+    document.querySelectorAll('[data-control-open-tab]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const tabKey = String(button.getAttribute('data-control-open-tab') || '').trim();
+        if (tabKey) {
+          activateTab(tabKey);
+        }
+      });
+    });
+
+    if (controlDiscordForm) {
+      controlDiscordForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        const submitButton = getSubmitButton(controlDiscordForm, event);
+        try {
+          await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
+            await api('/admin/api/config/patch', 'POST', {
+              patch: buildControlDiscordPatch(),
+            });
+            if (hasRoleAtLeast(currentUserRole, 'owner')) {
+              await api('/admin/api/control-panel/env', 'POST', {
+                root: {
+                  DISCORD_GUILD_ID: String(cpGuildId?.value || '').trim(),
+                },
+              });
+            }
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: true });
+          toast('บันทึก Discord / Access แล้ว');
+        } catch (error) {
+          toast(error.message || 'บันทึก Discord / Access ไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (controlCommandForm) {
+      controlCommandForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        const submitButton = getSubmitButton(controlCommandForm, event);
+        try {
+          await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
+            await api('/admin/api/config/patch', 'POST', {
+              patch: buildControlCommandPatch(),
+            });
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: true });
+          toast('บันทึกสถานะคำสั่งแล้ว');
+        } catch (error) {
+          toast(error.message || 'บันทึกสถานะคำสั่งไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (controlDeliveryForm) {
+      controlDeliveryForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        const submitButton = getSubmitButton(controlDeliveryForm, event);
+        try {
+          await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
+            await api('/admin/api/config/patch', 'POST', {
+              patch: buildControlDeliveryPatch(),
+            });
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: true });
+          toast('บันทึก Delivery Flow แล้ว');
+        } catch (error) {
+          toast(error.message || 'บันทึก Delivery Flow ไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (controlEnvRuntimeForm) {
+      controlEnvRuntimeForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        if (!hasRoleAtLeast(currentUserRole, 'owner')) {
+          toast('ต้องใช้สิทธิ owner');
+          return;
+        }
+        const submitButton = getSubmitButton(controlEnvRuntimeForm, event);
+        try {
+          await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
+            await api('/admin/api/control-panel/env', 'POST', buildRuntimeEnvPatch());
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: true });
+          toast('บันทึก Runtime Flags แล้ว');
+        } catch (error) {
+          toast(error.message || 'บันทึก Runtime Flags ไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (controlRconAgentForm) {
+      controlRconAgentForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        if (!hasRoleAtLeast(currentUserRole, 'owner')) {
+          toast('ต้องใช้สิทธิ owner');
+          return;
+        }
+        const submitButton = getSubmitButton(controlRconAgentForm, event);
+        try {
+          await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
+            await api('/admin/api/control-panel/env', 'POST', buildRconAgentEnvPatch());
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: true });
+          toast('บันทึก RCON / Agent แล้ว');
+        } catch (error) {
+          toast(error.message || 'บันทึก RCON / Agent ไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (controlWatcherForm) {
+      controlWatcherForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        if (!hasRoleAtLeast(currentUserRole, 'owner')) {
+          toast('ต้องใช้สิทธิ owner');
+          return;
+        }
+        const submitButton = getSubmitButton(controlWatcherForm, event);
+        try {
+          await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
+            await api('/admin/api/control-panel/env', 'POST', buildWatcherPortalEnvPatch());
+          });
+          await refreshSnapshot({ silent: true, syncConfigInputs: true });
+          toast('บันทึก Watcher / Portal แล้ว');
+        } catch (error) {
+          toast(error.message || 'บันทึก Watcher / Portal ไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (controlAdminUserForm) {
+      controlAdminUserForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        if (!hasRoleAtLeast(currentUserRole, 'owner')) {
+          toast('ต้องใช้สิทธิ owner');
+          return;
+        }
+        const submitButton = getSubmitButton(controlAdminUserForm, event);
+        try {
+          await runWithButtonState(submitButton, 'กำลังบันทึก...', async () => {
+            await api('/admin/api/auth/user', 'POST', {
+              username: String(cpAdminUserName?.value || '').trim(),
+              role: String(cpAdminUserRole?.value || 'mod').trim() || 'mod',
+              isActive: String(cpAdminUserActive?.value || 'true') === 'true',
+              password: String(cpAdminUserPassword?.value || '').trim(),
+            });
+          });
+          if (cpAdminUserPassword) {
+            cpAdminUserPassword.value = '';
+          }
+          await refreshSnapshot({ silent: true, syncConfigInputs: true });
+          toast('บันทึก Admin User แล้ว');
+        } catch (error) {
+          toast(error.message || 'บันทึก Admin User ไม่สำเร็จ');
         }
       });
     }

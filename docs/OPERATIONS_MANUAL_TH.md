@@ -3,7 +3,7 @@
 เอกสารนี้เป็นคู่มือปฏิบัติการหลักของระบบ ใช้สำหรับติดตั้ง, ตั้งค่า, รัน, ทดสอบ, ตรวจสุขภาพ และดูแลระบบในงานจริง
 
 อัปเดตล่าสุด: **2026-03-15**
-สถานะอ้างอิง: `npm test` ผ่าน `135/135`, `npm run lint` ผ่าน
+สถานะอ้างอิง: ดู CI badge และ artifact ล่าสุดที่ [VERIFICATION_STATUS_TH.md](./VERIFICATION_STATUS_TH.md)
 
 เอกสารที่เกี่ยวข้อง
 - ภาพรวมระบบ: [README.md](../README.md)
@@ -509,7 +509,7 @@ npm test
 
 ผลล่าสุด
 - `npm run lint` ผ่าน
-- `npm test` ผ่าน `135/135`
+- verification status อ้างอิงจาก CI workflow และ artifact ล่าสุด
 
 ชุดทดสอบครอบคลุม
 - admin API / RBAC / SSO / presets / capability catalog

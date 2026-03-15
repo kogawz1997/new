@@ -16,7 +16,8 @@ const {
 } = require('discord.js');
 const fs = require('node:fs');
 const path = require('node:path');
-const { moderation, roles, channels, economy } = require('./config');
+const config = require('./config');
+const { moderation, roles, channels, economy } = config;
 const {
   pushMessage,
   getRecentMessages,
@@ -814,6 +815,16 @@ async function handleInteractionCreate(interaction) {
   if (!command) {
     console.error(`ไม่พบคำสั่งที่ชื่อ ${interaction.commandName}`);
     return;
+  }
+
+  const disabledCommands = Array.isArray(config.commands?.disabled)
+    ? config.commands.disabled.map((name) => String(name || '').trim()).filter(Boolean)
+    : [];
+  if (disabledCommands.includes(String(interaction.commandName || '').trim())) {
+    return interaction.reply({
+      content: 'คำสั่งนี้ถูกปิดใช้งานชั่วคราวโดยแอดมิน',
+      flags: MessageFlags.Ephemeral,
+    });
   }
 
   try {

@@ -3,6 +3,10 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   secret-hygiene:
@@ -23,8 +27,82 @@ jobs:
       - name: Secret scan
         run: npm run security:scan-secrets
 
-  quality:
+  quality-matrix:
     needs: secret-hygiene
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+
+      - name: Prepare test env profile
+        run: npm run env:prepare:test
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Push test schema
+        run: npx prisma db push --skip-generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+  clean-room-install:
+    needs: quality-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Prepare clean-room env
+        run: npm run env:prepare:test
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npm run db:generate
+
+      - name: Push test schema
+        run: npx prisma db push --skip-generate
+
+      - name: Doctor
+        run: npm run doctor
+
+      - name: Security check
+        run: npm run security:check
+
+      - name: Local smoke stack
+        run: npm run smoke:local-ci
+
+  verification-artifacts:
+    needs: clean-room-install
+    if: ${{ always() }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -36,11 +114,25 @@ jobs:
           node-version: 20
           cache: npm
 
+      - name: Prepare test env profile
+        run: npm run env:prepare:test
+
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint (syntax)
-        run: npm run lint
+      - name: Generate Prisma client
+        run: npm run db:generate
 
-      - name: Test
-        run: npm test
+      - name: Push test schema
+        run: npx prisma db push --skip-generate
+
+      - name: Run verification suite
+        run: npm run ci:verify
+
+      - name: Upload verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-artifacts
+          path: artifacts/ci
+          if-no-files-found: error

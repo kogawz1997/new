@@ -6,6 +6,7 @@ const { once } = require('node:events');
 
 const adminWebServerPath = path.resolve(__dirname, '../src/adminWebServer.js');
 const ticketStorePath = path.resolve(__dirname, '../src/store/ticketStore.js');
+const ticketServicePath = path.resolve(__dirname, '../src/services/ticketService.js');
 
 function freshModule(modulePath) {
   delete require.cache[modulePath];
@@ -142,6 +143,7 @@ test('admin e2e: ticket claim -> close deletes channel in full flow', async (t) 
   process.env.ADMIN_WEB_2FA_ENABLED = 'false';
   process.env.ADMIN_WEB_SESSION_BIND_USER_AGENT = 'true';
 
+  delete require.cache[ticketServicePath];
   const ticketStore = freshModule(ticketStorePath);
   if (typeof ticketStore.replaceTickets === 'function') {
     ticketStore.replaceTickets([], 1);
@@ -189,6 +191,7 @@ test('admin e2e: ticket claim -> close deletes channel in full flow', async (t) 
   t.after(async () => {
     await new Promise((resolve) => server.close(resolve));
     delete require.cache[adminWebServerPath];
+    delete require.cache[ticketServicePath];
     delete require.cache[ticketStorePath];
   });
 
