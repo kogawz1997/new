@@ -87,7 +87,7 @@ npm run setup:easy
 - Redirect URI (local):
   - `http://127.0.0.1:3300/auth/discord/callback`
 - Redirect URI (production):
-  - `https://genz.noah-dns.online/auth/discord/callback`
+  - `https://player.genz.noah-dns.online/auth/discord/callback`
 
 นำค่าเหล่านี้มาใส่ `.env` ของเว็บ:
 
@@ -194,8 +194,8 @@ npm run smoke:postdeploy
 ตั้งค่า base URL สำหรับ smoke script ได้:
 
 ```bash
-set SMOKE_ADMIN_BASE_URL=https://genz.noah-dns.online/admin
-set SMOKE_PLAYER_BASE_URL=https://genz.noah-dns.online
+set SMOKE_ADMIN_BASE_URL=https://admin.genz.noah-dns.online/admin
+set SMOKE_PLAYER_BASE_URL=https://player.genz.noah-dns.online
 npm run smoke:postdeploy
 ```
 
@@ -245,8 +245,8 @@ deploy\run-production-checks.cmd
 1. คัดลอกไฟล์ template production:
    - `copy apps\web-portal-standalone\.env.production.example apps\web-portal-standalone\.env`
 2. ตั้งโดเมน + HTTPS
-3. ตั้ง `WEB_PORTAL_BASE_URL=https://genz.noah-dns.online`
-4. ตั้ง `WEB_PORTAL_LEGACY_ADMIN_URL=https://genz.noah-dns.online/admin`
+3. ตั้ง `WEB_PORTAL_BASE_URL=https://player.genz.noah-dns.online`
+4. ตั้ง `WEB_PORTAL_LEGACY_ADMIN_URL=https://admin.genz.noah-dns.online/admin`
 5. ตั้ง Discord OAuth ให้ตรง redirect จริง
 6. รัน `npm run doctor:web-standalone:prod` ให้ PASS
 7. รันด้วย process manager (PM2 / service manager)

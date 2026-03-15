@@ -89,6 +89,7 @@ const {
   getDailyRent,
 } = require('../../src/store/rentBikeStore');
 const { awardWheelRewardForUser } = require('../../src/services/wheelService');
+const { getPlatformPublicOverview } = require('../../src/services/platformService');
 const config = require('../../src/config');
 
 const NODE_ENV = String(process.env.NODE_ENV || 'development').trim().toLowerCase();
@@ -104,9 +105,18 @@ const LEGACY_ADMIN_URL = String(
 
 const SESSION_TTL_MS =
   asInt(process.env.WEB_PORTAL_SESSION_TTL_HOURS, 12, 1, 168) * 60 * 60 * 1000;
-const SESSION_COOKIE_NAME = 'scum_portal_session';
+const SESSION_COOKIE_NAME =
+  String(process.env.WEB_PORTAL_SESSION_COOKIE_NAME || 'scum_portal_session').trim()
+    || 'scum_portal_session';
 const SESSION_COOKIE_SAMESITE = normalizeSameSite(
   process.env.WEB_PORTAL_COOKIE_SAMESITE || 'lax',
+);
+const SESSION_COOKIE_PATH = normalizeCookiePath(
+  process.env.WEB_PORTAL_SESSION_COOKIE_PATH || '/',
+  '/',
+);
+const SESSION_COOKIE_DOMAIN = normalizeCookieDomain(
+  process.env.WEB_PORTAL_COOKIE_DOMAIN || '',
 );
 const SECURE_COOKIE = envBool('WEB_PORTAL_SECURE_COOKIE', IS_PRODUCTION);
 const ENFORCE_ORIGIN_CHECK = envBool('WEB_PORTAL_ENFORCE_ORIGIN_CHECK', true);
@@ -152,6 +162,10 @@ const CLEANUP_INTERVAL_MS = asInt(
 const DISCORD_API_BASE = 'https://discord.com/api/v10';
 const LOGIN_HTML_PATH = path.join(__dirname, 'public', 'login.html');
 const PLAYER_HTML_PATH = path.join(__dirname, 'public', 'player.html');
+const LANDING_HTML_PATH = path.join(__dirname, 'public', 'landing.html');
+const TRIAL_HTML_PATH = path.join(__dirname, 'public', 'trial.html');
+const SHOWCASE_HTML_PATH = path.join(__dirname, 'public', 'showcase.html');
+const DOCS_DIR_PATH = path.resolve(process.cwd(), 'docs');
 const DEFAULT_MAP_PORTAL_URL = 'https://scum-map.com/th/map/bunkers_and_killboxes';
 const DEFAULT_SCUM_ITEMS_DIR_PATH = path.resolve(process.cwd(), 'scum_items-main');
 const SCUM_ITEMS_DIR_PATH = path.resolve(
@@ -180,8 +194,14 @@ const PARTY_CHAT_MAX_LENGTH = 280;
 
 let cachedLoginHtml = null;
 let cachedPlayerHtml = null;
+let cachedLandingHtml = null;
+let cachedTrialHtml = null;
+let cachedShowcaseHtml = null;
 let cachedLoginHtmlMtimeMs = 0;
 let cachedPlayerHtmlMtimeMs = 0;
+let cachedLandingHtmlMtimeMs = 0;
+let cachedTrialHtmlMtimeMs = 0;
+let cachedShowcaseHtmlMtimeMs = 0;
 
 function asInt(raw, fallback, min, max) {
   const parsed = Number(raw);
@@ -200,6 +220,20 @@ function normalizeSameSite(value) {
   if (raw === 'strict') return 'Strict';
   if (raw === 'none') return 'None';
   return 'Lax';
+}
+
+function normalizeCookiePath(value, fallback = '/') {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+  if (!text.startsWith('/')) return fallback;
+  return text;
+}
+
+function normalizeCookieDomain(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/[;\s]/.test(text)) return '';
+  return text;
 }
 
 function normalizeMode(value) {
@@ -778,10 +812,11 @@ function buildSessionCookie(sessionId) {
   const parts = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
     'HttpOnly',
-    'Path=/',
+    `Path=${SESSION_COOKIE_PATH}`,
     `SameSite=${SESSION_COOKIE_SAMESITE}`,
     `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
   ];
+  if (SESSION_COOKIE_DOMAIN) parts.push(`Domain=${SESSION_COOKIE_DOMAIN}`);
   if (SECURE_COOKIE) parts.push('Secure');
   return parts.join('; ');
 }
@@ -790,10 +825,11 @@ function buildClearSessionCookie() {
   const parts = [
     `${SESSION_COOKIE_NAME}=`,
     'HttpOnly',
-    'Path=/',
+    `Path=${SESSION_COOKIE_PATH}`,
     `SameSite=${SESSION_COOKIE_SAMESITE}`,
     'Max-Age=0',
   ];
+  if (SESSION_COOKIE_DOMAIN) parts.push(`Domain=${SESSION_COOKIE_DOMAIN}`);
   if (SECURE_COOKIE) parts.push('Secure');
   return parts.join('; ');
 }
@@ -983,6 +1019,68 @@ function getPlayerHtml() {
   return cachedPlayerHtml;
 }
 
+function getLandingHtml() {
+  const mtimeMs = getFileMtimeMs(LANDING_HTML_PATH);
+  if (!cachedLandingHtml || !IS_PRODUCTION || mtimeMs > cachedLandingHtmlMtimeMs) {
+    cachedLandingHtml = loadHtmlTemplate(LANDING_HTML_PATH);
+    cachedLandingHtmlMtimeMs = mtimeMs;
+  }
+  return cachedLandingHtml;
+}
+
+function getTrialHtml() {
+  const mtimeMs = getFileMtimeMs(TRIAL_HTML_PATH);
+  if (!cachedTrialHtml || !IS_PRODUCTION || mtimeMs > cachedTrialHtmlMtimeMs) {
+    cachedTrialHtml = loadHtmlTemplate(TRIAL_HTML_PATH);
+    cachedTrialHtmlMtimeMs = mtimeMs;
+  }
+  return cachedTrialHtml;
+}
+
+function renderMarkdownDocument(title, markdown) {
+  return `<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>${escapeHtml(title)}</title>
+  <style>
+    body{margin:0;background:#0c1318;color:#e9f3f3;font-family:ui-sans-serif,system-ui,sans-serif}
+    .shell{width:min(980px,calc(100% - 32px));margin:0 auto;padding:28px 0 44px}
+    .card{background:#121d24;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:22px;box-shadow:0 24px 56px rgba(0,0,0,.28)}
+    a{color:#8fd4c8}
+    h1{margin:0 0 16px;font-size:32px}
+    pre{white-space:pre-wrap;line-height:1.7;font-size:14px;color:#bcd0cf}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card">
+      <p><a href="/landing">กลับหน้า Landing</a></p>
+      <h1>${escapeHtml(title)}</h1>
+      <pre>${escapeHtml(markdown)}</pre>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function tryServePublicDoc(pathname, res) {
+  if (!pathname.startsWith('/docs/')) return false;
+  const relative = pathname.slice('/docs/'.length);
+  if (!relative || !relative.toLowerCase().endsWith('.md')) return false;
+  const absolute = path.resolve(DOCS_DIR_PATH, relative);
+  if (!absolute.startsWith(DOCS_DIR_PATH)) return false;
+  if (!fs.existsSync(absolute)) return false;
+  const markdown = fs.readFileSync(absolute, 'utf8');
+  sendHtml(
+    res,
+    200,
+    renderMarkdownDocument(path.basename(relative), markdown),
+  );
+  return true;
+}
+
 function renderLoginPage(message) {
   const mtimeMs = getFileMtimeMs(LOGIN_HTML_PATH);
   if (!cachedLoginHtml || !IS_PRODUCTION || mtimeMs > cachedLoginHtmlMtimeMs) {
@@ -991,6 +1089,16 @@ function renderLoginPage(message) {
   }
   const safe = escapeHtml(String(message || ''));
   return cachedLoginHtml.replace('__ERROR_MESSAGE__', safe);
+}
+
+// Keep the public showcase static and cacheable so sales/demo flows do not depend on auth or API calls.
+function getShowcaseHtml() {
+  const mtimeMs = getFileMtimeMs(SHOWCASE_HTML_PATH);
+  if (!cachedShowcaseHtml || !IS_PRODUCTION || mtimeMs > cachedShowcaseHtmlMtimeMs) {
+    cachedShowcaseHtml = loadHtmlTemplate(SHOWCASE_HTML_PATH);
+    cachedShowcaseHtmlMtimeMs = mtimeMs;
+  }
+  return cachedShowcaseHtml;
 }
 
 function startOauthState() {
@@ -2715,12 +2823,17 @@ function buildHealthPayload() {
       sessions: sessions.size,
       oauthStates: oauthStates.size,
       secureCookie: SECURE_COOKIE,
+      cookieName: SESSION_COOKIE_NAME,
+      cookiePath: SESSION_COOKIE_PATH,
       cookieSameSite: SESSION_COOKIE_SAMESITE,
       enforceOriginCheck: ENFORCE_ORIGIN_CHECK,
       discordOAuthConfigured: Boolean(DISCORD_CLIENT_ID && DISCORD_CLIENT_SECRET),
       playerOpenAccess: PLAYER_OPEN_ACCESS,
       requireGuildMember: REQUIRE_GUILD_MEMBER,
       legacyAdminUrl: LEGACY_ADMIN_URL,
+      landingUrl: '/landing',
+      showcaseUrl: '/showcase',
+      trialUrl: '/trial',
     },
   };
 }
@@ -2749,6 +2862,21 @@ async function requestHandler(req, res) {
     return;
   }
 
+  // Admin routes must jump to the dedicated admin origin before generic
+  // player canonicalization, otherwise local smoke checks get redirected
+  // back to the player origin and never reach the real admin surface.
+  if (pathname.startsWith('/admin')) {
+    const target = buildLegacyAdminUrl(pathname, urlObj.search);
+    if (!target) {
+      return sendJson(res, 503, {
+        ok: false,
+        error: 'Legacy admin URL is invalid',
+      });
+    }
+    res.writeHead(302, { Location: target });
+    return res.end();
+  }
+
   const canonicalRedirectUrl = getCanonicalRedirectUrl(req);
   if (canonicalRedirectUrl && (method === 'GET' || method === 'HEAD')) {
     res.writeHead(302, { Location: canonicalRedirectUrl });
@@ -2763,9 +2891,47 @@ async function requestHandler(req, res) {
     return sendJson(res, 200, buildHealthPayload());
   }
 
+  if (method === 'GET' && tryServePublicDoc(pathname, res)) {
+    return;
+  }
+
   if (pathname === '/') {
     res.writeHead(302, { Location: '/player' });
     return res.end();
+  }
+
+  if (pathname === '/showcase/' && method === 'GET') {
+    res.writeHead(302, { Location: '/showcase' });
+    return res.end();
+  }
+
+  if (pathname === '/landing/' && method === 'GET') {
+    res.writeHead(302, { Location: '/landing' });
+    return res.end();
+  }
+
+  if (pathname === '/landing' && method === 'GET') {
+    return sendHtml(res, 200, getLandingHtml());
+  }
+
+  if (pathname === '/showcase' && method === 'GET') {
+    return sendHtml(res, 200, getShowcaseHtml());
+  }
+
+  if (pathname === '/trial/' && method === 'GET') {
+    res.writeHead(302, { Location: '/trial' });
+    return res.end();
+  }
+
+  if (pathname === '/trial' && method === 'GET') {
+    return sendHtml(res, 200, getTrialHtml());
+  }
+
+  if (pathname === '/api/platform/public/overview' && method === 'GET') {
+    return sendJson(res, 200, {
+      ok: true,
+      data: await getPlatformPublicOverview(),
+    });
   }
 
   if (pathname === '/player/') {
@@ -2797,18 +2963,6 @@ async function requestHandler(req, res) {
       200,
       renderLoginPage(String(urlObj.searchParams.get('error') || '')),
     );
-  }
-
-  if (pathname.startsWith('/admin')) {
-    const target = buildLegacyAdminUrl(pathname, urlObj.search);
-    if (!target) {
-      return sendJson(res, 503, {
-        ok: false,
-        error: 'Legacy admin URL is invalid',
-      });
-    }
-    res.writeHead(302, { Location: target });
-    return res.end();
   }
 
   if (pathname === '/player' && method === 'GET') {
@@ -2899,6 +3053,14 @@ function buildStartupValidation() {
     warnings.push('WEB_PORTAL_COOKIE_SAMESITE=None without secure cookie may be rejected by browsers');
   }
 
+  if (base && legacy && base.origin === legacy.origin) {
+    warnings.push('WEB_PORTAL_BASE_URL and WEB_PORTAL_LEGACY_ADMIN_URL share the same origin; prefer split origin/subdomain for cleaner cookie and routing isolation');
+  }
+
+  if (SESSION_TTL_MS > 24 * 60 * 60 * 1000) {
+    warnings.push('WEB_PORTAL_SESSION_TTL_HOURS is longer than 24 hours; review whether player sessions should expire sooner');
+  }
+
   if (base && !isLoopbackHost(base.hostname) && base.protocol !== 'https:') {
     warnings.push('WEB_PORTAL_BASE_URL is not HTTPS on non-loopback host');
   }
@@ -2928,8 +3090,11 @@ function printStartupHints() {
   console.log(`[web-portal-standalone] listening at ${BASE_URL}`);
   console.log(`[web-portal-standalone] mode: ${PORTAL_MODE}`);
   console.log(`[web-portal-standalone] legacy admin: ${LEGACY_ADMIN_URL}`);
+  console.log(`[web-portal-standalone] landing: ${new URL('/landing', BASE_URL).toString()}`);
+  console.log(`[web-portal-standalone] showcase: ${new URL('/showcase', BASE_URL).toString()}`);
+  console.log(`[web-portal-standalone] trial: ${new URL('/trial', BASE_URL).toString()}`);
   console.log(
-    `[web-portal-standalone] cookie: secure=${SECURE_COOKIE} sameSite=${SESSION_COOKIE_SAMESITE}`,
+    `[web-portal-standalone] cookie: name=${SESSION_COOKIE_NAME} path=${SESSION_COOKIE_PATH} secure=${SECURE_COOKIE} sameSite=${SESSION_COOKIE_SAMESITE}${SESSION_COOKIE_DOMAIN ? ` domain=${SESSION_COOKIE_DOMAIN}` : ''}`,
   );
 
   const validation = buildStartupValidation();

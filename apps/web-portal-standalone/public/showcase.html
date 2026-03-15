@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCUM Ops Platform Showcase</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Teko:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-1: #081218;
+      --bg-2: #11212b;
+      --bg-3: #1c343d;
+      --text: #eef7f6;
+      --muted: #a6c1bf;
+      --line: rgba(140, 202, 194, 0.2);
+      --card: rgba(10, 20, 25, 0.82);
+      --soft: rgba(255, 255, 255, 0.05);
+      --accent: #d9b86b;
+      --accent-2: #8fd4c8;
+      --accent-3: #8db9ff;
+      --ok: #7ad38a;
+      --warn: #f1ba72;
+      --shadow: 0 22px 48px rgba(2, 7, 10, 0.48);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: "Barlow Condensed", "Teko", sans-serif;
+      letter-spacing: 0.2px;
+      background:
+        radial-gradient(900px 520px at 5% 0%, rgba(143, 212, 200, 0.15), transparent 62%),
+        radial-gradient(900px 520px at 95% 100%, rgba(141, 185, 255, 0.16), transparent 58%),
+        linear-gradient(155deg, var(--bg-1), var(--bg-2) 42%, var(--bg-3));
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 34px 34px;
+      opacity: 0.14;
+    }
+
+    .shell {
+      width: min(1360px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 40px;
+      display: grid;
+      gap: 18px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .hero,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(165deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
+        var(--card);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+
+    .hero {
+      padding: 24px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .hero-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      min-height: 34px;
+      padding: 0 12px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--accent-2);
+      font-size: 13px;
+      letter-spacing: 0.9px;
+      text-transform: uppercase;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      font-family: "Teko", sans-serif;
+      letter-spacing: 0.45px;
+    }
+
+    h1 {
+      font-size: clamp(48px, 9vw, 86px);
+      line-height: 0.88;
+      max-width: 12ch;
+    }
+
+    .hero-copy p,
+    .panel p,
+    .metric p,
+    .flow-step p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 16px;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 0 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      color: var(--text);
+      text-decoration: none;
+      background: rgba(255, 255, 255, 0.05);
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(217, 184, 107, 0.42);
+    }
+
+    .btn.primary {
+      color: #0d1618;
+      border-color: transparent;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      font-weight: 700;
+    }
+
+    .hero-grid,
+    .cap-grid,
+    .module-grid,
+    .proof-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+
+    .metric,
+    .module-card,
+    .proof-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.045);
+      display: grid;
+      gap: 8px;
+    }
+
+    .metric .kicker,
+    .module-card .kicker,
+    .proof-card .kicker {
+      color: var(--accent-2);
+      font-size: 12px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .metric .value {
+      font-family: "Teko", sans-serif;
+      font-size: 34px;
+      line-height: 0.95;
+    }
+
+    .panel {
+      padding: 20px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: end;
+      flex-wrap: wrap;
+    }
+
+    .panel-head h2 {
+      font-size: 34px;
+      line-height: 0.92;
+    }
+
+    .tags {
+      display: flex;
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(143, 212, 200, 0.24);
+      background: rgba(255, 255, 255, 0.04);
+      color: #d9f2ef;
+      font-size: 12px;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      display: grid;
+      gap: 6px;
+      color: #dbeeed;
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 10px;
+    }
+
+    .flow-step {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      background: linear-gradient(165deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+      display: grid;
+      gap: 6px;
+    }
+
+    .flow-step .idx {
+      color: var(--accent);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .proof-grid {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+
+    .proof-card strong {
+      font-size: 20px;
+      line-height: 1.05;
+    }
+
+    .footer-note {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    @media (max-width: 780px) {
+      .shell {
+        width: min(100%, calc(100% - 22px));
+      }
+
+      h1 {
+        max-width: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="hero-top">
+        <div class="hero-copy">
+          <span class="badge">SCUM Ops Platform Showcase</span>
+          <h1>มากกว่าบอท เป็น control plane สำหรับเซิร์ฟเวอร์ SCUM</h1>
+          <p>รวม Discord bot, delivery worker, log watcher, admin web, player portal และ SCUM admin bridge ไว้ในระบบเดียว พร้อม timeline, preflight, simulator, restore guardrails และ operational tooling สำหรับ production</p>
+        </div>
+        <div class="hero-actions">
+          <a class="btn primary" href="/player/login">เข้า Player Portal</a>
+          <a class="btn" href="/admin">เปิด Admin Web</a>
+        </div>
+      </div>
+
+      <div class="hero-grid">
+        <article class="metric">
+          <div class="kicker">Runtime Split</div>
+          <div class="value">5+1</div>
+          <p>`bot / worker / watcher / web / admin web` พร้อม `console-agent` สำหรับ delivery แบบ live</p>
+        </article>
+        <article class="metric">
+          <div class="kicker">Delivery Stack</div>
+          <div class="value">Queue + Verify</div>
+          <p>มี queue, retry, dead-letter, audit, per-order timeline, preflight, simulator และ post-spawn verification</p>
+        </article>
+        <article class="metric">
+          <div class="kicker">Admin Cockpit</div>
+          <div class="value">Ops Ready</div>
+          <p>RBAC, SSO, config editor, backup/restore, notifications, metrics และ capability tester อยู่ในหน้าเดียว</p>
+        </article>
+        <article class="metric">
+          <div class="kicker">Player Surface</div>
+          <div class="value">Portal</div>
+          <p>ผู้เล่นเห็น wallet, purchase history, shop, redeem และ profile ของตัวเองได้ผ่าน portal แยกจาก admin</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Capability Matrix</h2>
+          <p>สิ่งที่ระบบทำได้จริงและเล่าให้ลูกค้าเห็นได้โดยไม่ต้องอธิบายทีละ service</p>
+        </div>
+        <div class="tags">
+          <span class="tag">Economy</span>
+          <span class="tag">Delivery</span>
+          <span class="tag">Admin</span>
+          <span class="tag">Player Portal</span>
+          <span class="tag">Observability</span>
+        </div>
+      </div>
+      <div class="cap-grid">
+        <article class="module-card">
+          <div class="kicker">Commerce</div>
+          <h3>Economy + Shop</h3>
+          <ul>
+            <li>wallet, ledger, transfer, gift</li>
+            <li>shop, cart, purchase, refund, VIP, redeem</li>
+            <li>welcome, daily, weekly, wheel reward</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <div class="kicker">Operations</div>
+          <h3>Delivery + SCUM Ops</h3>
+          <ul>
+            <li>announce, teleport, spawn, multi-item delivery</li>
+            <li>preflight, simulator, test-send, capability presets</li>
+            <li>timeline, dead-letter, watchdog, verification policy</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <div class="kicker">Control Plane</div>
+          <h3>Admin Web</h3>
+          <ul>
+            <li>RBAC, Discord SSO, 2FA baseline</li>
+            <li>config editor, snapshot export, backup/restore</li>
+            <li>notifications, audit center, metrics timeline</li>
+          </ul>
+        </article>
+        <article class="module-card">
+          <div class="kicker">Player Experience</div>
+          <h3>Player Portal</h3>
+          <ul>
+            <li>Discord login และ player-only experience</li>
+            <li>wallet, history, shop, redeem, steam binding</li>
+            <li>แยกจาก admin web เพื่อใช้งานจริงได้ง่ายกว่า</li>
+          </ul>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Validated Delivery Flow</h2>
+          <p>เส้นทางที่ใช้เล่าให้เห็นว่าระบบส่งของไม่ใช่ black box แต่มีหลักฐานทุกขั้น</p>
+        </div>
+        <div class="tags">
+          <span class="tag">Timeline</span>
+          <span class="tag">Preflight</span>
+          <span class="tag">Simulator</span>
+          <span class="tag">Verify</span>
+        </div>
+      </div>
+      <div class="flow">
+        <article class="flow-step">
+          <div class="idx">Step 01</div>
+          <h3>Purchase / Test</h3>
+          <p>คำขอเริ่มจาก Discord หรือหน้า admin/player portal พร้อม user identity และ order code</p>
+        </article>
+        <article class="flow-step">
+          <div class="idx">Step 02</div>
+          <h3>Queue + Audit</h3>
+          <p>ระบบ enqueue งาน เก็บ status history และ audit ทันทีตั้งแต่ `queued`</p>
+        </article>
+        <article class="flow-step">
+          <div class="idx">Step 03</div>
+          <h3>Worker + Preflight</h3>
+          <p>worker ตรวจความพร้อมของ runtime, agent, template และเป้าหมายก่อนยิงจริง</p>
+        </article>
+        <article class="flow-step">
+          <div class="idx">Step 04</div>
+          <h3>Teleport + Spawn</h3>
+          <p>agent mode วิ่ง `announce -> teleport -> spawn -> return` ตาม profile ของสินค้า</p>
+        </article>
+        <article class="flow-step">
+          <div class="idx">Step 05</div>
+          <h3>Verify + Timeline</h3>
+          <p>ผลลัพธ์ถูกปิดงานด้วย verification policy, timeline, notifications และ dead-letter ถ้าพลาด</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Operational Proof</h2>
+          <p>ของที่ใช้บอกว่าระบบนี้พร้อมใช้งานจริงมากกว่าระดับ prototype</p>
+        </div>
+      </div>
+      <div class="proof-grid">
+        <article class="proof-card">
+          <div class="kicker">Safety</div>
+          <strong>Backup / Restore Guardrails</strong>
+          <p>dry-run diff, confirmation, maintenance gate, rollback backup และ restore status ลดความเสี่ยงของงาน restore ผิดชุด</p>
+        </article>
+        <article class="proof-card">
+          <div class="kicker">Readiness</div>
+          <strong>Doctor + Security + Smoke</strong>
+          <p>มี `doctor`, `security:check`, `readiness:prod`, `smoke:postdeploy` และ topology checks สำหรับก่อนขึ้น production</p>
+        </article>
+        <article class="proof-card">
+          <div class="kicker">Visibility</div>
+          <strong>Runtime Supervisor + Notification Center</strong>
+          <p>ช่วยจับอาการ process แยกตายบางตัว, queue ค้าง, dead-letter พุ่ง หรือ restore ค้างจากหน้าเว็บเดียว</p>
+        </article>
+      </div>
+      <p class="footer-note">หมายเหตุ: การยืนยัน delivery แบบ live ยังขึ้นกับ runtime ภายนอก เช่น Windows session และ SCUM admin client จริง ซึ่งควรตรวจด้วย capability test บนเครื่อง production ก่อนใช้งานเต็มระบบ</p>
+    </section>
+  </div>
+</body>
+</html>

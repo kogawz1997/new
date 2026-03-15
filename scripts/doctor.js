@@ -212,6 +212,9 @@ function addPortalReverseProxyChecks() {
   }
 
   const adminOrigin = legacyAdminUrl.origin;
+  const adminCookiePath = String(
+    process.env.ADMIN_WEB_SESSION_COOKIE_PATH || '/admin',
+  ).trim() || '/admin';
   if (
     adminOrigins.length > 0
     && !adminOrigins.includes(adminOrigin)
@@ -224,6 +227,44 @@ function addPortalReverseProxyChecks() {
   if (baseUrl.origin === adminOrigin) {
     warnings.push(
       'Player portal and admin portal share the same origin; verify path routing and cookie scope carefully',
+    );
+    if (adminCookiePath === '/' || !adminCookiePath.startsWith('/admin')) {
+      warnings.push(
+        'When admin/player share the same origin, set ADMIN_WEB_SESSION_COOKIE_PATH=/admin for tighter cookie isolation',
+      );
+    }
+  }
+}
+
+function addAuthHardeningChecks() {
+  const adminOrigins = parseCsvList(process.env.ADMIN_WEB_ALLOWED_ORIGINS);
+  const hasExternalAdminOrigin = adminOrigins.some((origin) => {
+    try {
+      return !isLoopbackHost(new URL(origin).hostname);
+    } catch {
+      return false;
+    }
+  });
+  const adminTwoFactorEnabled = isTruthy(process.env.ADMIN_WEB_2FA_ENABLED, false);
+  const adminTwoFactorSecret = String(process.env.ADMIN_WEB_2FA_SECRET || '').trim();
+  const adminSessionTtlHours = Number(process.env.ADMIN_WEB_SESSION_TTL_HOURS || 12);
+  const portalSessionTtlHours = Number(process.env.WEB_PORTAL_SESSION_TTL_HOURS || 12);
+
+  if (hasExternalAdminOrigin && (!adminTwoFactorEnabled || !adminTwoFactorSecret)) {
+    warnings.push(
+      'Admin web is exposed externally without active 2FA; enable ADMIN_WEB_2FA_ENABLED=true and set ADMIN_WEB_2FA_SECRET',
+    );
+  }
+
+  if (Number.isFinite(adminSessionTtlHours) && adminSessionTtlHours > 24) {
+    warnings.push(
+      `ADMIN_WEB_SESSION_TTL_HOURS=${adminSessionTtlHours} is longer than 24 hours; review admin session lifetime`,
+    );
+  }
+
+  if (Number.isFinite(portalSessionTtlHours) && portalSessionTtlHours > 24) {
+    warnings.push(
+      `WEB_PORTAL_SESSION_TTL_HOURS=${portalSessionTtlHours} is longer than 24 hours; review player session lifetime`,
     );
   }
 }
@@ -474,6 +515,10 @@ runCheck('player portal reverse proxy / origins config', () => {
 
 runCheck('Discord OAuth redirect consistency', () => {
   addDiscordRedirectChecks();
+});
+
+runCheck('auth/session hardening posture', () => {
+  addAuthHardeningChecks();
 });
 
 runCheck('RCON runtime consistency', () => {

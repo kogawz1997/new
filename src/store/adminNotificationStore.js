@@ -220,6 +220,8 @@ function buildNotificationFromLiveEvent(type, payload = {}) {
         || kind === 'consecutive-failures'
         || kind === 'runtime-offline'
         || kind === 'runtime-degraded'
+        || kind === 'platform-webhook-failed'
+        || kind === 'platform-auto-backup-failed'
         ? 'error'
         : 'warn';
     let title = 'Operational Alert';
@@ -263,6 +265,40 @@ function buildNotificationFromLiveEvent(type, payload = {}) {
         `${String(data.runtimeLabel || data.runtimeKey || 'runtime')} degraded`
         + `${data.reason ? ` (${String(data.reason)})` : ''}`
         + `${data.url ? ` @ ${String(data.url)}` : ''}`;
+    } else if (kind === 'platform-webhook-failed') {
+      title = 'Platform Webhook Failed';
+      message =
+        `${String(data.eventType || 'platform.unknown')} -> ${String(data.targetUrl || '-')}`
+        + `${data.error ? ` error=${trimText(data.error, 200)}` : ''}`;
+    } else if (kind === 'agent-version-outdated') {
+      title = 'Agent Version Outdated';
+      message =
+        `${String(data.tenantId || 'tenant')} / ${String(data.runtimeKey || 'runtime')}`
+        + ` version=${String(data.version || '-')}`
+        + ` min=${String(data.minimumVersion || '-')}`;
+    } else if (kind === 'agent-runtime-stale') {
+      title = 'Agent Runtime Stale';
+      message =
+        `${String(data.tenantId || 'tenant')} / ${String(data.runtimeKey || 'runtime')}`
+        + ` lastSeenAt=${String(data.lastSeenAt || '-')}`;
+    } else if (kind === 'delivery-reconcile-anomaly') {
+      title = 'Delivery Reconcile Anomaly';
+      message =
+        `count=${Number(data.count || 0)}`
+        + `${Array.isArray(data.sample) && data.sample.length > 0 ? ` sample=${String(data.sample[0]?.type || '-')}` : ''}`;
+    } else if (kind === 'delivery-abuse-suspected') {
+      title = 'Delivery Abuse Suspected';
+      message =
+        `count=${Number(data.count || 0)}`
+        + `${Array.isArray(data.sample) && data.sample.length > 0 ? ` sample=${String(data.sample[0]?.type || '-')}` : ''}`;
+    } else if (kind === 'platform-auto-backup-created') {
+      title = 'Platform Auto Backup Created';
+      message =
+        `backup=${String(data.backup || '-')}`
+        + `${data.note ? ` note=${trimText(data.note, 120)}` : ''}`;
+    } else if (kind === 'platform-auto-backup-failed') {
+      title = 'Platform Auto Backup Failed';
+      message = `${data.error ? trimText(data.error, 240) : 'unknown error'}`;
     }
     return {
       type: 'ops-alert',
@@ -372,6 +408,38 @@ function buildNotificationFromLiveEvent(type, payload = {}) {
       message:
         `${String(data.lookupKey || '-')} by ${String(data.actor || 'unknown')}`,
       entityKey: String(data.lookupKey || '').trim() || null,
+      data,
+    };
+  }
+
+  if (eventType === 'platform-event') {
+    const eventName = String(data.eventType || 'platform.unknown').trim() || 'platform.unknown';
+    const label = eventName.replace(/^platform\./, '').replace(/[._-]+/g, ' ').trim();
+    return {
+      type: 'platform',
+      source: String(data.source || 'platform').trim() || 'platform',
+      kind: eventName,
+      severity: 'info',
+      title: `Platform Event: ${label || eventName}`,
+      message:
+        `${data.tenantId ? `tenant=${String(data.tenantId)} ` : ''}`
+        + `${data.actor ? `actor=${String(data.actor)} ` : ''}`
+        + `${data.subscriptionId ? `subscription=${String(data.subscriptionId)} ` : ''}`
+        + `${data.licenseId ? `license=${String(data.licenseId)} ` : ''}`
+        + `${data.apiKeyId ? `apiKey=${String(data.apiKeyId)} ` : ''}`
+        + `${data.webhookId ? `webhook=${String(data.webhookId)} ` : ''}`
+        + `${data.offerId ? `offer=${String(data.offerId)} ` : ''}`
+        + `${data.runtimeKey ? `runtime=${String(data.runtimeKey)} ` : ''}`.trim(),
+      entityKey:
+        String(
+          data.tenantId
+          || data.subscriptionId
+          || data.licenseId
+          || data.apiKeyId
+          || data.webhookId
+          || data.offerId
+          || eventName,
+        ).trim() || eventName,
       data,
     };
   }

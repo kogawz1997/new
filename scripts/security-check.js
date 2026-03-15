@@ -48,6 +48,16 @@ function isLocalHost(host) {
   return value === '127.0.0.1' || value === 'localhost' || value === '::1';
 }
 
+function parseOriginOrEmpty(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  try {
+    return new URL(text).origin;
+  } catch {
+    return '';
+  }
+}
+
 function checkMinLength(name, value, minLength, errors, warnings) {
   const text = String(value || '').trim();
   if (!text) {
@@ -101,6 +111,58 @@ function checkPortalOAuth(env, errors) {
     errors.push(
       'WEB_PORTAL_DISCORD_CLIENT_SECRET (or ADMIN_WEB_SSO_DISCORD_CLIENT_SECRET fallback) is missing or placeholder',
     );
+  }
+}
+
+function addSessionAndOriginHardeningWarnings(env, warnings) {
+  const adminOrigins = String(env.ADMIN_WEB_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const hasExternalAdminOrigin = adminOrigins.some((origin) => {
+    const parsedOrigin = parseOriginOrEmpty(origin);
+    if (!parsedOrigin) return false;
+    try {
+      return !isLocalHost(new URL(parsedOrigin).hostname);
+    } catch {
+      return false;
+    }
+  });
+
+  const adminTwoFactorEnabled =
+    isTruthy(env.ADMIN_WEB_2FA_ENABLED) && String(env.ADMIN_WEB_2FA_SECRET || '').trim().length > 0;
+  if (hasExternalAdminOrigin && !adminTwoFactorEnabled) {
+    warnings.push(
+      'ADMIN_WEB_2FA_ENABLED=true with ADMIN_WEB_2FA_SECRET set is strongly recommended for externally exposed admin access',
+    );
+  }
+
+  const adminSessionTtlHours = Number(env.ADMIN_WEB_SESSION_TTL_HOURS || 12);
+  if (Number.isFinite(adminSessionTtlHours) && adminSessionTtlHours > 24) {
+    warnings.push(
+      `ADMIN_WEB_SESSION_TTL_HOURS=${adminSessionTtlHours} is longer than 24 hours; review admin session lifetime`,
+    );
+  }
+
+  const portalSessionTtlHours = Number(env.WEB_PORTAL_SESSION_TTL_HOURS || 12);
+  if (Number.isFinite(portalSessionTtlHours) && portalSessionTtlHours > 24) {
+    warnings.push(
+      `WEB_PORTAL_SESSION_TTL_HOURS=${portalSessionTtlHours} is longer than 24 hours; review player session lifetime`,
+    );
+  }
+
+  const portalOrigin = parseOriginOrEmpty(env.WEB_PORTAL_BASE_URL);
+  const adminOrigin = parseOriginOrEmpty(env.WEB_PORTAL_LEGACY_ADMIN_URL);
+  const adminCookiePath = String(env.ADMIN_WEB_SESSION_COOKIE_PATH || '/admin').trim() || '/admin';
+  if (portalOrigin && adminOrigin && portalOrigin === adminOrigin) {
+    warnings.push(
+      'WEB_PORTAL_BASE_URL and WEB_PORTAL_LEGACY_ADMIN_URL share the same origin; split admin/player origins are recommended',
+    );
+    if (adminCookiePath === '/' || !adminCookiePath.startsWith('/admin')) {
+      warnings.push(
+        'ADMIN_WEB_SESSION_COOKIE_PATH=/admin is recommended when admin/player share the same origin',
+      );
+    }
   }
 }
 
@@ -189,6 +251,8 @@ function run() {
   if (hasPortalEnvFile || String(env.WEB_PORTAL_MODE || '').trim() !== '') {
     checkPortalOAuth(env, errors);
   }
+
+  addSessionAndOriginHardeningWarnings(env, warnings);
 
   if (
     String(env.ADMIN_WEB_ALLOW_TOKEN_QUERY || '').trim().toLowerCase() !==

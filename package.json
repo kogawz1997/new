@@ -40,9 +40,15 @@
     "smoke:postdeploy": "node scripts/post-deploy-smoke.js",
     "security:check": "node scripts/security-check.js",
     "security:generate-secrets": "node scripts/generate-secrets.js",
+    "security:generate-admin-2fa": "node scripts/generate-admin-2fa-secret.js",
+    "security:scaffold-split-env": "node scripts/scaffold-split-origin-env.js",
+    "security:apply-split-env": "node scripts/apply-split-origin-env.js",
+    "security:activate-split-env": "node scripts/activate-split-origin-env.js",
     "security:rotate:prod:dry": "node scripts/rotate-production-secrets.js",
     "security:rotate:prod": "node scripts/rotate-production-secrets.js --write",
-    "deploy:oneclick:win": "deploy\\one-click-production.cmd"
+    "deploy:oneclick:win": "deploy\\one-click-production.cmd",
+    "platform:schema:upgrade": "node scripts/platform-schema-upgrade.js",
+    "platform:bootstrap:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/platform-bootstrap.ps1"
   },
   "keywords": [
     "discord",

@@ -5,9 +5,14 @@ const { once } = require('node:events');
 const { createPurchase, listShopItems } = require('../src/store/memoryStore');
 const { claimWelcomePackForUser } = require('../src/services/welcomePackService');
 const { startScumConsoleAgent } = require('../src/services/scumConsoleAgent');
+const { prisma } = require('../src/prisma');
 const {
   setAdminRestoreState,
 } = require('../src/store/adminRestoreStateStore');
+const {
+  resetPlatformOpsState,
+  updatePlatformOpsState,
+} = require('../src/store/platformOpsStateStore');
 
 const adminWebServerPath = path.resolve(__dirname, '../src/adminWebServer.js');
 
@@ -20,7 +25,41 @@ function randomPort(base = 38000, span = 1000) {
   return base + Math.floor(Math.random() * span);
 }
 
+function resetAdminIntegrationRuntimeState() {
+  setAdminRestoreState({
+    status: 'idle',
+    active: false,
+    maintenance: false,
+    backup: null,
+    confirmBackup: null,
+    rollbackBackup: null,
+    actor: null,
+    role: null,
+    startedAt: null,
+    endedAt: null,
+    updatedAt: new Date().toISOString(),
+    lastCompletedAt: null,
+    durationMs: null,
+    lastError: null,
+    rollbackStatus: 'none',
+    rollbackError: null,
+    counts: null,
+    currentCounts: null,
+    diff: null,
+    warnings: [],
+  });
+  resetPlatformOpsState();
+  process.env.ADMIN_WEB_SSO_DISCORD_ENABLED = 'false';
+  process.env.ADMIN_WEB_SSO_DISCORD_CLIENT_ID = '';
+  process.env.ADMIN_WEB_SSO_DISCORD_CLIENT_SECRET = '';
+  process.env.ADMIN_WEB_SSO_DISCORD_REDIRECT_URI = '';
+  process.env.ADMIN_WEB_SSO_DISCORD_GUILD_ID = '';
+}
+
+resetAdminIntegrationRuntimeState();
+
 test('admin API auth + validation integration flow', async (t) => {
+  resetAdminIntegrationRuntimeState();
   const port = randomPort();
   process.env.ADMIN_WEB_HOST = '127.0.0.1';
   process.env.ADMIN_WEB_PORT = String(port);
@@ -46,6 +85,7 @@ test('admin API auth + validation integration flow', async (t) => {
   }
 
   t.after(async () => {
+    resetAdminIntegrationRuntimeState();
     await new Promise((resolve) => server.close(resolve));
     delete require.cache[adminWebServerPath];
   });
@@ -98,6 +138,7 @@ test('admin API auth + validation integration flow', async (t) => {
   assert.equal(login.data.ok, true);
   const setCookie = login.res.headers.get('set-cookie');
   assert.ok(setCookie, 'expected Set-Cookie header after login');
+  assert.match(String(setCookie || ''), /Path=\/admin/i);
   const cookie = String(setCookie).split(';')[0];
 
   const me = await request('/admin/api/me', 'GET', null, cookie);
@@ -106,6 +147,12 @@ test('admin API auth + validation integration flow', async (t) => {
   assert.equal(me.data.data.user, 'admin_test');
   assert.equal(me.res.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(me.res.headers.get('x-frame-options'), 'DENY');
+
+  const providers = await request('/admin/api/auth/providers', 'GET', null, cookie);
+  assert.equal(providers.res.status, 200);
+  assert.equal(providers.data.ok, true);
+  assert.equal(String(providers.data.data?.sessionCookie?.path || ''), '/admin');
+  assert.equal(String(providers.data.data?.sessionCookie?.name || ''), 'scum_admin_session');
 
   const invalidWallet = await request(
     '/admin/api/wallet/set',
@@ -674,6 +721,219 @@ test('admin API auth + validation integration flow', async (t) => {
     presetListAfterDelete.data.data.some((row) => String(row?.id || '') === presetId),
     false,
   );
+});
+
+test('admin platform APIs expose overview data while snapshot stays sanitized', async (t) => {
+  resetAdminIntegrationRuntimeState();
+  const port = randomPort(39050, 600);
+  process.env.ADMIN_WEB_HOST = '127.0.0.1';
+  process.env.ADMIN_WEB_PORT = String(port);
+  process.env.ADMIN_WEB_USER = 'admin_platform_test';
+  process.env.ADMIN_WEB_PASSWORD = 'pass_platform_test';
+  process.env.ADMIN_WEB_TOKEN = 'token_platform_test';
+  process.env.ADMIN_WEB_USERS_JSON = '';
+  process.env.ADMIN_WEB_2FA_ENABLED = 'false';
+
+  const fakeClient = {
+    guilds: {
+      cache: new Map(),
+    },
+    channels: {
+      fetch: async () => null,
+    },
+  };
+
+  const nowSeed = Date.now();
+  const tenantId = `tenant-platform-${nowSeed}`;
+  const subscriptionId = `sub-platform-${nowSeed}`;
+  const licenseId = `license-platform-${nowSeed}`;
+  const apiKeyId = `apikey-platform-${nowSeed}`;
+  const webhookId = `hook-platform-${nowSeed}`;
+  const offerId = `offer-platform-${nowSeed}`;
+  const webhookSecret = 'platform-secret-1234567890';
+
+  updatePlatformOpsState({
+    lastMonitoringAt: '2026-03-15T10:00:00.000Z',
+    lastAutoBackupAt: '2026-03-15T09:00:00.000Z',
+    lastReconcileAt: '2026-03-15T08:00:00.000Z',
+    lastAlertAtByKey: {
+      'platform-seed-alert': '2026-03-15T07:00:00.000Z',
+    },
+  });
+
+  const { startAdminWebServer } = freshAdminWebServerModule();
+  const server = startAdminWebServer(fakeClient);
+  if (!server.listening) {
+    await once(server, 'listening');
+  }
+
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await prisma.platformWebhookEndpoint.deleteMany({ where: { id: webhookId } }).catch(() => null);
+    await prisma.platformApiKey.deleteMany({ where: { id: apiKeyId } }).catch(() => null);
+    await prisma.platformMarketplaceOffer.deleteMany({ where: { id: offerId } }).catch(() => null);
+    await prisma.platformLicense.deleteMany({ where: { id: licenseId } }).catch(() => null);
+    await prisma.platformSubscription.deleteMany({ where: { id: subscriptionId } }).catch(() => null);
+    await prisma.platformTenant.deleteMany({ where: { id: tenantId } }).catch(() => null);
+    resetAdminIntegrationRuntimeState();
+    delete require.cache[adminWebServerPath];
+  });
+
+  const baseUrl = `http://127.0.0.1:${port}`;
+  async function request(pathname, method = 'GET', body = null, cookie = '') {
+    const headers = {};
+    if (body != null) headers['content-type'] = 'application/json';
+    if (cookie) headers.cookie = cookie;
+    const res = await fetch(`${baseUrl}${pathname}`, {
+      method,
+      headers,
+      body: body == null ? undefined : JSON.stringify(body),
+    });
+    const data = await res.json().catch(() => ({}));
+    return { res, data };
+  }
+
+  const login = await request('/admin/api/login', 'POST', {
+    username: 'admin_platform_test',
+    password: 'pass_platform_test',
+  });
+  assert.equal(login.res.status, 200);
+  const cookie = String(login.res.headers.get('set-cookie') || '').split(';')[0];
+  assert.ok(cookie, 'expected cookie after platform login');
+
+  const tenantRes = await request('/admin/api/platform/tenant', 'POST', {
+    id: tenantId,
+    name: 'Platform Integration Tenant',
+    slug: tenantId,
+    type: 'trial',
+    status: 'active',
+    locale: 'th',
+    ownerEmail: 'tenant@example.com',
+  }, cookie);
+  assert.equal(tenantRes.res.status, 200);
+  assert.equal(tenantRes.data.ok, true);
+
+  const subscriptionRes = await request('/admin/api/platform/subscription', 'POST', {
+    id: subscriptionId,
+    tenantId,
+    planId: 'starter',
+    status: 'active',
+    billingCycle: 'monthly',
+    amountCents: 9900,
+    currency: 'THB',
+  }, cookie);
+  assert.equal(subscriptionRes.res.status, 200);
+  assert.equal(subscriptionRes.data.ok, true);
+
+  const licenseRes = await request('/admin/api/platform/license', 'POST', {
+    id: licenseId,
+    tenantId,
+    status: 'active',
+    seats: 3,
+    legalDocVersion: '2026.03',
+  }, cookie);
+  assert.equal(licenseRes.res.status, 200);
+  assert.equal(licenseRes.data.ok, true);
+  const rawLicenseKey = String(licenseRes.data.data?.licenseKey || '');
+  assert.ok(rawLicenseKey.length >= 8);
+
+  const licenseAcceptRes = await request('/admin/api/platform/license/accept-legal', 'POST', {
+    licenseId,
+    legalDocVersion: '2026.03',
+  }, cookie);
+  assert.equal(licenseAcceptRes.res.status, 200);
+  assert.equal(licenseAcceptRes.data.ok, true);
+
+  const apiKeyRes = await request('/admin/api/platform/apikey', 'POST', {
+    id: apiKeyId,
+    tenantId,
+    name: 'Integration API Key',
+    scopes: ['tenant:read', 'analytics:read', 'delivery:reconcile'],
+  }, cookie);
+  assert.equal(apiKeyRes.res.status, 200);
+  assert.equal(apiKeyRes.data.ok, true);
+  assert.equal(String(apiKeyRes.data.data?.apiKey?.id || ''), apiKeyId);
+  assert.match(String(apiKeyRes.data.data?.rawKey || ''), /^sk_/);
+
+  const webhookRes = await request('/admin/api/platform/webhook', 'POST', {
+    id: webhookId,
+    tenantId,
+    name: 'Integration Webhook',
+    eventType: '*',
+    targetUrl: 'https://example.com/platform-webhook',
+    secretValue: webhookSecret,
+  }, cookie);
+  assert.equal(webhookRes.res.status, 200);
+  assert.equal(webhookRes.data.ok, true);
+  assert.equal(String(webhookRes.data.data?.id || ''), webhookId);
+  assert.equal(String(webhookRes.data.data?.secretValue || ''), webhookSecret);
+
+  const offerRes = await request('/admin/api/platform/marketplace', 'POST', {
+    id: offerId,
+    tenantId,
+    title: 'Full Platform Package',
+    kind: 'package',
+    status: 'active',
+    priceCents: 19900,
+    currency: 'THB',
+    locale: 'th',
+  }, cookie);
+  assert.equal(offerRes.res.status, 200);
+  assert.equal(offerRes.data.ok, true);
+
+  const overviewRes = await request('/admin/api/platform/overview', 'GET', null, cookie);
+  assert.equal(overviewRes.res.status, 200);
+  assert.equal(overviewRes.data.ok, true);
+  assert.equal(typeof overviewRes.data.data?.analytics?.subscriptions?.mrrCents, 'number');
+  assert.ok(Array.isArray(overviewRes.data.data?.permissionCatalog));
+  assert.ok(Array.isArray(overviewRes.data.data?.plans));
+  assert.equal(String(overviewRes.data.data?.opsState?.lastMonitoringAt || '').length > 0, true);
+  assert.equal(
+    Object.keys(overviewRes.data.data?.opsState?.lastAlertAtByKey || {}).length >= 1,
+    true,
+  );
+
+  const opsStateRes = await request('/admin/api/platform/ops-state', 'GET', null, cookie);
+  assert.equal(opsStateRes.res.status, 200);
+  assert.equal(opsStateRes.data.ok, true);
+  assert.equal(String(opsStateRes.data.data?.lastAutoBackupAt || '').length > 0, true);
+
+  const reconcileRes = await request('/admin/api/platform/reconcile', 'GET', null, cookie);
+  assert.equal(reconcileRes.res.status, 200);
+  assert.equal(reconcileRes.data.ok, true);
+  assert.equal(typeof reconcileRes.data.data?.summary?.anomalies, 'number');
+
+  const monitoringRes = await request('/admin/api/platform/monitoring/run', 'POST', {}, cookie);
+  assert.equal(monitoringRes.res.status, 200);
+  assert.equal(monitoringRes.data.ok, true);
+  assert.equal(typeof monitoringRes.data.data?.generatedAt, 'string');
+
+  const snapshotRes = await request('/admin/api/snapshot', 'GET', null, cookie);
+  assert.equal(snapshotRes.res.status, 200);
+  assert.equal(snapshotRes.data.ok, true);
+  assert.equal(String(snapshotRes.data.data?.platformOpsState?.lastMonitoringAt || '').length > 0, true);
+
+  const snapshotLicense = (snapshotRes.data.data?.platformLicenses || []).find(
+    (row) => String(row?.id || '') === licenseId,
+  );
+  assert.ok(snapshotLicense, 'expected platform license in snapshot');
+  assert.notEqual(String(snapshotLicense.licenseKey || ''), rawLicenseKey);
+  assert.match(String(snapshotLicense.licenseKey || ''), /\*{2,}/);
+
+  const snapshotApiKey = (snapshotRes.data.data?.platformApiKeys || []).find(
+    (row) => String(row?.id || '') === apiKeyId,
+  );
+  assert.ok(snapshotApiKey, 'expected platform api key in snapshot');
+  assert.equal('keyHash' in snapshotApiKey, false);
+  assert.equal('rawKey' in snapshotApiKey, false);
+  assert.deepEqual(snapshotApiKey.scopes, ['tenant:read', 'analytics:read', 'delivery:reconcile']);
+
+  const snapshotWebhook = (snapshotRes.data.data?.platformWebhookEndpoints || []).find(
+    (row) => String(row?.id || '') === webhookId,
+  );
+  assert.ok(snapshotWebhook, 'expected platform webhook in snapshot');
+  assert.notEqual(String(snapshotWebhook.secretValue || ''), webhookSecret);
+  assert.match(String(snapshotWebhook.secretValue || ''), /\*{2,}/);
 });
 
 test('admin API rejects malformed JSON and oversized UTF-8 body with proper status', async (t) => {

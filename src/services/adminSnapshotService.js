@@ -55,6 +55,16 @@ const {
 } = require('../store/adminCommandCapabilityPresetStore');
 const { resolveItemIconUrl } = require('./itemIconService');
 const { getRuntimeSupervisorSnapshot } = require('./runtimeSupervisorService');
+const {
+  listMarketplaceOffers,
+  listPlatformAgentRuntimes,
+  listPlatformApiKeys,
+  listPlatformLicenses,
+  listPlatformSubscriptions,
+  listPlatformTenants,
+  listPlatformWebhookEndpoints,
+} = require('./platformService');
+const { getPlatformOpsState } = require('../store/platformOpsStateStore');
 const { publishAdminLiveUpdate } = require('./adminLiveBus');
 const { acquireRuntimeLock, releaseRuntimeLock } = require('./runtimeLock');
 const { DATA_DIR, getPersistenceStatus } = require('../store/_persist');
@@ -243,8 +253,36 @@ async function replacePrismaTablesFromSnapshot(snapshot = {}) {
   const playerAccounts = Array.isArray(snapshot.playerAccounts)
     ? snapshot.playerAccounts
     : [];
+  const platformTenants = Array.isArray(snapshot.platformTenants)
+    ? snapshot.platformTenants
+    : [];
+  const platformSubscriptions = Array.isArray(snapshot.platformSubscriptions)
+    ? snapshot.platformSubscriptions
+    : [];
+  const platformLicenses = Array.isArray(snapshot.platformLicenses)
+    ? snapshot.platformLicenses
+    : [];
+  const platformApiKeys = Array.isArray(snapshot.platformApiKeys)
+    ? snapshot.platformApiKeys
+    : [];
+  const platformWebhookEndpoints = Array.isArray(snapshot.platformWebhookEndpoints)
+    ? snapshot.platformWebhookEndpoints
+    : [];
+  const platformAgentRuntimes = Array.isArray(snapshot.platformAgentRuntimes)
+    ? snapshot.platformAgentRuntimes
+    : [];
+  const platformMarketplaceOffers = Array.isArray(snapshot.platformMarketplaceOffers)
+    ? snapshot.platformMarketplaceOffers
+    : [];
 
   await prisma.$transaction([
+    prisma.platformMarketplaceOffer.deleteMany({}),
+    prisma.platformAgentRuntime.deleteMany({}),
+    prisma.platformWebhookEndpoint.deleteMany({}),
+    prisma.platformApiKey.deleteMany({}),
+    prisma.platformLicense.deleteMany({}),
+    prisma.platformSubscription.deleteMany({}),
+    prisma.platformTenant.deleteMany({}),
     prisma.walletLedger.deleteMany({}),
     prisma.purchaseStatusHistory.deleteMany({}),
     prisma.playerAccount.deleteMany({}),
@@ -390,6 +428,179 @@ async function replacePrismaTablesFromSnapshot(snapshot = {}) {
         avatarUrl: row.avatarUrl ? String(row.avatarUrl) : null,
         steamId: row.steamId ? String(row.steamId) : null,
         isActive: row.isActive !== false,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of platformTenants) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(row.id || '').trim();
+    const slug = String(row.slug || '').trim();
+    const name = String(row.name || '').trim();
+    if (!id || !slug || !name) continue;
+    await prisma.platformTenant.create({
+      data: {
+        id,
+        slug,
+        name,
+        type: row.type ? String(row.type) : 'direct',
+        status: row.status ? String(row.status) : 'active',
+        locale: row.locale ? String(row.locale) : 'th',
+        ownerName: row.ownerName ? String(row.ownerName) : null,
+        ownerEmail: row.ownerEmail ? String(row.ownerEmail) : null,
+        parentTenantId: row.parentTenantId ? String(row.parentTenantId) : null,
+        metadataJson: row.metadataJson ? String(row.metadataJson) : null,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of platformSubscriptions) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(row.id || '').trim();
+    const tenantId = String(row.tenantId || '').trim();
+    const planId = String(row.planId || '').trim();
+    if (!id || !tenantId || !planId) continue;
+    await prisma.platformSubscription.create({
+      data: {
+        id,
+        tenantId,
+        planId,
+        billingCycle: row.billingCycle ? String(row.billingCycle) : 'monthly',
+        status: row.status ? String(row.status) : 'active',
+        currency: row.currency ? String(row.currency) : 'THB',
+        amountCents: Number(row.amountCents || 0),
+        startedAt: row.startedAt ? new Date(row.startedAt) : new Date(),
+        renewsAt: row.renewsAt ? new Date(row.renewsAt) : null,
+        canceledAt: row.canceledAt ? new Date(row.canceledAt) : null,
+        externalRef: row.externalRef ? String(row.externalRef) : null,
+        metadataJson: row.metadataJson ? String(row.metadataJson) : null,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of platformLicenses) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(row.id || '').trim();
+    const tenantId = String(row.tenantId || '').trim();
+    const licenseKey = String(row.licenseKey || '').trim();
+    if (!id || !tenantId || !licenseKey) continue;
+    await prisma.platformLicense.create({
+      data: {
+        id,
+        tenantId,
+        licenseKey,
+        status: row.status ? String(row.status) : 'active',
+        seats: Number(row.seats || 1),
+        issuedAt: row.issuedAt ? new Date(row.issuedAt) : new Date(),
+        expiresAt: row.expiresAt ? new Date(row.expiresAt) : null,
+        legalDocVersion: row.legalDocVersion ? String(row.legalDocVersion) : null,
+        legalAcceptedAt: row.legalAcceptedAt ? new Date(row.legalAcceptedAt) : null,
+        metadataJson: row.metadataJson ? String(row.metadataJson) : null,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of platformApiKeys) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(row.id || '').trim();
+    const tenantId = String(row.tenantId || '').trim();
+    const name = String(row.name || '').trim();
+    const keyPrefix = String(row.keyPrefix || '').trim();
+    const keyHash = String(row.keyHash || '').trim();
+    if (!id || !tenantId || !name || !keyPrefix || !keyHash) continue;
+    await prisma.platformApiKey.create({
+      data: {
+        id,
+        tenantId,
+        name,
+        keyPrefix,
+        keyHash,
+        scopesJson: row.scopesJson ? String(row.scopesJson) : '[]',
+        status: row.status ? String(row.status) : 'active',
+        lastUsedAt: row.lastUsedAt ? new Date(row.lastUsedAt) : null,
+        revokedAt: row.revokedAt ? new Date(row.revokedAt) : null,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of platformWebhookEndpoints) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(row.id || '').trim();
+    const tenantId = String(row.tenantId || '').trim();
+    const name = String(row.name || '').trim();
+    const eventType = String(row.eventType || '').trim();
+    const targetUrl = String(row.targetUrl || '').trim();
+    const secretValue = String(row.secretValue || '').trim();
+    if (!id || !tenantId || !name || !eventType || !targetUrl || !secretValue) continue;
+    await prisma.platformWebhookEndpoint.create({
+      data: {
+        id,
+        tenantId,
+        name,
+        eventType,
+        targetUrl,
+        secretValue,
+        enabled: row.enabled !== false,
+        lastSuccessAt: row.lastSuccessAt ? new Date(row.lastSuccessAt) : null,
+        lastFailureAt: row.lastFailureAt ? new Date(row.lastFailureAt) : null,
+        lastError: row.lastError ? String(row.lastError) : null,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of platformAgentRuntimes) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(row.id || '').trim();
+    const tenantId = String(row.tenantId || '').trim();
+    const runtimeKey = String(row.runtimeKey || '').trim();
+    const version = String(row.version || '').trim();
+    if (!id || !tenantId || !runtimeKey || !version) continue;
+    await prisma.platformAgentRuntime.create({
+      data: {
+        id,
+        tenantId,
+        runtimeKey,
+        channel: row.channel ? String(row.channel) : null,
+        version,
+        minRequiredVersion: row.minRequiredVersion ? String(row.minRequiredVersion) : null,
+        status: row.status ? String(row.status) : 'online',
+        lastSeenAt: row.lastSeenAt ? new Date(row.lastSeenAt) : new Date(),
+        metaJson: row.metaJson ? String(row.metaJson) : null,
+        createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+        updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+      },
+    });
+  }
+
+  for (const row of platformMarketplaceOffers) {
+    if (!row || typeof row !== 'object') continue;
+    const id = String(row.id || '').trim();
+    const tenantId = String(row.tenantId || '').trim();
+    const title = String(row.title || '').trim();
+    if (!id || !tenantId || !title) continue;
+    await prisma.platformMarketplaceOffer.create({
+      data: {
+        id,
+        tenantId,
+        title,
+        kind: row.kind ? String(row.kind) : 'service',
+        priceCents: Number(row.priceCents || 0),
+        currency: row.currency ? String(row.currency) : 'THB',
+        status: row.status ? String(row.status) : 'active',
+        locale: row.locale ? String(row.locale) : 'th',
+        metaJson: row.metaJson ? String(row.metaJson) : null,
         createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
         updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
       },
@@ -606,7 +817,11 @@ function createRestoreOperationId() {
 
 // Snapshots intentionally capture both business data and operator-facing runtime state
 // so restore previews can show the blast radius before anything mutates.
-async function buildAdminSnapshot({ client = null, observabilitySnapshot = null } = {}) {
+async function buildAdminSnapshot({
+  client = null,
+  observabilitySnapshot = null,
+  includePlatformSecrets = false,
+} = {}) {
   const [
     shopItems,
     wallets,
@@ -620,6 +835,13 @@ async function buildAdminSnapshot({ client = null, observabilitySnapshot = null 
     partyChatMessages,
     deliveryRuntime,
     runtimeSupervisor,
+    platformTenants,
+    platformSubscriptions,
+    platformLicenses,
+    platformApiKeys,
+    platformWebhookEndpoints,
+    platformAgentRuntimes,
+    platformMarketplaceOffers,
   ] = await Promise.all([
     listShopItems(),
     prisma.userWallet.findMany({
@@ -648,6 +870,48 @@ async function buildAdminSnapshot({ client = null, observabilitySnapshot = null 
     listAllPartyMessages(5000),
     getDeliveryRuntimeStatus().catch(() => null),
     getRuntimeSupervisorSnapshot().catch(() => null),
+    includePlatformSecrets
+      ? prisma.platformTenant.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+      })
+      : listPlatformTenants({ limit: 500 }),
+    includePlatformSecrets
+      ? prisma.platformSubscription.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+      })
+      : listPlatformSubscriptions({ limit: 500 }),
+    includePlatformSecrets
+      ? prisma.platformLicense.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+      })
+      : listPlatformLicenses({ limit: 500 }),
+    includePlatformSecrets
+      ? prisma.platformApiKey.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+      })
+      : listPlatformApiKeys({ limit: 500 }),
+    includePlatformSecrets
+      ? prisma.platformWebhookEndpoint.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+      })
+      : listPlatformWebhookEndpoints({ limit: 500 }),
+    includePlatformSecrets
+      ? prisma.platformAgentRuntime.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+      })
+      : listPlatformAgentRuntimes({ limit: 500 }),
+    includePlatformSecrets
+      ? prisma.platformMarketplaceOffer.findMany({
+        orderBy: { updatedAt: 'desc' },
+        take: 500,
+      })
+      : listMarketplaceOffers({ limit: 500 }),
   ]);
 
   const shopItemsWithIcon = shopItems.map((item) => ({
@@ -695,6 +959,14 @@ async function buildAdminSnapshot({ client = null, observabilitySnapshot = null 
     rentBikeRuntime: getRentBikeRuntime(),
     deliveryRuntime,
     runtimeSupervisor,
+    platformTenants,
+    platformSubscriptions,
+    platformLicenses,
+    platformApiKeys,
+    platformWebhookEndpoints,
+    platformAgentRuntimes,
+    platformMarketplaceOffers,
+    platformOpsState: getPlatformOpsState(),
     backupRestore: getAdminRestoreState(),
     deliveryQueue: listDeliveryQueue(500),
     deliveryDeadLetters: listDeliveryDeadLetters(1000),
@@ -718,7 +990,11 @@ async function createAdminBackup({
   observabilitySnapshot = null,
 } = {}) {
   const snapshot = includeSnapshot
-    ? await buildAdminSnapshot({ client, observabilitySnapshot })
+    ? await buildAdminSnapshot({
+      client,
+      observabilitySnapshot,
+      includePlatformSecrets: true,
+    })
     : {};
   const payload = buildBackupPayload({
     actor,

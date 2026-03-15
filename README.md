@@ -4,19 +4,20 @@ SCUM Discord Bot + Admin Web + Player Portal + Delivery Worker
 ![Node.js](https://img.shields.io/badge/Node.js-20%2B-2f7d32?style=for-the-badge&logo=node.js&logoColor=white)
 ![discord.js](https://img.shields.io/badge/discord.js-v14.25.1-5865F2?style=for-the-badge&logo=discord&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-5.22.0-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-106%2F106%20passing-15803d?style=for-the-badge)
+![Tests](https://img.shields.io/badge/tests-119%2F119%20passing-15803d?style=for-the-badge)
 ![Mode](https://img.shields.io/badge/delivery-agent%20mode%20validated-c2410c?style=for-the-badge)
 
 ระบบนี้เป็นแพลตฟอร์มจัดการเซิร์ฟเวอร์ SCUM แบบครบชุดในโปรเจกต์เดียว ประกอบด้วย Discord Bot, Worker, Log Watcher, Admin Web, Player Portal และระบบส่งของอัตโนมัติที่รองรับทั้ง `RCon` และ `agent mode`.
 
 สถานะปัจจุบัน ณ วันที่ **2026-03-15**
-- `npm test` ผ่าน `106/106`
+- `npm test` ผ่าน `119/119`
 - `npm run lint` ผ่าน
 - `agent mode` ส่งของจริงผ่าน SCUM admin client ได้แล้ว
 - flow ที่ยืนยันใช้งานจริงแล้ว: `announce -> teleport -> spawn -> multi-item -> magazine StackCount`
 
 เอกสารหลัก
 - เอกสารโชว์งาน/ภาพรวมเชิง commercial: [docs/SHOWCASE_TH.md](./docs/SHOWCASE_TH.md)
+- เช็กลิสต์ก่อนขึ้นจริง: [docs/GO_LIVE_CHECKLIST_TH.md](./docs/GO_LIVE_CHECKLIST_TH.md)
 - คู่มือปฏิบัติการ: [docs/OPERATIONS_MANUAL_TH.md](./docs/OPERATIONS_MANUAL_TH.md)
 - คู่มืออธิบายตัวแปร `.env`: [docs/ENV_REFERENCE_TH.md](./docs/ENV_REFERENCE_TH.md)
 - รายงานเทียบ `.env` จริงกับ production baseline: [docs/PRODUCTION_ENV_GAP_TH.md](./docs/PRODUCTION_ENV_GAP_TH.md)
@@ -386,7 +387,7 @@ npm run scum:agent:exec -- --command "#SpawnItem Magazine_M1911 1 StackCount 100
 
 เส้นทางหลัก
 - `http://127.0.0.1:3200/admin`
-- production ปัจจุบันอ้างอิงโดเมน `https://genz.noah-dns.online/admin`
+- production ปัจจุบันอ้างอิงโดเมน `https://admin.genz.noah-dns.online/admin`
 
 ---
 
@@ -394,7 +395,7 @@ npm run scum:agent:exec -- --command "#SpawnItem Magazine_M1911 1 StackCount 100
 
 เส้นทางหลัก
 - `http://127.0.0.1:3300/player`
-- production ปัจจุบันอ้างอิงโดเมน `https://genz.noah-dns.online`
+- production ปัจจุบันอ้างอิงโดเมน `https://player.genz.noah-dns.online`
 
 รองรับ
 - Discord login
@@ -459,7 +460,7 @@ npm test
 
 ผลล่าสุด
 - `npm run lint` ผ่าน
-- `npm test` ผ่าน `106/106`
+- `npm test` ผ่าน `119/119`
 
 ---
 

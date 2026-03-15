@@ -2,8 +2,8 @@
 
 runbook นี้ใช้สำหรับติดตั้งระบบจริงแบบ end-to-end โดยยึด topology แยก process ชัดเจน
 
-- player portal: `https://genz.noah-dns.online`
-- admin portal: `https://genz.noah-dns.online/admin`
+- player portal: `https://player.genz.noah-dns.online`
+- admin portal: `https://admin.genz.noah-dns.online/admin`
 
 ## 1) Topology ที่แนะนำ
 
@@ -132,14 +132,14 @@ journalctl -u scum-worker -f
 
 แนวทาง:
 
-- `https://genz.noah-dns.online/admin` -> `127.0.0.1:3200`
-- `https://genz.noah-dns.online` -> `127.0.0.1:3300`
+- `https://admin.genz.noah-dns.online/admin` -> `127.0.0.1:3200`
+- `https://player.genz.noah-dns.online` -> `127.0.0.1:3300`
 - บังคับ HTTPS
 
 OAuth redirects ที่ต้องลงใน Discord:
 
-- player portal: `https://genz.noah-dns.online/auth/discord/callback`
-- admin SSO: `https://genz.noah-dns.online/admin/auth/discord/callback`
+- player portal: `https://player.genz.noah-dns.online/auth/discord/callback`
+- admin SSO: `https://admin.genz.noah-dns.online/admin/auth/discord/callback`
 
 ## 7) Health Matrix
 

@@ -158,6 +158,23 @@
       line-height: 1.4;
     }
 
+    .links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .links a {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 15px;
+    }
+
+    .links a:hover {
+      text-decoration: underline;
+    }
+
     @media (max-width: 860px) {
       .card { grid-template-columns: 1fr; }
       .left { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -190,6 +207,12 @@
       <button class="discord-btn" id="discordBtn" type="button">เข้าสู่ระบบด้วย Discord</button>
       <div id="errorText" class="error">__ERROR_MESSAGE__</div>
       <p class="hint">หากล็อกอินไม่ได้ ให้ตรวจค่า OAuth ในไฟล์ `.env` ของเว็บ standalone</p>
+      <div class="links">
+        <a href="/landing">ดูหน้า Landing</a>
+        <a href="/showcase">ดูหน้า Showcase ระบบ</a>
+        <a href="/trial">ดูหน้า Trial</a>
+        <a href="/admin">ไปหน้าแอดมิน</a>
+      </div>
     </div>
   </section>
 

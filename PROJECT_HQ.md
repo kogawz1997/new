@@ -3,16 +3,17 @@
 ![Node.js](https://img.shields.io/badge/Node.js-20%2B-2f7d32?style=for-the-badge&logo=node.js&logoColor=white)
 ![discord.js](https://img.shields.io/badge/discord.js-v14.25.1-5865F2?style=for-the-badge&logo=discord&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-5.22.0-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
-![Tests](https://img.shields.io/badge/tests-106%2F106%20passing-15803d?style=for-the-badge)
+![Tests](https://img.shields.io/badge/tests-119%2F119%20passing-15803d?style=for-the-badge)
 ![Status](https://img.shields.io/badge/status-production%20baseline%20ready-0f766e?style=for-the-badge)
 
 เอกสารนี้คือศูนย์กลางสถานะของโปรเจกต์ ใช้สรุปสิ่งที่เสร็จแล้ว, สิ่งที่ยืนยันใช้งานได้จริง, ความเสี่ยงที่ยังเหลือ, และแผนถัดไป
 
-อัปเดตล่าสุด: **2026-03-15 00:05 +07:00**
+อัปเดตล่าสุด: **2026-03-15 08:42 +07:00**
 
 อ้างอิงหลัก
 - ภาพรวม/วิธีใช้: [README.md](./README.md)
 - เอกสารโชว์งาน/ภาพรวมเชิง commercial: [docs/SHOWCASE_TH.md](./docs/SHOWCASE_TH.md)
+- เช็กลิสต์ก่อนขึ้นจริง: [docs/GO_LIVE_CHECKLIST_TH.md](./docs/GO_LIVE_CHECKLIST_TH.md)
 - คู่มือปฏิบัติการ: [docs/OPERATIONS_MANUAL_TH.md](./docs/OPERATIONS_MANUAL_TH.md)
 - คู่มือ `.env` ทุกไฟล์: [docs/ENV_REFERENCE_TH.md](./docs/ENV_REFERENCE_TH.md)
 - รายงาน gap ของ env ปัจจุบัน: [docs/PRODUCTION_ENV_GAP_TH.md](./docs/PRODUCTION_ENV_GAP_TH.md)
@@ -30,7 +31,9 @@
 
 ### ผลตรวจล่าสุด
 - `npm run lint` ผ่าน
-- `npm test` ผ่าน `106/106`
+- `npm test` ผ่าน `119/119`
+- `npm run smoke:postdeploy` ผ่านบน stack ที่รันจริงแล้ว
+- admin Discord SSO redirect ผ่านบน runtime จริงแล้ว
 - doctor / topology / portal doctor / readiness tooling มีครบ
 
 ### สถานะ production baseline
@@ -42,7 +45,8 @@
 ### Showcase / commercial posture
 - admin dashboard มี landing showcase สรุป topology, delivery runtime, restore guardrails และ operational evidence แล้ว
 - มีเอกสารโชว์งานแยกที่ [docs/SHOWCASE_TH.md](./docs/SHOWCASE_TH.md) สำหรับใช้ present ลูกค้าหรือทีม
-- สิ่งที่นำเสนอได้ชัดแล้วคือ delivery timeline, preflight, simulator, capability test, notification center และ player portal
+- มี public landing / showcase / trial route แยกจาก player login แล้ว
+- สิ่งที่นำเสนอได้ชัดแล้วคือ delivery timeline, preflight, simulator, capability test, notification center, player portal และ platform layer เชิง commercial
 
 ---
 
@@ -80,6 +84,7 @@
 - alert / notification center
 - item command editor + command template override preview
 - deep filters / exact match / sort / cursor pagination / shared presets
+- platform overview / tenant / subscription / license / API key / webhook / marketplace / reconcile endpoints
 
 ### Player Portal
 - Discord login
@@ -100,6 +105,18 @@
 - teleport mode `player | vehicle`
 - multi-item delivery ใช้งานได้
 - magazine auto `StackCount 100` ใช้งานได้
+
+### Platform / commercial foundation
+- billing plan catalog + subscription records
+- license + legal acceptance records ต่อ tenant
+- multi-tenant foundation พร้อม `tenant type`, `parentTenantId`, reseller-ready shape
+- tenant API key scopes + public platform API
+- outbound platform webhooks
+- agent heartbeat + version drift detection
+- marketplace offer records
+- public overview analytics + landing/trial route
+- legal docs + subscription policy + privacy policy
+- one-click bootstrap script + schema upgrade fallback
 
 ---
 

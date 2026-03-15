@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCUM Platform Trial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0a1016;
+      --bg-soft: #101b22;
+      --panel: rgba(12, 22, 28, 0.8);
+      --text: #edf6f7;
+      --muted: #a0b7bc;
+      --line: rgba(138, 206, 198, 0.16);
+      --accent: #d6b56c;
+      --accent-2: #8dd1c7;
+      --ok: #7fd291;
+      --warn: #efc172;
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans Thai", sans-serif;
+      color: var(--text);
+      min-height: 100vh;
+      background:
+        radial-gradient(1000px 620px at 0% 100%, rgba(214, 181, 108, 0.16), transparent 55%),
+        radial-gradient(1100px 700px at 100% 0%, rgba(141, 209, 199, 0.16), transparent 58%),
+        linear-gradient(155deg, var(--bg), #122029 50%, #1a323b);
+    }
+
+    .shell {
+      width: min(1180px, calc(100% - 32px));
+      margin: 0 auto;
+      padding: 28px 0 50px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)), var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 28px 64px rgba(0,0,0,0.32);
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .topbar b {
+      font-family: "Barlow Condensed", sans-serif;
+      font-size: 28px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 11px 16px;
+      border-radius: 999px;
+      text-decoration: none;
+      color: var(--text);
+      border: 1px solid rgba(214,181,108,0.24);
+      background: rgba(255,255,255,0.05);
+      transition: transform .18s ease, border-color .18s ease;
+    }
+
+    .btn.primary {
+      background: linear-gradient(135deg, rgba(214,181,108,0.95), rgba(141,209,199,0.92));
+      color: #0a1012;
+      font-weight: 700;
+      border-color: transparent;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(214,181,108,0.5);
+    }
+
+    h1, h2 {
+      margin: 0 0 10px;
+      font-family: "Barlow Condensed", sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    h1 { font-size: clamp(40px, 7vw, 72px); line-height: .95; }
+    h2 { font-size: 32px; }
+
+    p, li {
+      color: var(--muted);
+      line-height: 1.7;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 18px;
+      align-items: start;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(12, minmax(0, 1fr));
+    }
+
+    .col-6 { grid-column: span 6; }
+    .col-4 { grid-column: span 4; }
+    .col-8 { grid-column: span 8; }
+
+    .card, .step {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      background: rgba(255,255,255,0.04);
+    }
+
+    .step strong, .card strong {
+      display: block;
+      color: var(--accent-2);
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      margin-bottom: 8px;
+    }
+
+    .list {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .checks {
+      display: grid;
+      gap: 10px;
+    }
+
+    .check {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--line);
+    }
+
+    .check b {
+      color: var(--text);
+    }
+
+    .status {
+      font-weight: 700;
+      color: var(--ok);
+    }
+
+    .muted { color: var(--muted); }
+
+    @media (max-width: 900px) {
+      .hero { grid-template-columns: 1fr; }
+      .col-6, .col-4, .col-8 { grid-column: span 12; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="panel topbar">
+      <b>SCUM Platform Trial</b>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <a class="btn" href="/landing">Landing</a>
+        <a class="btn" href="/showcase">Showcase</a>
+        <a class="btn" href="/player/login">Player Portal</a>
+        <a class="btn primary" href="/admin">Admin</a>
+      </div>
+    </section>
+
+    <section class="panel hero">
+      <div>
+        <h1>Run A Real Trial Before Go-Live</h1>
+        <p id="hero-copy">โหลดข้อมูล trial overview...</p>
+      </div>
+      <div class="card">
+        <strong>Trial Outcome</strong>
+        <p>เป้าหมายของ trial คือพิสูจน์ว่า topology, delivery runtime, web auth, backup, reconcile และ public API ทำงานได้จริงในเครื่องลูกค้าก่อนเปิด production</p>
+      </div>
+    </section>
+
+    <section class="grid">
+      <section class="panel col-8">
+        <h2>Trial Steps</h2>
+        <div class="grid">
+          <div class="col-6 step">
+            <strong>1. Bootstrap</strong>
+            <p>รัน one-click install หรือ bootstrap script, generate Prisma client, doctor, security-check และ readiness ให้ผ่านก่อน</p>
+          </div>
+          <div class="col-6 step">
+            <strong>2. Tenant Setup</strong>
+            <p>สร้าง tenant, subscription, license, API key, webhook endpoint และ marketplace offer ผ่าน admin API</p>
+          </div>
+          <div class="col-6 step">
+            <strong>3. Delivery Proof</strong>
+            <p>ทดสอบ preflight, simulate, capability test, test send, verify และ delivery timeline ใน admin dashboard</p>
+          </div>
+          <div class="col-6 step">
+            <strong>4. Operations Proof</strong>
+            <p>ยืนยัน runtime supervisor, agent heartbeat, auto backup, notification center และ reconcile anomalies ใช้งานได้จริง</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel col-4">
+        <h2>Live Checks</h2>
+        <div id="checks" class="checks">
+          <div class="check"><b>Trial availability</b><span class="status">loading</span></div>
+        </div>
+      </section>
+
+      <section class="panel col-6">
+        <h2>What You Validate</h2>
+        <ul class="list">
+          <li>Discord/player/admin flows separate cleanly and enforce the right auth model</li>
+          <li>Delivery runtime can reconcile queue, audit, dead-letter, and anti-abuse signals</li>
+          <li>Billing/legal/license records are tracked per tenant instead of flat config only</li>
+          <li>Public API and webhook surface is safe enough for integrations and agent automation</li>
+          <li>Auto backup and restore preview are part of the operational runbook before launch</li>
+        </ul>
+      </section>
+
+      <section class="panel col-6">
+        <h2>Legal Documents</h2>
+        <div id="legal-docs" class="checks">
+          <div class="check"><b>Legal docs</b><span class="muted">loading</span></div>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script>
+    function createCheck(label, status) {
+      return `<div class="check"><b>${label}</b><span class="status">${status}</span></div>`;
+    }
+
+    async function loadTrialOverview() {
+      try {
+        const res = await fetch('/api/platform/public/overview', { headers: { accept: 'application/json' } });
+        const payload = await res.json();
+        if (!res.ok || !payload?.ok) throw new Error(payload?.error || 'request-failed');
+        const overview = payload.data || {};
+        const analytics = overview.analytics || {};
+        const trial = overview.trial || {};
+        const marketplace = overview.marketplace || {};
+        const hero = [
+          overview.brand?.description || 'Platform overview available.',
+          `Trial enabled: ${trial.enabled === true ? 'yes' : 'no'}`,
+          `Active tenants: ${analytics.tenants?.active || 0}`,
+          `Marketplace offers: ${analytics.marketplace?.offers || 0}`,
+        ].join(' ');
+        document.getElementById('hero-copy').textContent = hero;
+
+        document.getElementById('checks').innerHTML = [
+          createCheck('Trial availability', trial.enabled === true ? 'enabled' : 'disabled'),
+          createCheck('Billing plans', String((overview.billing?.plans || []).length)),
+          createCheck('Active tenants', String(analytics.tenants?.active || 0)),
+          createCheck('Delivery success', `${Math.round(Number(analytics.delivery?.successRate || 0) * 100)}%`),
+          createCheck('Marketplace offers', String(marketplace.offers?.length || 0)),
+        ].join('');
+
+        const docs = Array.isArray(overview.legal?.docs) ? overview.legal.docs : [];
+        document.getElementById('legal-docs').innerHTML = docs.length > 0
+          ? docs.map((doc) => `<div class="check"><b>${doc.title || 'Document'}</b><a class="btn" href="${doc.url || '#'}">Open</a></div>`).join('')
+          : `<div class="check"><b>Legal docs</b><span class="muted">not configured</span></div>`;
+      } catch (error) {
+        document.getElementById('hero-copy').textContent = `Unable to load overview: ${error.message}`;
+        document.getElementById('checks').innerHTML = createCheck('Trial availability', 'error');
+      }
+    }
+
+    loadTrialOverview();
+  </script>
+</body>
+</html>

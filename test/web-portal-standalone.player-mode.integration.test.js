@@ -73,10 +73,44 @@ test('web-portal-standalone player-only mode: routes and api behavior', async ()
     const healthBody = await health.json();
     assert.equal(healthBody?.data?.mode, 'player');
     assert.equal(healthBody?.data?.legacyAdminUrl, legacyAdminUrl);
+    assert.equal(healthBody?.data?.cookieName, 'scum_portal_session');
+    assert.equal(healthBody?.data?.cookiePath, '/');
 
     const root = await request('/', baseUrl);
     assert.equal(root.status, 302);
     assert.equal(root.headers.get('location'), '/player');
+
+    const showcase = await request('/showcase', baseUrl);
+    assert.equal(showcase.status, 200);
+    const showcaseHtml = await showcase.text();
+    assert.match(showcaseHtml, /SCUM Ops Platform Showcase/i);
+    assert.match(showcaseHtml, /Validated Delivery Flow/i);
+
+    const showcaseSlash = await request('/showcase/', baseUrl);
+    assert.equal(showcaseSlash.status, 302);
+    assert.equal(showcaseSlash.headers.get('location'), '/showcase');
+
+    const landing = await request('/landing', baseUrl);
+    assert.equal(landing.status, 200);
+    const landingHtml = await landing.text();
+    assert.match(landingHtml, /SCUM Platform Landing/i);
+
+    const trial = await request('/trial', baseUrl);
+    assert.equal(trial.status, 200);
+    const trialHtml = await trial.text();
+    assert.match(trialHtml, /SCUM Platform Trial/i);
+
+    const publicOverview = await request('/api/platform/public/overview', baseUrl);
+    assert.equal(publicOverview.status, 200);
+    const publicOverviewBody = await publicOverview.json();
+    assert.equal(publicOverviewBody?.ok, true);
+    assert.ok(Array.isArray(publicOverviewBody?.data?.billing?.plans));
+    assert.ok(Array.isArray(publicOverviewBody?.data?.legal?.docs));
+
+    const legalDoc = await request('/docs/LEGAL_TERMS_TH.md', baseUrl);
+    assert.equal(legalDoc.status, 200);
+    const legalDocHtml = await legalDoc.text();
+    assert.match(legalDocHtml, /ข้อกำหนดการใช้งานแพลตฟอร์ม/i);
 
     const admin = await request('/admin', baseUrl);
     assert.equal(admin.status, 302);
@@ -107,6 +141,57 @@ test('web-portal-standalone player-only mode: routes and api behavior', async ()
       assert.equal(body?.ok, false);
       assert.equal(body?.error, 'Unauthorized');
     }
+  } finally {
+    child.kill('SIGTERM');
+    await delay(500);
+  }
+
+  if (stderr.trim()) {
+    assert.ok(!/EADDRINUSE/i.test(stderr), `unexpected stderr: ${stderr}`);
+  }
+});
+
+test('web-portal-standalone routes local /admin traffic to legacy admin before player canonical redirect', async () => {
+  const port = pickPort();
+  const localBase = `http://127.0.0.1:${port}`;
+  const canonicalBase = 'https://player.example.com';
+  const legacyAdminUrl = 'https://admin.example.com/admin';
+
+  const child = spawn(process.execPath, ['apps/web-portal-standalone/server.js'], {
+    cwd: process.cwd(),
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      NODE_ENV: 'production',
+      WEB_PORTAL_MODE: 'player',
+      WEB_PORTAL_HOST: '127.0.0.1',
+      WEB_PORTAL_PORT: String(port),
+      WEB_PORTAL_BASE_URL: canonicalBase,
+      WEB_PORTAL_LEGACY_ADMIN_URL: legacyAdminUrl,
+      WEB_PORTAL_DISCORD_CLIENT_ID: '1478651427088760842',
+      WEB_PORTAL_DISCORD_CLIENT_SECRET: 'test-client-secret-1234567890',
+      WEB_PORTAL_PLAYER_OPEN_ACCESS: 'true',
+      WEB_PORTAL_SECURE_COOKIE: 'true',
+      WEB_PORTAL_ENFORCE_ORIGIN_CHECK: 'true',
+      BOT_ENABLE_ADMIN_WEB: 'false',
+    },
+  });
+
+  let stderr = '';
+  child.stderr.on('data', (chunk) => {
+    stderr += String(chunk || '');
+  });
+
+  try {
+    await delay(1200);
+
+    const admin = await request('/admin', localBase);
+    assert.equal(admin.status, 302);
+    assert.equal(admin.headers.get('location'), legacyAdminUrl);
+
+    const adminApiLive = await request('/admin/api/live', localBase);
+    assert.equal(adminApiLive.status, 302);
+    assert.equal(adminApiLive.headers.get('location'), `${legacyAdminUrl}/api/live`);
   } finally {
     child.kill('SIGTERM');
     await delay(500);

@@ -150,6 +150,36 @@ const {
   stopRuntimeSupervisorMonitor,
 } = require('./services/runtimeSupervisorService');
 const {
+  acceptPlatformLicenseLegal,
+  createMarketplaceOffer,
+  createPlatformApiKey,
+  createPlatformWebhookEndpoint,
+  createSubscription,
+  createTenant,
+  getPlanCatalog,
+  getPlatformAnalyticsOverview,
+  getPlatformPermissionCatalog,
+  getPlatformPublicOverview,
+  getPlatformTenantById,
+  issuePlatformLicense,
+  listMarketplaceOffers,
+  listPlatformAgentRuntimes,
+  listPlatformApiKeys,
+  listPlatformLicenses,
+  listPlatformSubscriptions,
+  listPlatformTenants,
+  listPlatformWebhookEndpoints,
+  recordPlatformAgentHeartbeat,
+  reconcileDeliveryState,
+  verifyPlatformApiKey,
+} = require('./services/platformService');
+const {
+  runPlatformMonitoringCycle,
+  startPlatformMonitoring,
+  stopPlatformMonitoring,
+} = require('./services/platformMonitoringService');
+const { getPlatformOpsState } = require('./store/platformOpsStateStore');
+const {
   revokeWelcomePackClaimForAdmin,
   clearWelcomePackClaimsForAdmin,
 } = require('./services/welcomePackService');
@@ -188,10 +218,23 @@ let resolvedToken = null;
 const sessions = new Map();
 let adminUsersReadyPromise = null;
 
-const SESSION_COOKIE_NAME = 'scum_admin_session';
+const SESSION_COOKIE_NAME =
+  String(process.env.ADMIN_WEB_SESSION_COOKIE_NAME || 'scum_admin_session').trim()
+    || 'scum_admin_session';
 const SESSION_TTL_MS = Math.max(
   10 * 60 * 1000,
   Number(process.env.ADMIN_WEB_SESSION_TTL_HOURS || 12) * 60 * 60 * 1000,
+);
+const SESSION_COOKIE_PATH = normalizeCookiePath(
+  process.env.ADMIN_WEB_SESSION_COOKIE_PATH || '/admin',
+  '/admin',
+);
+const SESSION_COOKIE_SAMESITE = normalizeSameSite(
+  process.env.ADMIN_WEB_SESSION_COOKIE_SAMESITE || 'strict',
+  'Strict',
+);
+const SESSION_COOKIE_DOMAIN = normalizeCookieDomain(
+  process.env.ADMIN_WEB_SESSION_COOKIE_DOMAIN || '',
 );
 const ADMIN_WEB_MAX_BODY_BYTES = Math.max(
   8 * 1024,
@@ -337,6 +380,28 @@ function envBool(name, fallback = false) {
   const raw = String(process.env[name] || '').trim().toLowerCase();
   if (!raw) return fallback;
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on';
+}
+
+function normalizeCookiePath(value, fallback = '/') {
+  const text = String(value || '').trim();
+  if (!text) return fallback;
+  if (!text.startsWith('/')) return fallback;
+  return text;
+}
+
+function normalizeSameSite(value, fallback = 'Lax') {
+  const raw = String(value || '').trim().toLowerCase();
+  if (raw === 'strict') return 'Strict';
+  if (raw === 'none') return 'None';
+  if (raw === 'lax') return 'Lax';
+  return fallback;
+}
+
+function normalizeCookieDomain(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  if (/[;\s]/.test(text)) return '';
+  return text;
 }
 
 function normalizeRole(value) {
@@ -1124,10 +1189,11 @@ function buildSessionCookie(sessionId) {
   const parts = [
     `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
     'HttpOnly',
-    'Path=/',
-    'SameSite=Strict',
+    `Path=${SESSION_COOKIE_PATH}`,
+    `SameSite=${SESSION_COOKIE_SAMESITE}`,
     `Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`,
   ];
+  if (SESSION_COOKIE_DOMAIN) parts.push(`Domain=${SESSION_COOKIE_DOMAIN}`);
   if (SESSION_SECURE_COOKIE) parts.push('Secure');
   return parts.join('; ');
 }
@@ -1136,10 +1202,11 @@ function buildClearSessionCookie() {
   const parts = [
     `${SESSION_COOKIE_NAME}=`,
     'HttpOnly',
-    'Path=/',
-    'SameSite=Strict',
+    `Path=${SESSION_COOKIE_PATH}`,
+    `SameSite=${SESSION_COOKIE_SAMESITE}`,
     'Max-Age=0',
   ];
+  if (SESSION_COOKIE_DOMAIN) parts.push(`Domain=${SESSION_COOKIE_DOMAIN}`);
   if (SESSION_SECURE_COOKIE) parts.push('Secure');
   return parts.join('; ');
 }
@@ -1237,6 +1304,31 @@ function ensurePortalTokenAuth(req, urlObj, res) {
   };
 }
 
+function getPlatformApiKeyFromRequest(req) {
+  const headerKey = String(req.headers['x-platform-api-key'] || '').trim();
+  if (headerKey) return headerKey;
+  const authHeader = String(req.headers.authorization || '').trim();
+  if (/^bearer\s+/i.test(authHeader)) {
+    return authHeader.replace(/^bearer\s+/i, '').trim();
+  }
+  return '';
+}
+
+async function ensurePlatformApiKey(req, res, requiredScopes = []) {
+  const rawKey = getPlatformApiKeyFromRequest(req);
+  const auth = await verifyPlatformApiKey(rawKey, requiredScopes);
+  if (!auth?.ok) {
+    const status = auth?.reason === 'insufficient-scope' ? 403 : 401;
+    sendJson(res, status, {
+      ok: false,
+      error: auth?.reason || 'invalid-platform-api-key',
+      missingScopes: Array.isArray(auth?.missingScopes) ? auth.missingScopes : [],
+    });
+    return null;
+  }
+  return auth;
+}
+
 function filterShopItems(rows, options = {}) {
   const kindFilter = String(options.kind || '').trim().toLowerCase();
   const query = String(options.q || '').trim().toLowerCase();
@@ -1281,6 +1373,13 @@ function requiredRoleForPostPath(pathname) {
     '/admin/api/rentbike/reset-now',
     '/admin/api/backup/create',
     '/admin/api/backup/restore',
+    '/admin/api/platform/tenant',
+    '/admin/api/platform/subscription',
+    '/admin/api/platform/license',
+    '/admin/api/platform/license/accept-legal',
+    '/admin/api/platform/apikey',
+    '/admin/api/platform/webhook',
+    '/admin/api/platform/marketplace',
   ]);
   if (ownerOnly.has(pathname)) return 'owner';
 
@@ -1292,6 +1391,8 @@ function requiredRoleForPostPath(pathname) {
     '/admin/api/stats/add-death',
     '/admin/api/stats/add-playtime',
     '/admin/api/scum/status',
+    '/admin/api/platform/reconcile',
+    '/admin/api/platform/monitoring/run',
   ]);
   if (modAllowed.has(pathname)) return 'mod';
   return 'admin';
@@ -1365,7 +1466,8 @@ function asInt(value, fallback = null) {
 }
 
 function requiredString(body, key) {
-  const value = String(body?.[key] || '').trim();
+  const source = typeof key === 'undefined' ? body : body?.[key];
+  const value = String(source || '').trim();
   return value || null;
 }
 
@@ -2404,6 +2506,142 @@ async function handlePostAction(client, pathname, body, res, auth) {
     }
   }
 
+  if (pathname === '/admin/api/platform/tenant') {
+    const result = await createTenant({
+      id: requiredString(body, 'id'),
+      slug: requiredString(body, 'slug'),
+      name: requiredString(body, 'name'),
+      type: requiredString(body, 'type'),
+      status: requiredString(body, 'status'),
+      locale: requiredString(body, 'locale'),
+      ownerName: requiredString(body, 'ownerName'),
+      ownerEmail: requiredString(body, 'ownerEmail'),
+      parentTenantId: requiredString(body, 'parentTenantId'),
+      metadata: body.metadata,
+    }, `admin-web:${auth?.user || 'unknown'}`);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'platform-tenant-failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.tenant });
+  }
+
+  if (pathname === '/admin/api/platform/subscription') {
+    const result = await createSubscription({
+      id: requiredString(body, 'id'),
+      tenantId: requiredString(body, 'tenantId'),
+      planId: requiredString(body, 'planId'),
+      billingCycle: requiredString(body, 'billingCycle'),
+      status: requiredString(body, 'status'),
+      currency: requiredString(body, 'currency'),
+      amountCents: body.amountCents,
+      intervalDays: body.intervalDays,
+      startedAt: body.startedAt,
+      renewsAt: body.renewsAt,
+      canceledAt: body.canceledAt,
+      externalRef: requiredString(body, 'externalRef'),
+      metadata: body.metadata,
+    }, `admin-web:${auth?.user || 'unknown'}`);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'platform-subscription-failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.subscription });
+  }
+
+  if (pathname === '/admin/api/platform/license') {
+    const result = await issuePlatformLicense({
+      id: requiredString(body, 'id'),
+      tenantId: requiredString(body, 'tenantId'),
+      licenseKey: requiredString(body, 'licenseKey'),
+      status: requiredString(body, 'status'),
+      seats: body.seats,
+      issuedAt: body.issuedAt,
+      expiresAt: body.expiresAt,
+      legalDocVersion: requiredString(body, 'legalDocVersion'),
+      legalAcceptedAt: body.legalAcceptedAt,
+      metadata: body.metadata,
+    }, `admin-web:${auth?.user || 'unknown'}`);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'platform-license-failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.license });
+  }
+
+  if (pathname === '/admin/api/platform/license/accept-legal') {
+    const result = await acceptPlatformLicenseLegal({
+      licenseId: requiredString(body, 'licenseId'),
+      legalDocVersion: requiredString(body, 'legalDocVersion'),
+      metadata: body.metadata,
+    }, `admin-web:${auth?.user || 'unknown'}`);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'platform-license-legal-failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.license });
+  }
+
+  if (pathname === '/admin/api/platform/apikey') {
+    const result = await createPlatformApiKey({
+      id: requiredString(body, 'id'),
+      tenantId: requiredString(body, 'tenantId'),
+      name: requiredString(body, 'name'),
+      status: requiredString(body, 'status'),
+      scopes: parseStringArray(body.scopes),
+    }, `admin-web:${auth?.user || 'unknown'}`);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'platform-apikey-failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result });
+  }
+
+  if (pathname === '/admin/api/platform/webhook') {
+    const result = await createPlatformWebhookEndpoint({
+      id: requiredString(body, 'id'),
+      tenantId: requiredString(body, 'tenantId'),
+      name: requiredString(body, 'name'),
+      eventType: requiredString(body, 'eventType'),
+      targetUrl: requiredString(body, 'targetUrl'),
+      secretValue: requiredString(body, 'secretValue'),
+      enabled: body.enabled !== false,
+    }, `admin-web:${auth?.user || 'unknown'}`);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'platform-webhook-failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.webhook });
+  }
+
+  if (pathname === '/admin/api/platform/marketplace') {
+    const result = await createMarketplaceOffer({
+      id: requiredString(body, 'id'),
+      tenantId: requiredString(body, 'tenantId'),
+      title: requiredString(body, 'title'),
+      kind: requiredString(body, 'kind'),
+      priceCents: body.priceCents,
+      currency: requiredString(body, 'currency'),
+      status: requiredString(body, 'status'),
+      locale: requiredString(body, 'locale'),
+      meta: body.meta,
+    }, `admin-web:${auth?.user || 'unknown'}`);
+    if (!result.ok) {
+      return sendJson(res, 400, { ok: false, error: result.reason || 'platform-marketplace-failed' });
+    }
+    return sendJson(res, 200, { ok: true, data: result.offer });
+  }
+
+  if (pathname === '/admin/api/platform/reconcile') {
+    const result = await reconcileDeliveryState({
+      windowMs: body.windowMs,
+      pendingOverdueMs: body.pendingOverdueMs,
+    });
+    return sendJson(res, 200, { ok: true, data: result });
+  }
+
+  if (pathname === '/admin/api/platform/monitoring/run') {
+    const result = await runPlatformMonitoringCycle({
+      client,
+      force: true,
+    });
+    return sendJson(res, 200, { ok: true, data: result });
+  }
+
   if (pathname === '/admin/api/notifications/ack') {
     const ids = parseStringArray(body?.ids);
     if (ids.length === 0) {
@@ -2505,6 +2743,7 @@ function startAdminWebServer(client) {
   const allowedOrigins = buildAllowedOrigins(host, port);
   const token = getAdminToken();
   ensureMetricsSeriesTimer();
+  startPlatformMonitoring({ client });
   if (!liveBusBound) {
     adminLiveBus.on('update', (evt) => {
       broadcastLiveUpdate(evt?.type || 'update', evt?.payload || {});
@@ -2559,6 +2798,81 @@ function startAdminWebServer(client) {
         return res.end();
       }
       return sendHtml(res, 200, getDashboardHtml());
+    }
+
+    if (req.method === 'GET' && pathname === '/platform/api/v1/public/overview') {
+      return sendJson(res, 200, {
+        ok: true,
+        data: await getPlatformPublicOverview(),
+      });
+    }
+
+    if (pathname.startsWith('/platform/api/v1/')) {
+      try {
+        if (req.method === 'GET' && pathname === '/platform/api/v1/tenant/self') {
+          const platformAuth = await ensurePlatformApiKey(req, res, ['tenant:read']);
+          if (!platformAuth) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              tenant: platformAuth.tenant,
+              apiKey: platformAuth.apiKey,
+              scopes: platformAuth.scopes,
+            },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/platform/api/v1/analytics/overview') {
+          const platformAuth = await ensurePlatformApiKey(req, res, ['analytics:read']);
+          if (!platformAuth) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: await getPlatformAnalyticsOverview(),
+          });
+        }
+
+        if (req.method === 'POST' && pathname === '/platform/api/v1/agent/heartbeat') {
+          const platformAuth = await ensurePlatformApiKey(req, res, ['agent:write']);
+          if (!platformAuth) return undefined;
+          const body = await readJsonBody(req);
+          const result = await recordPlatformAgentHeartbeat({
+            tenantId: platformAuth.tenant?.id,
+            runtimeKey: requiredString(body, 'runtimeKey'),
+            version: requiredString(body, 'version'),
+            channel: requiredString(body, 'channel'),
+            status: requiredString(body, 'status'),
+            minRequiredVersion: requiredString(body, 'minRequiredVersion'),
+            meta: body.meta,
+          }, 'platform-api');
+          if (!result.ok) {
+            return sendJson(res, 400, { ok: false, error: result.reason || 'platform-agent-heartbeat-failed' });
+          }
+          return sendJson(res, 200, { ok: true, data: result.runtime });
+        }
+
+        if (req.method === 'POST' && pathname === '/platform/api/v1/delivery/reconcile') {
+          const platformAuth = await ensurePlatformApiKey(req, res, ['delivery:reconcile']);
+          if (!platformAuth) return undefined;
+          const body = await readJsonBody(req);
+          return sendJson(res, 200, {
+            ok: true,
+            data: await reconcileDeliveryState({
+              windowMs: body.windowMs,
+              pendingOverdueMs: body.pendingOverdueMs,
+            }),
+          });
+        }
+
+        return sendJson(res, 404, { ok: false, error: 'Resource not found' });
+      } catch (error) {
+        return sendJson(res, Number(error?.statusCode || 500), {
+          ok: false,
+          error:
+            Number(error?.statusCode || 500) >= 500
+              ? 'Internal platform API error'
+              : String(error?.message || 'Bad request'),
+        });
+      }
     }
 
     if (req.method === 'GET' && pathname === '/admin/auth/discord/start') {
@@ -2740,6 +3054,13 @@ function startAdminWebServer(client) {
               password: true,
               discordSso: SSO_DISCORD_ACTIVE,
               twoFactor: ADMIN_WEB_2FA_ACTIVE,
+              sessionCookie: {
+                name: SESSION_COOKIE_NAME,
+                path: SESSION_COOKIE_PATH,
+                sameSite: SESSION_COOKIE_SAMESITE,
+                secure: SESSION_SECURE_COOKIE,
+                domain: SESSION_COOKIE_DOMAIN || null,
+              },
             },
           });
         }
@@ -2783,6 +3104,118 @@ function startAdminWebServer(client) {
             ok: true,
             data: getAdminRestoreState(),
           });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/overview') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: {
+              analytics: await getPlatformAnalyticsOverview(),
+              publicOverview: await getPlatformPublicOverview(),
+              permissionCatalog: getPlatformPermissionCatalog(),
+              plans: getPlanCatalog(),
+              opsState: getPlatformOpsState(),
+            },
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/ops-state') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          return sendJson(res, 200, {
+            ok: true,
+            data: getPlatformOpsState(),
+          });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/tenants') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const data = await listPlatformTenants({
+            limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
+            status: requiredString(urlObj.searchParams.get('status')),
+            type: requiredString(urlObj.searchParams.get('type')),
+          });
+          return sendJson(res, 200, { ok: true, data });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/subscriptions') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const data = await listPlatformSubscriptions({
+            limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
+            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            status: requiredString(urlObj.searchParams.get('status')),
+          });
+          return sendJson(res, 200, { ok: true, data });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/licenses') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const data = await listPlatformLicenses({
+            limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
+            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            status: requiredString(urlObj.searchParams.get('status')),
+          });
+          return sendJson(res, 200, { ok: true, data });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/apikeys') {
+          const auth = ensureRole(req, urlObj, 'owner', res);
+          if (!auth) return undefined;
+          const data = await listPlatformApiKeys({
+            limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
+            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            status: requiredString(urlObj.searchParams.get('status')),
+          });
+          return sendJson(res, 200, { ok: true, data });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/webhooks') {
+          const auth = ensureRole(req, urlObj, 'owner', res);
+          if (!auth) return undefined;
+          const data = await listPlatformWebhookEndpoints({
+            limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
+            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            eventType: requiredString(urlObj.searchParams.get('eventType')),
+          });
+          return sendJson(res, 200, { ok: true, data });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/agents') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const data = await listPlatformAgentRuntimes({
+            limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
+            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            status: requiredString(urlObj.searchParams.get('status')),
+          });
+          return sendJson(res, 200, { ok: true, data });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/marketplace') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const data = await listMarketplaceOffers({
+            limit: asInt(urlObj.searchParams.get('limit'), 100) || 100,
+            tenantId: requiredString(urlObj.searchParams.get('tenantId')),
+            status: requiredString(urlObj.searchParams.get('status')),
+            locale: requiredString(urlObj.searchParams.get('locale')),
+          });
+          return sendJson(res, 200, { ok: true, data });
+        }
+
+        if (req.method === 'GET' && pathname === '/admin/api/platform/reconcile') {
+          const auth = ensureRole(req, urlObj, 'mod', res);
+          if (!auth) return undefined;
+          const data = await reconcileDeliveryState({
+            windowMs: asInt(urlObj.searchParams.get('windowMs'), null),
+            pendingOverdueMs: asInt(urlObj.searchParams.get('pendingOverdueMs'), null),
+          });
+          return sendJson(res, 200, { ok: true, data });
         }
 
         if (req.method === 'GET' && pathname === '/admin/api/runtime/supervisor') {
@@ -3559,6 +3992,7 @@ function startAdminWebServer(client) {
   adminServer.on('close', () => {
     closeAllLiveStreams();
     stopMetricsSeriesTimer();
+    stopPlatformMonitoring();
     stopRuntimeSupervisorMonitor();
     adminServer = null;
   });
@@ -3583,6 +4017,9 @@ function startAdminWebServer(client) {
         '[admin-web] SESSION cookie is not secure. Set ADMIN_WEB_SECURE_COOKIE=true for HTTPS production.',
       );
     }
+    console.log(
+      `[admin-web] session cookie: name=${SESSION_COOKIE_NAME} path=${SESSION_COOKIE_PATH} sameSite=${SESSION_COOKIE_SAMESITE} secure=${SESSION_SECURE_COOKIE}${SESSION_COOKIE_DOMAIN ? ` domain=${SESSION_COOKIE_DOMAIN}` : ''}`,
+    );
     if (!process.env.ADMIN_WEB_PASSWORD) {
       console.log(
         '[admin-web] ยังไม่ได้ตั้งค่า ADMIN_WEB_PASSWORD จึงใช้ ADMIN_WEB_TOKEN (หรือโทเค็นชั่วคราว) เป็นรหัสผ่านล็อกอิน',

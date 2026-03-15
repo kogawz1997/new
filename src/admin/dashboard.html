@@ -1333,6 +1333,7 @@
         </div>
         <div class="showcase-actions">
           <button type="button" class="ghost" data-showcase-tab="delivery">เปิดแท็บ Delivery</button>
+          <button type="button" class="ghost" data-showcase-tab="platform">เปิดแท็บ Platform</button>
           <button type="button" class="ghost" data-showcase-tab="metrics">เปิดแท็บ Metrics</button>
           <button type="button" class="ghost" data-showcase-tab="config">เปิดแท็บ Config</button>
           <button type="button" class="ghost" data-showcase-tab="danger">เปิดแท็บ Restore</button>
@@ -1360,6 +1361,7 @@
               <button class="tab-btn" data-tab="players" data-tab-label="ผู้เล่น player vip redeem link steam code" type="button">ผู้เล่น + VIP + ระบบแลกรางวัล<span class="desc">ลิงก์, VIP, โค้ด</span></button>
               <button class="tab-btn" data-tab="moderation" data-tab-label="ลงโทษ moderation สถิติ stats ต้อนรับ welcome" type="button">ลงโทษ + สถิติ + ต้อนรับ<span class="desc">ดูแล, สถิติ, ต้อนรับ</span></button>
               <button class="tab-btn" data-tab="delivery" data-tab-label="ส่งของ delivery rcon queue เช่ามอไซ rentbike" type="button">ส่งของ RCON + เช่ามอไซ<span class="desc">คิว, ลองใหม่, รีเซ็ต</span></button>
+              <button class="tab-btn" data-tab="platform" data-tab-label="platform tenant billing subscription license webhook api marketplace agent monitoring" type="button">Platform Center<span class="desc">tenant, billing, legal, API</span></button>
               <button class="tab-btn" data-tab="metrics" data-tab-label="metrics observability timeline charts alert webhook login delivery" type="button">Metrics Timeline<span class="desc">กราฟเวลา + แนวโน้มระบบ</span></button>
               <button class="tab-btn" data-tab="config" data-tab-label="คอนฟิก config setting patch" type="button">แก้ไขคอนฟิก<span class="desc">แก้บางส่วน / ตั้งค่าทั้งหมด</span></button>
               <button class="tab-btn danger" data-tab="danger" data-tab-label="danger โซนอันตราย ลบ รีเซ็ต clear reset" type="button">โซนอันตราย<span class="desc">ลบ / ล้าง / รีเซ็ต</span></button>
@@ -2364,6 +2366,396 @@
               </form>
             </section>
 
+            <section class="tab-panel" data-tab-panel="platform">
+              <div class="tab-panel-head">
+                <h3>Platform Center</h3>
+                <p>คุม tenant, billing, license, API/webhook, marketplace, monitoring และ reconciliation จากหน้าเดียว</p>
+              </div>
+
+              <datalist id="platformTenantOptions"></datalist>
+              <datalist id="platformPlanOptions"></datalist>
+              <datalist id="platformLicenseOptions"></datalist>
+
+              <div class="form-card">
+                <div class="section-head-inline">
+                  <div>
+                    <h4>Platform Overview + Ops State</h4>
+                    <p class="help">สรุป business metrics, public surface, permission catalog และสถานะ monitoring ล่าสุด</p>
+                  </div>
+                  <div class="inline-actions">
+                    <button type="button" id="platformRefreshBtn" class="ghost">รีเฟรช Platform</button>
+                    <button type="button" id="platformRunMonitoringBtn" class="ghost" data-min-role="mod">รัน Monitoring</button>
+                    <button type="button" id="platformRunReconcileBtn" class="ghost" data-min-role="mod">รัน Reconcile</button>
+                  </div>
+                </div>
+                <div id="platformOverviewSummary" class="summary"></div>
+                <div id="platformOpsSummary" class="summary"></div>
+                <pre id="platformOverviewView" class="raw">ยังไม่มีข้อมูล platform overview</pre>
+                <pre id="platformOpsView" class="raw">ยังไม่มีข้อมูล platform ops</pre>
+              </div>
+
+              <div class="delivery-grid">
+                <form id="platformTenantForm" class="form-card" data-endpoint="/admin/api/platform/tenant" data-min-role="owner">
+                  <h4>Tenant / Multi-tenant</h4>
+                  <p class="help">สร้างหรืออัปเดต tenant หลัก, trial, reseller หรือ demo tenant</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Tenant ID (ถ้ามี)</span>
+                      <input name="id" placeholder="tenant-...">
+                    </label>
+                    <label class="field">
+                      <span>Name</span>
+                      <input name="name" placeholder="เช่น SCUM TH Network" required>
+                    </label>
+                    <label class="field">
+                      <span>Slug</span>
+                      <input name="slug" placeholder="เช่น scum-th-network">
+                    </label>
+                    <label class="field">
+                      <span>Type</span>
+                      <select name="type">
+                        <option value="direct">direct</option>
+                        <option value="trial">trial</option>
+                        <option value="reseller">reseller</option>
+                        <option value="demo">demo</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Status</span>
+                      <select name="status">
+                        <option value="active">active</option>
+                        <option value="trialing">trialing</option>
+                        <option value="paused">paused</option>
+                        <option value="suspended">suspended</option>
+                        <option value="inactive">inactive</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Locale</span>
+                      <input name="locale" placeholder="th / en">
+                    </label>
+                    <label class="field">
+                      <span>Owner Name</span>
+                      <input name="ownerName" placeholder="ชื่อผู้ดูแล">
+                    </label>
+                    <label class="field">
+                      <span>Owner Email</span>
+                      <input name="ownerEmail" type="email" placeholder="owner@example.com">
+                    </label>
+                    <label class="field wide">
+                      <span>Parent Tenant ID (ถ้ามี)</span>
+                      <input name="parentTenantId" list="platformTenantOptions" placeholder="tenant parent / reseller">
+                    </label>
+                    <label class="field wide">
+                      <span>Metadata JSON</span>
+                      <textarea name="metadata" rows="4" placeholder='{"region":"apac","cluster":"th-1"}'></textarea>
+                    </label>
+                    <button type="submit">บันทึก tenant</button>
+                  </div>
+                </form>
+
+                <form id="platformSubscriptionForm" class="form-card" data-endpoint="/admin/api/platform/subscription" data-min-role="owner">
+                  <h4>Billing / Subscription</h4>
+                  <p class="help">สร้าง subscription แยก plan, cycle, ราคา, renewal และ external ref</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Subscription ID (ถ้ามี)</span>
+                      <input name="id" placeholder="sub-...">
+                    </label>
+                    <label class="field">
+                      <span>Tenant ID</span>
+                      <input name="tenantId" list="platformTenantOptions" placeholder="tenant-..." required>
+                    </label>
+                    <label class="field">
+                      <span>Plan ID</span>
+                      <input name="planId" list="platformPlanOptions" placeholder="starter / pro">
+                    </label>
+                    <label class="field">
+                      <span>Status</span>
+                      <select name="status">
+                        <option value="active">active</option>
+                        <option value="trialing">trialing</option>
+                        <option value="paused">paused</option>
+                        <option value="past_due">past_due</option>
+                        <option value="canceled">canceled</option>
+                        <option value="expired">expired</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Billing Cycle</span>
+                      <select name="billingCycle">
+                        <option value="monthly">monthly</option>
+                        <option value="quarterly">quarterly</option>
+                        <option value="yearly">yearly</option>
+                        <option value="trial">trial</option>
+                        <option value="one-time">one-time</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Amount (cents)</span>
+                      <input name="amountCents" type="number" min="0" step="1" placeholder="9900">
+                    </label>
+                    <label class="field">
+                      <span>Currency</span>
+                      <input name="currency" placeholder="THB">
+                    </label>
+                    <label class="field">
+                      <span>Interval Days</span>
+                      <input name="intervalDays" type="number" min="1" step="1" placeholder="30">
+                    </label>
+                    <label class="field">
+                      <span>Renews At</span>
+                      <input name="renewsAt" placeholder="2026-12-31T00:00:00Z">
+                    </label>
+                    <label class="field wide">
+                      <span>External Ref</span>
+                      <input name="externalRef" placeholder="Stripe / invoice / manual ref">
+                    </label>
+                    <label class="field wide">
+                      <span>Metadata JSON</span>
+                      <textarea name="metadata" rows="4" placeholder='{"source":"manual-admin"}'></textarea>
+                    </label>
+                    <button type="submit">บันทึก subscription</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="delivery-grid">
+                <form id="platformLicenseForm" class="form-card" data-endpoint="/admin/api/platform/license" data-min-role="owner">
+                  <h4>License / Legal</h4>
+                  <p class="help">ออก license, กำหนดจำนวน seats, expiry และ legal document version</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>License ID (ถ้ามี)</span>
+                      <input name="id" placeholder="license-...">
+                    </label>
+                    <label class="field">
+                      <span>Tenant ID</span>
+                      <input name="tenantId" list="platformTenantOptions" placeholder="tenant-..." required>
+                    </label>
+                    <label class="field">
+                      <span>Status</span>
+                      <select name="status">
+                        <option value="active">active</option>
+                        <option value="trialing">trialing</option>
+                        <option value="expired">expired</option>
+                        <option value="revoked">revoked</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Seats</span>
+                      <input name="seats" type="number" min="1" step="1" placeholder="1">
+                    </label>
+                    <label class="field">
+                      <span>Expires At</span>
+                      <input name="expiresAt" placeholder="2026-12-31T00:00:00Z">
+                    </label>
+                    <label class="field">
+                      <span>Legal Doc Version</span>
+                      <input name="legalDocVersion" placeholder="2026.03">
+                    </label>
+                    <label class="field wide">
+                      <span>Metadata JSON</span>
+                      <textarea name="metadata" rows="4" placeholder='{"channel":"partner"}'></textarea>
+                    </label>
+                    <button type="submit">ออก license</button>
+                  </div>
+                </form>
+
+                <form id="platformLicenseAcceptForm" class="form-card" data-endpoint="/admin/api/platform/license/accept-legal" data-min-role="owner">
+                  <h4>บันทึกการยอมรับเอกสารกฎหมาย</h4>
+                  <p class="help">ใช้เมื่อ tenant ยอมรับ terms/privacy/subscription policy แล้ว</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>License ID</span>
+                      <input name="licenseId" list="platformLicenseOptions" placeholder="license-..." required>
+                    </label>
+                    <label class="field">
+                      <span>Legal Doc Version</span>
+                      <input name="legalDocVersion" placeholder="2026.03" required>
+                    </label>
+                    <label class="field wide">
+                      <span>Metadata JSON</span>
+                      <textarea name="metadata" rows="4" placeholder='{"acceptedVia":"admin-web"}'></textarea>
+                    </label>
+                    <button type="submit">บันทึกการยอมรับ</button>
+                  </div>
+                </form>
+              </div>
+
+              <div class="delivery-grid">
+                <form id="platformApiKeyForm" class="form-card" data-endpoint="/admin/api/platform/apikey" data-min-role="owner">
+                  <h4>Public API Keys</h4>
+                  <p class="help">ออก key ใหม่และกำหนด scope อย่างชัดเจน ระบบจะแสดง raw key ให้ดูครั้งเดียวหลังสร้าง</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>API Key ID (ถ้ามี)</span>
+                      <input name="id" placeholder="apikey-...">
+                    </label>
+                    <label class="field">
+                      <span>Tenant ID</span>
+                      <input name="tenantId" list="platformTenantOptions" placeholder="tenant-..." required>
+                    </label>
+                    <label class="field">
+                      <span>Name</span>
+                      <input name="name" placeholder="Delivery Reconcile Key" required>
+                    </label>
+                    <label class="field">
+                      <span>Status</span>
+                      <select name="status">
+                        <option value="active">active</option>
+                        <option value="disabled">disabled</option>
+                        <option value="revoked">revoked</option>
+                      </select>
+                    </label>
+                    <label class="field wide">
+                      <span>Scopes (comma separated)</span>
+                      <input name="scopes" placeholder="tenant:read,analytics:read,delivery:reconcile">
+                    </label>
+                    <button type="submit">ออก API key</button>
+                  </div>
+                  <pre id="platformApiKeyCreateView" class="raw">raw API key จะโชว์ที่นี่ครั้งเดียวหลังสร้าง</pre>
+                </form>
+
+                <form id="platformWebhookForm" class="form-card" data-endpoint="/admin/api/platform/webhook" data-min-role="owner">
+                  <h4>Webhook Endpoints</h4>
+                  <p class="help">ลงทะเบียนปลายทาง event และเก็บ secret ที่ใช้ sign payload ไว้ให้ operator ตรวจสอบได้</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Webhook ID (ถ้ามี)</span>
+                      <input name="id" placeholder="hook-...">
+                    </label>
+                    <label class="field">
+                      <span>Tenant ID</span>
+                      <input name="tenantId" list="platformTenantOptions" placeholder="tenant-..." required>
+                    </label>
+                    <label class="field">
+                      <span>Name</span>
+                      <input name="name" placeholder="Ops Alert Sink" required>
+                    </label>
+                    <label class="field">
+                      <span>Event Type</span>
+                      <input name="eventType" placeholder="platform.tenant.upserted หรือ *">
+                    </label>
+                    <label class="field wide">
+                      <span>Target URL</span>
+                      <input name="targetUrl" type="url" placeholder="https://example.com/webhook" required>
+                    </label>
+                    <label class="field">
+                      <span>Secret (ปล่อยว่างเพื่อ generate)</span>
+                      <input name="secretValue" placeholder="optional">
+                    </label>
+                    <button type="submit">บันทึก webhook</button>
+                  </div>
+                  <pre id="platformWebhookCreateView" class="raw">secret webhook จะโชว์ที่นี่หลังสร้าง</pre>
+                </form>
+              </div>
+
+              <div class="delivery-grid">
+                <form id="platformMarketplaceForm" class="form-card" data-endpoint="/admin/api/platform/marketplace" data-min-role="owner">
+                  <h4>Marketplace / Reseller Offer</h4>
+                  <p class="help">ใช้กับ package, reseller offer หรือ trial-to-paid offer ที่อยากขายในระบบ</p>
+                  <div class="form-grid">
+                    <label class="field">
+                      <span>Offer ID (ถ้ามี)</span>
+                      <input name="id" placeholder="offer-...">
+                    </label>
+                    <label class="field">
+                      <span>Tenant ID</span>
+                      <input name="tenantId" list="platformTenantOptions" placeholder="tenant-..." required>
+                    </label>
+                    <label class="field">
+                      <span>Title</span>
+                      <input name="title" placeholder="Full Shop + Delivery Package" required>
+                    </label>
+                    <label class="field">
+                      <span>Kind</span>
+                      <input name="kind" placeholder="service / preset / package">
+                    </label>
+                    <label class="field">
+                      <span>Status</span>
+                      <select name="status">
+                        <option value="active">active</option>
+                        <option value="draft">draft</option>
+                        <option value="archived">archived</option>
+                      </select>
+                    </label>
+                    <label class="field">
+                      <span>Price (cents)</span>
+                      <input name="priceCents" type="number" min="0" step="1" placeholder="19900">
+                    </label>
+                    <label class="field">
+                      <span>Currency</span>
+                      <input name="currency" placeholder="THB">
+                    </label>
+                    <label class="field">
+                      <span>Locale</span>
+                      <input name="locale" placeholder="th">
+                    </label>
+                    <label class="field wide">
+                      <span>Meta JSON</span>
+                      <textarea name="meta" rows="4" placeholder='{"preset":"full-shop","channel":"direct"}'></textarea>
+                    </label>
+                    <button type="submit">บันทึก marketplace offer</button>
+                  </div>
+                </form>
+
+                <div class="form-card">
+                  <h4>Permission Catalog</h4>
+                  <p class="help">รายการ scope ที่ public API / webhook / automation ภายนอกสามารถขอใช้งานได้</p>
+                  <div id="platformPermissionTableWrap" class="table-wrap"></div>
+                </div>
+              </div>
+
+              <div class="delivery-grid">
+                <div class="form-card">
+                  <h4>Tenants</h4>
+                  <div id="platformTenantTableWrap" class="table-wrap"></div>
+                </div>
+
+                <div class="form-card">
+                  <h4>Subscriptions</h4>
+                  <div id="platformSubscriptionTableWrap" class="table-wrap"></div>
+                </div>
+              </div>
+
+              <div class="delivery-grid">
+                <div class="form-card">
+                  <h4>Licenses</h4>
+                  <div id="platformLicenseTableWrap" class="table-wrap"></div>
+                </div>
+
+                <div class="form-card">
+                  <h4>Marketplace Offers</h4>
+                  <div id="platformMarketplaceTableWrap" class="table-wrap"></div>
+                </div>
+              </div>
+
+              <div class="delivery-grid">
+                <div class="form-card">
+                  <h4>API Keys</h4>
+                  <div id="platformApiKeyTableWrap" class="table-wrap"></div>
+                </div>
+
+                <div class="form-card">
+                  <h4>Webhook Endpoints</h4>
+                  <div id="platformWebhookTableWrap" class="table-wrap"></div>
+                </div>
+              </div>
+
+              <div class="delivery-grid">
+                <div class="form-card">
+                  <h4>Agent Runtime Versions</h4>
+                  <div id="platformAgentTableWrap" class="table-wrap"></div>
+                </div>
+
+                <div class="form-card">
+                  <h4>Delivery Reconcile / Anti-abuse</h4>
+                  <div id="platformReconcileTableWrap" class="table-wrap"></div>
+                </div>
+              </div>
+            </section>
+
             <section class="tab-panel" data-tab-panel="metrics">
               <div class="tab-panel-head">
                 <h3>Metrics Timeline</h3>
@@ -2851,6 +3243,27 @@
     const backupRestoreStateSummary = document.getElementById('backupRestoreStateSummary');
     const backupRestoreStateView = document.getElementById('backupRestoreStateView');
     const backupRestoreStateRefreshBtn = document.getElementById('backupRestoreStateRefreshBtn');
+    const platformRefreshBtn = document.getElementById('platformRefreshBtn');
+    const platformRunMonitoringBtn = document.getElementById('platformRunMonitoringBtn');
+    const platformRunReconcileBtn = document.getElementById('platformRunReconcileBtn');
+    const platformOverviewSummary = document.getElementById('platformOverviewSummary');
+    const platformOpsSummary = document.getElementById('platformOpsSummary');
+    const platformOverviewView = document.getElementById('platformOverviewView');
+    const platformOpsView = document.getElementById('platformOpsView');
+    const platformPermissionTableWrap = document.getElementById('platformPermissionTableWrap');
+    const platformTenantTableWrap = document.getElementById('platformTenantTableWrap');
+    const platformSubscriptionTableWrap = document.getElementById('platformSubscriptionTableWrap');
+    const platformLicenseTableWrap = document.getElementById('platformLicenseTableWrap');
+    const platformApiKeyTableWrap = document.getElementById('platformApiKeyTableWrap');
+    const platformWebhookTableWrap = document.getElementById('platformWebhookTableWrap');
+    const platformAgentTableWrap = document.getElementById('platformAgentTableWrap');
+    const platformMarketplaceTableWrap = document.getElementById('platformMarketplaceTableWrap');
+    const platformReconcileTableWrap = document.getElementById('platformReconcileTableWrap');
+    const platformApiKeyCreateView = document.getElementById('platformApiKeyCreateView');
+    const platformWebhookCreateView = document.getElementById('platformWebhookCreateView');
+    const platformTenantOptions = document.getElementById('platformTenantOptions');
+    const platformPlanOptions = document.getElementById('platformPlanOptions');
+    const platformLicenseOptions = document.getElementById('platformLicenseOptions');
     const deliveryRuntimeSummary = document.getElementById('deliveryRuntimeSummary');
     const deliveryRuntimeView = document.getElementById('deliveryRuntimeView');
     const deliveryRuntimeRefreshBtn = document.getElementById('deliveryRuntimeRefreshBtn');
@@ -2946,6 +3359,9 @@
     let currentDashboardCards = null;
     let currentRuntimeSupervisor = null;
     let currentBackupRestoreState = null;
+    let currentPlatformOverview = null;
+    let currentPlatformReconcile = null;
+    let currentPlatformMonitoringReport = null;
     let currentDeliveryRuntime = null;
     let currentDeliveryDetailCode = '';
     let currentDeliveryDetailData = null;
@@ -3349,6 +3765,7 @@
         'connected',
         'heartbeat',
         'admin-action',
+        'platform-event',
         'scum-status',
         'scum-player',
         'scum-kill',
@@ -3483,6 +3900,13 @@
         '/admin/api/rentbike/reset-now',
         '/admin/api/backup/create',
         '/admin/api/backup/restore',
+        '/admin/api/platform/tenant',
+        '/admin/api/platform/subscription',
+        '/admin/api/platform/license',
+        '/admin/api/platform/license/accept-legal',
+        '/admin/api/platform/apikey',
+        '/admin/api/platform/webhook',
+        '/admin/api/platform/marketplace',
       ]);
       const modAllowed = new Set([
         '/admin/api/ticket/claim',
@@ -3492,6 +3916,8 @@
         '/admin/api/stats/add-death',
         '/admin/api/stats/add-playtime',
         '/admin/api/scum/status',
+        '/admin/api/platform/reconcile',
+        '/admin/api/platform/monitoring/run',
       ]);
       if (ownerOnly.has(path)) return 'owner';
       if (modAllowed.has(path)) return 'mod';
@@ -4597,6 +5023,10 @@
         ['จำนวนคิวส่งของ', (snapshot.deliveryQueue || []).length],
         ['จำนวน dead-letter ส่งของ', (snapshot.deliveryDeadLetters || []).length],
         ['จำนวนบันทึกส่งของ', (snapshot.deliveryAudit || []).length],
+        ['จำนวน tenant', (snapshot.platformTenants || []).length],
+        ['จำนวน subscription', (snapshot.platformSubscriptions || []).length],
+        ['จำนวน license', (snapshot.platformLicenses || []).length],
+        ['จำนวน marketplace offer', (snapshot.platformMarketplaceOffers || []).length],
       ];
     }
 
@@ -4667,6 +5097,7 @@
       const deliveryMode = String(deliveryRuntime?.executionMode || 'unknown').toUpperCase();
       const verifyMode = deliveryRuntime?.settings?.verifyMode || deliveryRuntime?.verifyMode || '-';
       const restoreState = currentBackupRestoreState || snapshot?.backupRestore || null;
+      const analytics = currentPlatformOverview?.analytics || {};
       const { builtin, presets } = getCombinedDeliveryCapabilities();
       const unackedNotifications = currentAdminNotifications.filter((row) => !row?.acknowledgedAt).length;
 
@@ -4704,6 +5135,17 @@
             `${formatShowcaseNumber(builtin.length)} builtin`,
             `${formatShowcaseNumber(presets.length)} preset`,
             'dry-run + live test',
+          ],
+        },
+        {
+          kicker: 'Platform Layer',
+          value: formatShowcaseNumber(getSnapshotCount('platformTenants')),
+          title: 'tenant / billing / legal / API',
+          description: 'มี Platform Center แยกสำหรับ multi-tenant, subscription, license, public API, webhook, marketplace และ agent version management',
+          tags: [
+            `tenants ${formatShowcaseNumber(analytics?.tenants?.total || getSnapshotCount('platformTenants'))}`,
+            `subs ${formatShowcaseNumber(analytics?.subscriptions?.active || getSnapshotCount('platformSubscriptions'))}`,
+            `offers ${formatShowcaseNumber(analytics?.marketplace?.offers || getSnapshotCount('platformMarketplaceOffers'))}`,
           ],
         },
         {
@@ -5087,6 +5529,311 @@
       currentBackupRestoreState = res?.data || null;
       renderBackupRestoreState(currentBackupRestoreState);
       return currentBackupRestoreState;
+    }
+
+    function renderDatalistOptions(container, values = []) {
+      if (!container) return;
+      const unique = Array.from(new Set(
+        (Array.isArray(values) ? values : [])
+          .map((value) => String(value || '').trim())
+          .filter(Boolean),
+      ));
+      container.innerHTML = unique
+        .slice(0, 500)
+        .map((value) => `<option value="${escapeHtml(value)}"></option>`)
+        .join('');
+    }
+
+    function syncPlatformLookupOptions() {
+      const tenantValues = Array.isArray(snapshot?.platformTenants)
+        ? snapshot.platformTenants.flatMap((row) => [
+          String(row?.id || '').trim(),
+          String(row?.slug || '').trim(),
+          String(row?.name || '').trim(),
+        ])
+        : [];
+      const planValues = Array.isArray(currentPlatformOverview?.plans)
+        ? currentPlatformOverview.plans.flatMap((row) => [
+          String(row?.id || '').trim(),
+          String(row?.name || '').trim(),
+        ])
+        : [];
+      const licenseValues = Array.isArray(snapshot?.platformLicenses)
+        ? snapshot.platformLicenses.map((row) => String(row?.id || '').trim())
+        : [];
+      renderDatalistOptions(platformTenantOptions, tenantValues);
+      renderDatalistOptions(platformPlanOptions, planValues);
+      renderDatalistOptions(platformLicenseOptions, licenseValues);
+    }
+
+    function renderPlatformCenter() {
+      syncPlatformLookupOptions();
+      const overview = currentPlatformOverview && typeof currentPlatformOverview === 'object'
+        ? currentPlatformOverview
+        : null;
+      const analytics = overview?.analytics || {};
+      const publicOverview = overview?.publicOverview || {};
+      const opsState = snapshot?.platformOpsState && typeof snapshot.platformOpsState === 'object'
+        ? snapshot.platformOpsState
+        : overview?.opsState && typeof overview.opsState === 'object'
+          ? overview.opsState
+          : null;
+      const reconcile = currentPlatformReconcile && typeof currentPlatformReconcile === 'object'
+        ? currentPlatformReconcile
+        : null;
+      const monitoring = currentPlatformMonitoringReport && typeof currentPlatformMonitoringReport === 'object'
+        ? currentPlatformMonitoringReport
+        : null;
+
+      if (platformOverviewSummary) {
+        const metrics = overview
+          ? [
+              ['Tenants', Number(analytics?.tenants?.total || 0).toLocaleString()],
+              ['MRR', `${Number(analytics?.subscriptions?.mrrCents || 0).toLocaleString()} cents`],
+              ['Active Subs', Number(analytics?.subscriptions?.active || 0).toLocaleString()],
+              ['Active Licenses', Number(analytics?.licenses?.active || 0).toLocaleString()],
+              ['API Keys', Number(analytics?.api?.apiKeys || 0).toLocaleString()],
+              ['Webhooks', Number(analytics?.api?.webhooks || 0).toLocaleString()],
+              ['Outdated Agents', Number(analytics?.agent?.outdated || 0).toLocaleString()],
+              ['Marketplace', Number(analytics?.marketplace?.offers || 0).toLocaleString()],
+            ]
+          : [['Platform', 'ยังไม่ได้โหลด overview']];
+        platformOverviewSummary.innerHTML = metrics
+          .map(([k, v]) => `<div class="metric"><div class="k">${escapeHtml(String(k))}</div><div class="v">${escapeHtml(String(v))}</div></div>`)
+          .join('');
+      }
+
+      if (platformOpsSummary) {
+        const metrics = [
+          ['Last Monitoring', opsState?.lastMonitoringAt ? formatDeliveryTime(opsState.lastMonitoringAt) : '-'],
+          ['Last Auto Backup', opsState?.lastAutoBackupAt ? formatDeliveryTime(opsState.lastAutoBackupAt) : '-'],
+          ['Last Reconcile', opsState?.lastReconcileAt ? formatDeliveryTime(opsState.lastReconcileAt) : '-'],
+          ['Tracked Alerts', Number(Object.keys(opsState?.lastAlertAtByKey || {}).length || 0).toLocaleString()],
+          ['Reconcile Anomalies', Number(reconcile?.summary?.anomalies || 0).toLocaleString()],
+          ['Abuse Findings', Number(reconcile?.summary?.abuseFindings || 0).toLocaleString()],
+          ['Monitoring Alerts', Number(monitoring?.alerts?.length || 0).toLocaleString()],
+          ['Backups', Number((snapshot?.backups || []).length || 0).toLocaleString()],
+        ];
+        platformOpsSummary.innerHTML = metrics
+          .map(([k, v]) => `<div class="metric"><div class="k">${escapeHtml(String(k))}</div><div class="v">${escapeHtml(String(v))}</div></div>`)
+          .join('');
+      }
+
+      if (platformOverviewView) {
+        platformOverviewView.textContent = JSON.stringify({
+          overview,
+          brand: publicOverview?.brand || null,
+          trial: publicOverview?.trial || null,
+          legal: publicOverview?.legal || null,
+          localization: publicOverview?.localization || null,
+        }, null, 2);
+      }
+      if (platformOpsView) {
+        platformOpsView.textContent = JSON.stringify({
+          opsState,
+          monitoring,
+          reconcile,
+        }, null, 2);
+      }
+
+      renderRowsToContainer(
+        platformPermissionTableWrap,
+        Array.isArray(overview?.permissionCatalog)
+          ? overview.permissionCatalog.map((row) => ({
+            key: row?.key || '-',
+            title: row?.title || '-',
+            scopes: Array.isArray(row?.scopes) ? row.scopes.join(', ') : '-',
+          }))
+          : [],
+        'ยังไม่มี permission catalog',
+      );
+      renderRowsToContainer(
+        platformTenantTableWrap,
+        Array.isArray(snapshot?.platformTenants)
+          ? snapshot.platformTenants.map((row) => ({
+            id: row?.id || '-',
+            slug: row?.slug || '-',
+            name: row?.name || '-',
+            type: row?.type || '-',
+            status: row?.status || '-',
+            locale: row?.locale || '-',
+            owner: row?.ownerEmail || row?.ownerName || '-',
+            parentTenantId: row?.parentTenantId || '-',
+            updatedAt: row?.updatedAt || '-',
+          }))
+          : [],
+        'ยังไม่มี tenant',
+      );
+      renderRowsToContainer(
+        platformSubscriptionTableWrap,
+        Array.isArray(snapshot?.platformSubscriptions)
+          ? snapshot.platformSubscriptions.map((row) => ({
+            id: row?.id || '-',
+            tenantId: row?.tenantId || '-',
+            planId: row?.planId || '-',
+            status: row?.status || '-',
+            billingCycle: row?.billingCycle || '-',
+            amount: `${Number(row?.amountCents || 0).toLocaleString()} ${row?.currency || ''}`.trim(),
+            renewsAt: row?.renewsAt || '-',
+            externalRef: row?.externalRef || '-',
+          }))
+          : [],
+        'ยังไม่มี subscription',
+      );
+      renderRowsToContainer(
+        platformLicenseTableWrap,
+        Array.isArray(snapshot?.platformLicenses)
+          ? snapshot.platformLicenses.map((row) => ({
+            id: row?.id || '-',
+            tenantId: row?.tenantId || '-',
+            status: row?.status || '-',
+            licenseKey: row?.licenseKey || '-',
+            seats: row?.seats == null ? '-' : Number(row.seats).toLocaleString(),
+            legalDocVersion: row?.legalDocVersion || '-',
+            legalAcceptedAt: row?.legalAcceptedAt || '-',
+            expiresAt: row?.expiresAt || '-',
+          }))
+          : [],
+        'ยังไม่มี license',
+      );
+      renderRowsToContainer(
+        platformMarketplaceTableWrap,
+        Array.isArray(snapshot?.platformMarketplaceOffers)
+          ? snapshot.platformMarketplaceOffers.map((row) => ({
+            id: row?.id || '-',
+            tenantId: row?.tenantId || '-',
+            title: row?.title || '-',
+            kind: row?.kind || '-',
+            price: `${Number(row?.priceCents || 0).toLocaleString()} ${row?.currency || ''}`.trim(),
+            status: row?.status || '-',
+            locale: row?.locale || '-',
+            updatedAt: row?.updatedAt || '-',
+          }))
+          : [],
+        'ยังไม่มี marketplace offer',
+      );
+      renderRowsToContainer(
+        platformApiKeyTableWrap,
+        Array.isArray(snapshot?.platformApiKeys)
+          ? snapshot.platformApiKeys.map((row) => ({
+            id: row?.id || '-',
+            tenantId: row?.tenantId || '-',
+            name: row?.name || '-',
+            keyPrefix: row?.keyPrefix || '-',
+            status: row?.status || '-',
+            scopes: Array.isArray(row?.scopes) ? row.scopes.join(', ') : '-',
+            lastUsedAt: row?.lastUsedAt || '-',
+            updatedAt: row?.updatedAt || '-',
+          }))
+          : [],
+        'ยังไม่มี API key',
+      );
+      renderRowsToContainer(
+        platformWebhookTableWrap,
+        Array.isArray(snapshot?.platformWebhookEndpoints)
+          ? snapshot.platformWebhookEndpoints.map((row) => ({
+            id: row?.id || '-',
+            tenantId: row?.tenantId || '-',
+            name: row?.name || '-',
+            eventType: row?.eventType || '-',
+            enabled: row?.enabled ? 'yes' : 'no',
+            targetUrl: row?.targetUrl || '-',
+            secret: row?.secretValue || '-',
+            lastSuccessAt: row?.lastSuccessAt || '-',
+            lastFailureAt: row?.lastFailureAt || '-',
+            lastError: row?.lastError || '-',
+          }))
+          : [],
+        'ยังไม่มี webhook endpoint',
+      );
+      renderRowsToContainer(
+        platformAgentTableWrap,
+        Array.isArray(snapshot?.platformAgentRuntimes)
+          ? snapshot.platformAgentRuntimes.map((row) => ({
+            tenantId: row?.tenantId || '-',
+            runtimeKey: row?.runtimeKey || '-',
+            channel: row?.channel || '-',
+            version: row?.version || '-',
+            minRequiredVersion: row?.minRequiredVersion || '-',
+            status: row?.status || '-',
+            lastSeenAt: row?.lastSeenAt || '-',
+          }))
+          : [],
+        'ยังไม่มี agent runtime',
+      );
+
+      const reconcileRows = [];
+      if (Array.isArray(reconcile?.anomalies)) {
+        reconcile.anomalies.forEach((row) => {
+          reconcileRows.push({
+            bucket: 'anomaly',
+            code: row?.code || '-',
+            type: row?.type || '-',
+            severity: row?.severity || '-',
+            detail: row?.detail || '-',
+          });
+        });
+      }
+      if (Array.isArray(reconcile?.abuseFindings)) {
+        reconcile.abuseFindings.forEach((row) => {
+          reconcileRows.push({
+            bucket: 'anti-abuse',
+            code: row?.userId || row?.itemId || '-',
+            type: row?.type || '-',
+            severity: 'warn',
+            detail: `count=${row?.count || 0} threshold=${row?.threshold || 0}`,
+          });
+        });
+      }
+      renderRowsToContainer(
+        platformReconcileTableWrap,
+        reconcileRows,
+        'ยังไม่มี reconcile / anti-abuse finding',
+      );
+      renderShowcasePanel();
+    }
+
+    async function refreshPlatformCenter(options = {}) {
+      const {
+        forceOverview = false,
+        forceReconcile = false,
+        fetchOpsState = false,
+      } = options;
+      if (!isAuthed) return null;
+
+      const tasks = [];
+      if (forceOverview || !currentPlatformOverview) {
+        tasks.push(
+          api('/admin/api/platform/overview').then((res) => {
+            currentPlatformOverview = res?.data || null;
+          }),
+        );
+      }
+      if (forceReconcile || !currentPlatformReconcile) {
+        tasks.push(
+          api('/admin/api/platform/reconcile').then((res) => {
+            currentPlatformReconcile = res?.data || null;
+          }),
+        );
+      }
+      if (fetchOpsState || !snapshot?.platformOpsState) {
+        tasks.push(
+          api('/admin/api/platform/ops-state').then((res) => {
+            if (snapshot && typeof snapshot === 'object') {
+              snapshot.platformOpsState = res?.data || null;
+            }
+          }),
+        );
+      }
+      if (tasks.length > 0) {
+        await Promise.all(tasks);
+      }
+      renderPlatformCenter();
+      return {
+        overview: currentPlatformOverview,
+        reconcile: currentPlatformReconcile,
+        opsState: snapshot?.platformOpsState || null,
+      };
     }
 
     async function refreshDeliveryRuntime() {
@@ -5965,8 +6712,16 @@
         renderSummary();
         renderRuntimeSupervisor(snapshot?.runtimeSupervisor || null);
         renderBackupRestoreState(snapshot?.backupRestore || null);
+        renderPlatformCenter();
         renderDeliveryRuntime(snapshot?.deliveryRuntime || null);
         renderDeliveryOpsTables();
+        await refreshPlatformCenter({
+          forceOverview: !currentPlatformOverview,
+          forceReconcile: !currentPlatformReconcile,
+          fetchOpsState: !snapshot?.platformOpsState,
+        }).catch(() => {
+          renderPlatformCenter();
+        });
         await refreshDeliveryCapabilities().catch(() => null);
         await refreshAdminNotifications().catch(() => null);
         renderSelectedDataset();
@@ -5997,6 +6752,9 @@
     async function logout() {
       await api('/admin/api/logout', 'POST', {});
       snapshot = null;
+      currentPlatformOverview = null;
+      currentPlatformReconcile = null;
+      currentPlatformMonitoringReport = null;
       setAuthState(false);
       toast('ออกจากระบบแล้ว');
     }
@@ -6059,7 +6817,13 @@
         }
       }
 
-      await api(form.dataset.endpoint, form.dataset.method || 'POST', payload);
+      const response = await api(form.dataset.endpoint, form.dataset.method || 'POST', payload);
+      if (form.dataset.endpoint === '/admin/api/platform/apikey' && platformApiKeyCreateView) {
+        platformApiKeyCreateView.textContent = JSON.stringify(response?.data || {}, null, 2);
+      }
+      if (form.dataset.endpoint === '/admin/api/platform/webhook' && platformWebhookCreateView) {
+        platformWebhookCreateView.textContent = JSON.stringify(response?.data || {}, null, 2);
+      }
       if (form === shopAddForm) {
         form.reset();
         shopDeliveryItems = [];
@@ -6071,6 +6835,13 @@
       }
       toast('บันทึกแล้ว');
       await refreshSnapshot();
+      if (String(form.dataset.endpoint || '').startsWith('/admin/api/platform/')) {
+        await refreshPlatformCenter({
+          forceOverview: true,
+          forceReconcile: false,
+          fetchOpsState: true,
+        }).catch(() => null);
+      }
       setStatus(
         'บันทึกสำเร็จ',
         '#43dd86',
@@ -7111,6 +7882,75 @@
           toast('รีเฟรชตารางส่งของแล้ว');
         } catch (error) {
           toast(error.message || 'รีเฟรชตารางส่งของไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (platformRefreshBtn) {
+      platformRefreshBtn.addEventListener('click', async () => {
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        try {
+          await runWithButtonState(platformRefreshBtn, 'กำลังรีเฟรช...', async () => {
+            await refreshSnapshot({ silent: true, syncConfigInputs: false, forceCardsRefresh: true });
+            await refreshPlatformCenter({
+              forceOverview: true,
+              forceReconcile: true,
+              fetchOpsState: true,
+            });
+          });
+          toast('รีเฟรช Platform Center แล้ว');
+        } catch (error) {
+          toast(error.message || 'รีเฟรช Platform Center ไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (platformRunMonitoringBtn) {
+      platformRunMonitoringBtn.addEventListener('click', async () => {
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        try {
+          await runWithButtonState(platformRunMonitoringBtn, 'กำลังรัน...', async () => {
+            const res = await api('/admin/api/platform/monitoring/run', 'POST', {});
+            currentPlatformMonitoringReport = res?.data || null;
+            await refreshSnapshot({ silent: true, syncConfigInputs: false });
+            await refreshPlatformCenter({
+              forceOverview: true,
+              forceReconcile: true,
+              fetchOpsState: true,
+            });
+          });
+          toast('รัน platform monitoring แล้ว');
+        } catch (error) {
+          toast(error.message || 'รัน platform monitoring ไม่สำเร็จ');
+        }
+      });
+    }
+
+    if (platformRunReconcileBtn) {
+      platformRunReconcileBtn.addEventListener('click', async () => {
+        if (!isAuthed) {
+          toast('กรุณาเข้าสู่ระบบก่อน');
+          return;
+        }
+        try {
+          await runWithButtonState(platformRunReconcileBtn, 'กำลัง reconcile...', async () => {
+            const res = await api('/admin/api/platform/reconcile');
+            currentPlatformReconcile = res?.data || null;
+            await refreshPlatformCenter({
+              forceOverview: false,
+              forceReconcile: false,
+              fetchOpsState: true,
+            });
+          });
+          toast('รัน delivery reconcile แล้ว');
+        } catch (error) {
+          toast(error.message || 'รัน delivery reconcile ไม่สำเร็จ');
         }
       });
     }

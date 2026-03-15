@@ -9,6 +9,12 @@ if errorlevel 1 (
   echo [SCUM] rotate-production-secrets failed
   exit /b 1
 )
+echo [SCUM] Hint: for split-origin production scaffolding use:
+echo [SCUM] npm run security:scaffold-split-env -- --admin-origin https://admin.example.com --player-origin https://player.example.com
+echo [SCUM] Then apply with backup+validation:
+echo [SCUM] npm run security:apply-split-env -- --write
+echo [SCUM] Or do both in one command:
+echo [SCUM] npm run security:activate-split-env -- --admin-origin https://admin.example.com --player-origin https://player.example.com --write --with-readiness
 
 echo [SCUM] Step 2/8 validate production secrets/security baseline...
 call npm run security:check
@@ -39,7 +45,11 @@ if errorlevel 1 (
 )
 call cmd /c npx prisma migrate deploy
 if errorlevel 1 (
-  echo [SCUM] prisma migrate deploy failed
+  echo [SCUM] prisma migrate deploy skipped or baseline-required, continuing with platform schema upgrade...
+)
+call node scripts/platform-schema-upgrade.js
+if errorlevel 1 (
+  echo [SCUM] platform schema upgrade failed
   exit /b 1
 )
 

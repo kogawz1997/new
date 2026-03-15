@@ -401,3 +401,132 @@ model RentalVehicle {
   @@index([createdAt])
   @@map("rental_vehicles")
 }
+
+model PlatformTenant {
+  id            String   @id
+  slug          String   @unique
+  name          String
+  type          String   @default("direct")
+  status        String   @default("active")
+  locale        String   @default("th")
+  ownerName     String?
+  ownerEmail    String?
+  parentTenantId String?
+  metadataJson  String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@index([status, updatedAt])
+  @@index([type, updatedAt])
+  @@index([parentTenantId])
+}
+
+model PlatformSubscription {
+  id           String   @id
+  tenantId     String
+  planId       String
+  billingCycle String   @default("monthly")
+  status       String   @default("active")
+  currency     String   @default("THB")
+  amountCents  Int      @default(0)
+  startedAt    DateTime @default(now())
+  renewsAt     DateTime?
+  canceledAt   DateTime?
+  externalRef  String?
+  metadataJson String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  @@index([tenantId, updatedAt])
+  @@index([status, renewsAt])
+}
+
+model PlatformLicense {
+  id              String   @id
+  tenantId        String
+  licenseKey      String   @unique
+  status          String   @default("active")
+  seats           Int      @default(1)
+  issuedAt        DateTime @default(now())
+  expiresAt       DateTime?
+  legalDocVersion String?
+  legalAcceptedAt DateTime?
+  metadataJson    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
+
+  @@index([tenantId, updatedAt])
+  @@index([status, expiresAt])
+}
+
+model PlatformApiKey {
+  id         String   @id
+  tenantId   String
+  name       String
+  keyPrefix  String
+  keyHash    String
+  scopesJson String
+  status     String   @default("active")
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([tenantId, updatedAt])
+  @@index([status, updatedAt])
+  @@index([keyPrefix])
+}
+
+model PlatformWebhookEndpoint {
+  id            String   @id
+  tenantId      String
+  name          String
+  eventType     String
+  targetUrl     String
+  secretValue   String
+  enabled       Boolean  @default(true)
+  lastSuccessAt DateTime?
+  lastFailureAt DateTime?
+  lastError     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+
+  @@index([tenantId, updatedAt])
+  @@index([eventType, updatedAt])
+  @@index([enabled, updatedAt])
+}
+
+model PlatformAgentRuntime {
+  id               String   @id
+  tenantId         String
+  runtimeKey       String
+  channel          String?
+  version          String
+  minRequiredVersion String?
+  status           String   @default("online")
+  lastSeenAt       DateTime @default(now())
+  metaJson         String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+
+  @@unique([tenantId, runtimeKey])
+  @@index([tenantId, updatedAt])
+  @@index([status, updatedAt])
+}
+
+model PlatformMarketplaceOffer {
+  id         String   @id
+  tenantId   String
+  title      String
+  kind       String   @default("service")
+  priceCents Int      @default(0)
+  currency   String   @default("THB")
+  status     String   @default("active")
+  locale     String   @default("th")
+  metaJson   String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+
+  @@index([tenantId, updatedAt])
+  @@index([status, updatedAt])
+}

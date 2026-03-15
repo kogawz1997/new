@@ -28,6 +28,10 @@ test('doctor passes valid reverse proxy/origin/port production setup', () => {
     ADMIN_WEB_TRUST_PROXY: 'true',
     ADMIN_WEB_ENFORCE_ORIGIN_CHECK: 'true',
     ADMIN_WEB_ALLOWED_ORIGINS: 'https://admin.example.com',
+    ADMIN_WEB_SSO_DISCORD_ENABLED: '',
+    ADMIN_WEB_SSO_DISCORD_CLIENT_ID: '',
+    ADMIN_WEB_SSO_DISCORD_CLIENT_SECRET: '',
+    ADMIN_WEB_SSO_DISCORD_REDIRECT_URI: '',
     WEB_PORTAL_BASE_URL: 'https://player.example.com',
     WEB_PORTAL_LEGACY_ADMIN_URL: 'https://admin.example.com/admin',
     WEB_PORTAL_DISCORD_CLIENT_ID: '1478651427088760842',
@@ -153,4 +157,43 @@ test('doctor fails when admin Discord redirect origin is not allowed', () => {
   assert.notEqual(result.status, 0);
   const output = `${result.stdout}\n${result.stderr}`;
   assert.match(output, /ADMIN_WEB_SSO_DISCORD_REDIRECT_URI origin/i);
+});
+
+test('doctor warns when external admin lacks 2FA and session ttl is too long', () => {
+  const result = runDoctor({
+    NODE_ENV: 'production',
+    DATABASE_URL: 'file:./prisma/dev.db',
+    ADMIN_WEB_HOST: '127.0.0.1',
+    ADMIN_WEB_PORT: '3200',
+    ADMIN_WEB_SECURE_COOKIE: 'true',
+    ADMIN_WEB_HSTS_ENABLED: 'true',
+    ADMIN_WEB_TRUST_PROXY: 'true',
+    ADMIN_WEB_ENFORCE_ORIGIN_CHECK: 'true',
+    ADMIN_WEB_ALLOWED_ORIGINS: 'https://admin.example.com',
+    ADMIN_WEB_2FA_ENABLED: '',
+    ADMIN_WEB_2FA_SECRET: '',
+    ADMIN_WEB_SSO_DISCORD_ENABLED: '',
+    ADMIN_WEB_SSO_DISCORD_CLIENT_ID: '',
+    ADMIN_WEB_SSO_DISCORD_CLIENT_SECRET: '',
+    ADMIN_WEB_SSO_DISCORD_REDIRECT_URI: '',
+    ADMIN_WEB_SESSION_TTL_HOURS: '48',
+    WEB_PORTAL_BASE_URL: 'https://player.example.com',
+    WEB_PORTAL_LEGACY_ADMIN_URL: 'https://admin.example.com/admin',
+    WEB_PORTAL_DISCORD_CLIENT_ID: '1478651427088760842',
+    WEB_PORTAL_DISCORD_CLIENT_SECRET: 'portal-secret-1234567890',
+    WEB_PORTAL_SECURE_COOKIE: 'true',
+    WEB_PORTAL_ENFORCE_ORIGIN_CHECK: 'true',
+    WEB_PORTAL_SESSION_TTL_HOURS: '72',
+    SCUM_WEBHOOK_PORT: '3100',
+    BOT_HEALTH_PORT: '3210',
+    WORKER_HEALTH_PORT: '3211',
+    SCUM_WATCHER_HEALTH_PORT: '3212',
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const output = `${result.stdout}\n${result.stderr}`;
+  assert.match(output, /OK: auth\/session hardening posture/i);
+  assert.match(output, /without active 2FA/i);
+  assert.match(output, /ADMIN_WEB_SESSION_TTL_HOURS=48/i);
+  assert.match(output, /WEB_PORTAL_SESSION_TTL_HOURS=72/i);
 });

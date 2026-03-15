@@ -5,8 +5,8 @@
 
 โดเมนตัวอย่างในคู่มือนี้ถูกตั้งให้ตรงกับ deployment ปัจจุบัน:
 
-- player portal: `https://genz.noah-dns.online`
-- admin portal: `https://genz.noah-dns.online/admin`
+- player portal: `https://player.genz.noah-dns.online`
+- admin portal: `https://admin.genz.noah-dns.online/admin`
 
 ## 0) ลูกค้าได้รับอะไรจากชุดนี้
 
@@ -19,6 +19,7 @@
 - player portal สำหรับ wallet, purchase history, redeem, profile และ steam link
 
 ถ้าต้องใช้เอกสารสำหรับพรีเซนต์ภาพรวมระบบ ให้เปิด [docs/SHOWCASE_TH.md](./SHOWCASE_TH.md) ควบคู่กัน
+ก่อน go-live ให้ไล่ตาม [docs/GO_LIVE_CHECKLIST_TH.md](./GO_LIVE_CHECKLIST_TH.md)
 
 ## 1) หน้าที่ของแต่ละ runtime
 
@@ -99,8 +100,8 @@ Discord Developer Portal -> OAuth2 -> Redirects
 
 ต้องมีอย่างน้อย:
 
-- player portal: `https://genz.noah-dns.online/auth/discord/callback`
-- admin SSO: `https://genz.noah-dns.online/admin/auth/discord/callback`
+- player portal: `https://player.genz.noah-dns.online/auth/discord/callback`
+- admin SSO: `https://admin.genz.noah-dns.online/admin/auth/discord/callback`
 
 ค่าที่ต้องมีใน env:
 
@@ -123,8 +124,8 @@ npm run security:rotate:prod -- --discord-token <DISCORD_TOKEN จริง> --p
 - `NODE_ENV=production`
 - `PERSIST_REQUIRE_DB=true`
 - `PERSIST_LEGACY_SNAPSHOTS=false`
-- `WEB_PORTAL_BASE_URL=https://genz.noah-dns.online`
-- `WEB_PORTAL_LEGACY_ADMIN_URL=https://genz.noah-dns.online/admin`
+- `WEB_PORTAL_BASE_URL=https://player.genz.noah-dns.online`
+- `WEB_PORTAL_LEGACY_ADMIN_URL=https://admin.genz.noah-dns.online/admin`
 - `WEB_PORTAL_DISCORD_REDIRECT_PATH=/auth/discord/callback`
 
 ## 7) ติดตั้ง dependency และ migrate
@@ -208,8 +209,8 @@ npm run readiness:prod:audit
 ตั้งค่า base URL ให้ smoke script:
 
 ```bat
-set SMOKE_ADMIN_BASE_URL=https://genz.noah-dns.online/admin
-set SMOKE_PLAYER_BASE_URL=https://genz.noah-dns.online
+set SMOKE_ADMIN_BASE_URL=https://admin.genz.noah-dns.online/admin
+set SMOKE_PLAYER_BASE_URL=https://player.genz.noah-dns.online
 npm run smoke:postdeploy
 ```
 
