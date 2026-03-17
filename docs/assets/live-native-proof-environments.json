@@ -8,7 +8,7 @@
       "runtimeKind": "workstation",
       "workstationProfile": "Windows workstation with live SCUM client window",
       "scumServerProfile": "Current local dedicated server configuration on this machine",
-      "topologyMode": "shared",
+      "topologyMode": "schema-per-tenant",
       "executionMode": "agent",
       "nativeProofMode": "required",
       "proofSources": [
@@ -28,7 +28,7 @@
       "runtimeKind": "server-configuration",
       "workstationProfile": "Same Windows workstation with live SCUM client window",
       "scumServerProfile": "Alternate server configuration with EnableSpawnOnGround=True",
-      "topologyMode": "shared",
+      "topologyMode": "schema-per-tenant",
       "executionMode": "agent",
       "nativeProofMode": "required",
       "proofSources": [
@@ -48,7 +48,7 @@
       "runtimeKind": "runtime",
       "workstationProfile": "Same Windows workstation",
       "scumServerProfile": "Current local dedicated server configuration on this machine",
-      "topologyMode": "shared",
+      "topologyMode": "schema-per-tenant",
       "executionMode": "rcon",
       "nativeProofMode": "required",
       "proofSources": [

@@ -49,6 +49,7 @@ On this workstation as of `2026-03-17`:
 
 - the runtime boots with `TENANT_DB_TOPOLOGY_MODE=schema-per-tenant`
 - default tenant `1259096998045421672` is provisioned at PostgreSQL schema `tenant_1259096998045421672`
+- repo text surfaces pass `lint:text`, and user-facing Thai command/leaderboard strings are covered by `test/mojibake-regression.test.js`
 - watcher is `ready` against the real `SCUM.log`
 - console-agent is `ready` and preflight passes against the live `SCUM` window
 - one live agent command was observed in `SCUM.log`

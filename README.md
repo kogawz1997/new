@@ -94,6 +94,7 @@ If a statement in this repository is not backed by code, tests, CI artifacts, or
 - `doctor`, `security:check`, `readiness`, `smoke`, and `doctor:topology` now share one machine-readable report contract when called with `--json`
 - `ci:verify` now writes `verification-contract.json` from the shared JSON contract instead of relying only on raw log parsing
 - `lint` now covers syntax, text-encoding scan, ESLint, and formatting checks for repo metadata/docs
+- User-facing Thai command and leaderboard text is now guarded by `lint:text` plus `test/mojibake-regression.test.js`
 - Policy checks now include runtime profile, control-panel config registry, smoke behavior, readiness sequencing, and module docs
 - Live runtime proof now exists on this workstation for `console-agent` preflight/execute and watcher `ready` state against a real `SCUM.log`
 - Watcher health now exposes recent parsed `admin-command` events from the live server log

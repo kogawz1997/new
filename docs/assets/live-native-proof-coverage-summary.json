@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-17T06:00:05.440Z",
+  "generatedAt": "2026-03-17T14:01:54.922Z",
   "currentEnvironmentId": "workstation-local-agent-2026-03-17",
   "currentEnvironment": {
     "id": "workstation-local-agent-2026-03-17",
@@ -8,7 +8,7 @@
     "runtimeKind": "workstation",
     "scumServerProfile": "Current local dedicated server configuration on this machine",
     "workstationProfile": "Windows workstation with live SCUM client window",
-    "topologyMode": "shared",
+    "topologyMode": "schema-per-tenant",
     "executionMode": "agent",
     "nativeProofMode": "required",
     "proofSources": [
@@ -29,7 +29,7 @@
       "runtimeKind": "workstation",
       "scumServerProfile": "Current local dedicated server configuration on this machine",
       "workstationProfile": "Windows workstation with live SCUM client window",
-      "topologyMode": "shared",
+      "topologyMode": "schema-per-tenant",
       "executionMode": "agent",
       "nativeProofMode": "required",
       "proofSources": [
@@ -43,6 +43,45 @@
       "capturedAt": "2026-03-17"
     },
     {
+      "id": "workstation-local-agent-enable-spawn-on-ground-2026-03-17",
+      "status": "partial",
+      "label": "Current workstation / alternate SCUM server configuration",
+      "runtimeKind": "server-configuration",
+      "scumServerProfile": "Alternate server configuration with EnableSpawnOnGround=True",
+      "workstationProfile": "Same Windows workstation with live SCUM client window",
+      "topologyMode": "schema-per-tenant",
+      "executionMode": "agent",
+      "nativeProofMode": "required",
+      "proofSources": [
+        "SCUM.db",
+        "SCUM.log"
+      ],
+      "coverageGoal": "Second server configuration sample captured on the current workstation.",
+      "notes": "This configuration is sampled, but coverage is partial: magazine, ammo, and announce_teleport_spawn proved; water and base weapon still timed out here.",
+      "itemMatrixPath": "docs/assets/live-native-proof-enable-spawn-on-ground-matrix.json",
+      "wrapperMatrixPath": "docs/assets/live-native-proof-enable-spawn-on-ground-retry.json",
+      "capturedAt": "2026-03-17"
+    },
+    {
+      "id": "workstation-local-rcon-attempt-2026-03-17",
+      "status": "blocked",
+      "label": "Current workstation / RCON runtime attempt",
+      "runtimeKind": "runtime",
+      "scumServerProfile": "Current local dedicated server configuration on this machine",
+      "workstationProfile": "Same Windows workstation",
+      "topologyMode": "schema-per-tenant",
+      "executionMode": "rcon",
+      "nativeProofMode": "required",
+      "proofSources": [
+        "rcon-send.js"
+      ],
+      "coverageGoal": "Capture the representative native-proof matrix through the RCON runtime path.",
+      "notes": "Blocked on this workstation: live RCON command attempt returned connect ECONNREFUSED 127.0.0.1:27015, so no second runtime matrix was captured.",
+      "itemMatrixPath": "docs/assets/live-native-proof-rcon-attempt.json",
+      "wrapperMatrixPath": "docs/assets/live-native-proof-rcon-attempt.md",
+      "capturedAt": "2026-03-17"
+    },
+    {
       "id": "pending-second-server-config",
       "status": "pending",
       "label": "Additional SCUM server configuration",
@@ -53,8 +92,8 @@
       "executionMode": null,
       "nativeProofMode": null,
       "proofSources": [],
-      "coverageGoal": "Capture the representative native-proof matrix on a server with a different SCUM patch/config/runtime profile.",
-      "notes": "Needed before claiming broader environment coverage across server configurations.",
+      "coverageGoal": "Capture the representative native-proof matrix on a server with a different SCUM patch/config/runtime profile than the two sampled configurations already recorded here.",
+      "notes": "Still needed before claiming broader environment coverage across server configurations.",
       "itemMatrixPath": null,
       "wrapperMatrixPath": null,
       "capturedAt": null
@@ -75,6 +114,69 @@
       "itemMatrixPath": null,
       "wrapperMatrixPath": null,
       "capturedAt": null
+    }
+  ],
+  "verifiedEnvironments": [
+    {
+      "id": "workstation-local-agent-2026-03-17",
+      "status": "verified",
+      "label": "Current workstation / local dedicated server",
+      "runtimeKind": "workstation",
+      "scumServerProfile": "Current local dedicated server configuration on this machine",
+      "workstationProfile": "Windows workstation with live SCUM client window",
+      "topologyMode": "schema-per-tenant",
+      "executionMode": "agent",
+      "nativeProofMode": "required",
+      "proofSources": [
+        "SCUM.db",
+        "SCUM.log"
+      ],
+      "coverageGoal": "Baseline verified environment used by the current live matrices.",
+      "notes": "This is evidence for the current workstation only. It is not evidence of environment-independent native proof.",
+      "itemMatrixPath": "docs/assets/live-native-proof-matrix.json",
+      "wrapperMatrixPath": "docs/assets/live-native-proof-wrapper-matrix.json",
+      "capturedAt": "2026-03-17"
+    }
+  ],
+  "sampledButIncompleteEnvironments": [
+    {
+      "id": "workstation-local-agent-enable-spawn-on-ground-2026-03-17",
+      "status": "partial",
+      "label": "Current workstation / alternate SCUM server configuration",
+      "runtimeKind": "server-configuration",
+      "scumServerProfile": "Alternate server configuration with EnableSpawnOnGround=True",
+      "workstationProfile": "Same Windows workstation with live SCUM client window",
+      "topologyMode": "schema-per-tenant",
+      "executionMode": "agent",
+      "nativeProofMode": "required",
+      "proofSources": [
+        "SCUM.db",
+        "SCUM.log"
+      ],
+      "coverageGoal": "Second server configuration sample captured on the current workstation.",
+      "notes": "This configuration is sampled, but coverage is partial: magazine, ammo, and announce_teleport_spawn proved; water and base weapon still timed out here.",
+      "itemMatrixPath": "docs/assets/live-native-proof-enable-spawn-on-ground-matrix.json",
+      "wrapperMatrixPath": "docs/assets/live-native-proof-enable-spawn-on-ground-retry.json",
+      "capturedAt": "2026-03-17"
+    },
+    {
+      "id": "workstation-local-rcon-attempt-2026-03-17",
+      "status": "blocked",
+      "label": "Current workstation / RCON runtime attempt",
+      "runtimeKind": "runtime",
+      "scumServerProfile": "Current local dedicated server configuration on this machine",
+      "workstationProfile": "Same Windows workstation",
+      "topologyMode": "schema-per-tenant",
+      "executionMode": "rcon",
+      "nativeProofMode": "required",
+      "proofSources": [
+        "rcon-send.js"
+      ],
+      "coverageGoal": "Capture the representative native-proof matrix through the RCON runtime path.",
+      "notes": "Blocked on this workstation: live RCON command attempt returned connect ECONNREFUSED 127.0.0.1:27015, so no second runtime matrix was captured.",
+      "itemMatrixPath": "docs/assets/live-native-proof-rcon-attempt.json",
+      "wrapperMatrixPath": "docs/assets/live-native-proof-rcon-attempt.md",
+      "capturedAt": "2026-03-17"
     }
   ],
   "coverage": {
@@ -201,8 +303,8 @@
     {
       "id": "pending-second-server-config",
       "label": "Additional SCUM server configuration",
-      "coverageGoal": "Capture the representative native-proof matrix on a server with a different SCUM patch/config/runtime profile.",
-      "notes": "Needed before claiming broader environment coverage across server configurations."
+      "coverageGoal": "Capture the representative native-proof matrix on a server with a different SCUM patch/config/runtime profile than the two sampled configurations already recorded here.",
+      "notes": "Still needed before claiming broader environment coverage across server configurations."
     },
     {
       "id": "pending-second-workstation",

@@ -45,6 +45,7 @@ This document is the working status register for the repository. It should stay 
 - Validation scripts now share one machine-readable runtime status contract via `--json`
 - `ci:verify` now emits a contract-driven `artifacts/ci/verification-contract.json`
 - `lint` now includes syntax, encoding, ESLint, and docs/metadata formatting checks
+- User-facing Thai command and leaderboard text is now guarded by the repo encoding scan plus `test/mojibake-regression.test.js`
 - Policy checks now cover runtime profile parsing, control-panel env registry rules, smoke behavior, readiness ordering, and module docs
 - Tenant scope exists across core platform, commerce, and audit surfaces
 - Tenant DB topology resolver/provisioning now exists for `schema-per-tenant` and `database-per-tenant`
