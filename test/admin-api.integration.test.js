@@ -759,6 +759,11 @@ test('admin API auth + validation integration flow', async (t) => {
   assert.equal(restoreDryRun.data.data.dryRun, true);
   assert.equal(String(restoreDryRun.data.data.confirmBackup || ''), backupFile);
   assert.equal(typeof restoreDryRun.data.data?.diff?.summary?.changedCollections, 'number');
+  assert.ok(Array.isArray(restoreDryRun.data.data?.verificationPlan?.checks));
+  assert.equal(
+    Number(restoreDryRun.data.data?.verificationPlan?.expectedCounts?.wallets || 0) >= 1,
+    true,
+  );
   assert.match(String(restoreDryRun.data.data.previewToken || ''), /^[a-f0-9]{20,}$/i);
 
   const restoreStatusBefore = await request('/admin/api/backup/restore/status', 'GET', null, cookie);
@@ -793,6 +798,9 @@ test('admin API auth + validation integration flow', async (t) => {
   assert.equal(restoreLive.data.ok, true);
   assert.equal(restoreLive.data.data.restored, true);
   assert.ok(String(restoreLive.data.data.rollbackBackup || '').endsWith('.json'));
+  assert.equal(Boolean(restoreLive.data.data?.verification?.ready), true);
+  assert.equal(Boolean(restoreLive.data.data?.verification?.countsMatch), true);
+  assert.equal(Boolean(restoreLive.data.data?.verification?.configMatch), true);
 
   const snapshotAfterRestore = await request('/admin/api/snapshot', 'GET', null, cookie);
   assert.equal(snapshotAfterRestore.res.status, 200);
@@ -808,6 +816,11 @@ test('admin API auth + validation integration flow', async (t) => {
   assert.equal(restoreStatusAfter.data.data.active, false);
   assert.equal(String(restoreStatusAfter.data.data.backup || ''), backupFile);
   assert.ok(String(restoreStatusAfter.data.data.rollbackBackup || '').endsWith('.json'));
+  assert.equal(Boolean(restoreStatusAfter.data.data?.verification?.ready), true);
+  assert.equal(
+    Number(restoreStatusAfter.data.data?.verification?.summary?.changedCollections || 0),
+    0,
+  );
 
   const presetDelete = await request('/admin/api/audit/presets/delete', 'POST', {
     id: presetId,
@@ -2026,6 +2039,9 @@ test('admin API control panel settings, env patching, and admin user management'
   assert.ok(envWrite.data.data.rootChanged.includes('DISCORD_GUILD_ID'));
   assert.ok(envWrite.data.data.rootChanged.includes('RCON_HOST'));
   assert.ok(envWrite.data.data.portalChanged.includes('WEB_PORTAL_BASE_URL'));
+  assert.equal(Boolean(envWrite.data.data?.reloadRequired), true);
+  assert.equal(Number(envWrite.data.data?.applySummary?.totalChanged || 0), 6);
+  assert.deepEqual(envWrite.data.data?.applySummary?.suggestedRestartTargets, ['all']);
 
   const rootEnvText = fs.readFileSync(rootEnvPath, 'utf8');
   const portalEnvText = fs.readFileSync(portalEnvPath, 'utf8');

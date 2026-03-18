@@ -809,23 +809,24 @@ logoutBtn.addEventListener('click', async () => {
         const submitButton = getSubmitButton(controlDiscordForm, event);
         const restartTarget = getSelectedControlRestartTarget();
         try {
+          let envSaveResult = null;
           await runWithButtonState(submitButton, DASHBOARD_MESSAGES.saving, async () => {
             await api('/admin/api/config/patch', 'POST', {
               patch: buildControlDiscordPatch(),
             });
             if (hasRoleAtLeast(currentUserRole, 'owner')) {
-              await api('/admin/api/control-panel/env', 'POST', {
+              envSaveResult = await saveControlEnvPatch({
                 root: {
                   DISCORD_GUILD_ID: String(cpGuildId?.value || '').trim(),
                 },
+              }, 'Discord / Access', {
+                restartTarget,
+                restartLabel: 'Discord / Access',
               });
-              if (restartTarget) {
-                await restartManagedServiceSelection(restartTarget, 'Discord / Access');
-              }
             }
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true });
-          toast('บันทึก Discord / Access แล้ว');
+          toast(envSaveResult?.message || 'บันทึก Discord / Access แล้ว');
         } catch (error) {
           toast(error.message || 'บันทึก Discord / Access ไม่สำเร็จ');
         }
@@ -890,14 +891,15 @@ logoutBtn.addEventListener('click', async () => {
         const submitButton = getSubmitButton(controlEnvRuntimeForm, event);
         const restartTarget = getSelectedControlRestartTarget();
         try {
+          let envSaveResult = null;
           await runWithButtonState(submitButton, DASHBOARD_MESSAGES.saving, async () => {
-            await api('/admin/api/control-panel/env', 'POST', buildRuntimeEnvPatch());
-            if (restartTarget) {
-              await restartManagedServiceSelection(restartTarget, 'Runtime Flags');
-            }
+            envSaveResult = await saveControlEnvPatch(buildRuntimeEnvPatch(), 'Runtime Flags', {
+              restartTarget,
+              restartLabel: 'Runtime Flags',
+            });
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true });
-          toast('บันทึก Runtime Flags แล้ว');
+          toast(envSaveResult?.message || 'บันทึก Runtime Flags แล้ว');
         } catch (error) {
           toast(error.message || 'บันทึก Runtime Flags ไม่สำเร็จ');
         }
@@ -918,14 +920,15 @@ logoutBtn.addEventListener('click', async () => {
         const submitButton = getSubmitButton(controlRconAgentForm, event);
         const restartTarget = getSelectedControlRestartTarget();
         try {
+          let envSaveResult = null;
           await runWithButtonState(submitButton, DASHBOARD_MESSAGES.saving, async () => {
-            await api('/admin/api/control-panel/env', 'POST', buildRconAgentEnvPatch());
-            if (restartTarget) {
-              await restartManagedServiceSelection(restartTarget, 'RCON / Agent');
-            }
+            envSaveResult = await saveControlEnvPatch(buildRconAgentEnvPatch(), 'RCON / Agent', {
+              restartTarget,
+              restartLabel: 'RCON / Agent',
+            });
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true });
-          toast('บันทึก RCON / Agent แล้ว');
+          toast(envSaveResult?.message || 'บันทึก RCON / Agent แล้ว');
         } catch (error) {
           toast(error.message || 'บันทึก RCON / Agent ไม่สำเร็จ');
         }
@@ -946,14 +949,15 @@ logoutBtn.addEventListener('click', async () => {
         const submitButton = getSubmitButton(controlWatcherForm, event);
         const restartTarget = getSelectedControlRestartTarget();
         try {
+          let envSaveResult = null;
           await runWithButtonState(submitButton, DASHBOARD_MESSAGES.saving, async () => {
-            await api('/admin/api/control-panel/env', 'POST', buildWatcherPortalEnvPatch());
-            if (restartTarget) {
-              await restartManagedServiceSelection(restartTarget, 'Watcher / Portal');
-            }
+            envSaveResult = await saveControlEnvPatch(buildWatcherPortalEnvPatch(), 'Watcher / Portal', {
+              restartTarget,
+              restartLabel: 'Watcher / Portal',
+            });
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true });
-          toast('บันทึก Watcher / Portal แล้ว');
+          toast(envSaveResult?.message || 'บันทึก Watcher / Portal แล้ว');
         } catch (error) {
           toast(error.message || 'บันทึก Watcher / Portal ไม่สำเร็จ');
         }
@@ -1014,14 +1018,15 @@ logoutBtn.addEventListener('click', async () => {
         }
         const restartTarget = getSelectedControlRestartTarget();
         try {
+          let envSaveResult = null;
           await runWithButtonState(button, DASHBOARD_MESSAGES.saving, async () => {
-            await api('/admin/api/control-panel/env', 'POST', patch);
-            if (restartTarget) {
-              await restartManagedServiceSelection(restartTarget, 'env catalog');
-            }
+            envSaveResult = await saveControlEnvPatch(patch, 'env catalog', {
+              restartTarget,
+              restartLabel: 'env catalog',
+            });
           });
           await refreshSnapshot({ silent: true, syncConfigInputs: true, forceCardsRefresh: true });
-          toast('บันทึก env catalog แล้ว');
+          toast(envSaveResult?.message || 'บันทึก env catalog แล้ว');
         } catch (error) {
           toast(error.message || 'บันทึก env catalog ไม่สำเร็จ');
         }

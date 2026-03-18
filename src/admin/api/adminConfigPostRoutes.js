@@ -10,6 +10,7 @@ function createAdminConfigPostRoutes(deps) {
     parseStringArray,
     getAuthTenantId,
     buildControlPanelEnvPatch,
+    buildControlPanelEnvApplySummary,
     updateEnvFile,
     getRootEnvFilePath,
     getPortalEnvFilePath,
@@ -54,6 +55,10 @@ function createAdminConfigPostRoutes(deps) {
       const portalWrite = hasPortalPatch
         ? updateEnvFile(getPortalEnvFilePath(), envPatch.portal)
         : { changedKeys: [] };
+      const applySummary = buildControlPanelEnvApplySummary({
+        root: rootWrite.changedKeys,
+        portal: portalWrite.changedKeys,
+      });
       Object.assign(process.env, envPatch.root, envPatch.portal);
 
       recordAdminSecuritySignal('control-panel-env-updated', {
@@ -67,6 +72,7 @@ function createAdminConfigPostRoutes(deps) {
         data: {
           rootChanged: rootWrite.changedKeys,
           portalChanged: portalWrite.changedKeys,
+          applySummary,
         },
       });
 
@@ -75,7 +81,8 @@ function createAdminConfigPostRoutes(deps) {
         data: {
           rootChanged: rootWrite.changedKeys,
           portalChanged: portalWrite.changedKeys,
-          reloadRequired: true,
+          reloadRequired: applySummary.restartRequired,
+          applySummary,
         },
       });
       return true;

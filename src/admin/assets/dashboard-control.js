@@ -399,7 +399,12 @@
       return String(controlRestartTargetSelect?.value || '').trim();
     }
 
-    async function restartManagedServiceSelection(target, contextLabel = 'runtime service') {
+    async function restartManagedServiceSelection(
+      target,
+      contextLabel = 'runtime service',
+      options = {},
+    ) {
+      const { silent = false } = options;
       const normalizedTarget = String(target || '').trim();
       if (!normalizedTarget) return null;
       const res = await api('/admin/api/runtime/restart-service', 'POST', {
@@ -408,12 +413,60 @@
       const restartedLabels = Array.isArray(res.data?.services)
         ? res.data.services.map((entry) => entry.label || entry.key).filter(Boolean)
         : [];
-      toast(
-        restartedLabels.length > 0
-          ? `${contextLabel}: restart แล้ว (${restartedLabels.join(', ')})`
-          : `${contextLabel}: restart แล้ว`,
-      );
+      if (!silent) {
+        toast(
+          restartedLabels.length > 0
+            ? `${contextLabel}: restart แล้ว (${restartedLabels.join(', ')})`
+            : `${contextLabel}: restart แล้ว`,
+        );
+      }
       return res.data || null;
+    }
+
+    function buildControlEnvApplyMessage(contextLabel, envResult = {}, restartResult = null) {
+      const summary = envResult?.applySummary || {};
+      const totalChanged = Number(summary.totalChanged || 0);
+      if (totalChanged <= 0) {
+        return `${contextLabel}: no env changes`;
+      }
+      const parts = [`${contextLabel}: saved ${totalChanged} env key${totalChanged === 1 ? '' : 's'}`];
+      if (summary.hotReloadOnly) {
+        parts.push('hot reload only');
+      } else if (summary.restartRequired) {
+        const restartedLabels = Array.isArray(restartResult?.services)
+          ? restartResult.services.map((entry) => entry.label || entry.key).filter(Boolean)
+          : [];
+        if (restartedLabels.length > 0) {
+          parts.push(`restarted ${restartedLabels.join(', ')}`);
+        } else if (
+          Array.isArray(summary.suggestedRestartTargets)
+          && summary.suggestedRestartTargets.length > 0
+        ) {
+          parts.push(`restart suggested: ${summary.suggestedRestartTargets.join(', ')}`);
+        } else {
+          parts.push('restart required');
+        }
+      }
+      return parts.join(' | ');
+    }
+
+    async function saveControlEnvPatch(patch, contextLabel, options = {}) {
+      const {
+        restartTarget = '',
+        restartLabel = contextLabel,
+      } = options;
+      const envResult = await api('/admin/api/control-panel/env', 'POST', patch);
+      let restartResult = null;
+      if (envResult?.data?.reloadRequired && String(restartTarget || '').trim()) {
+        restartResult = await restartManagedServiceSelection(restartTarget, restartLabel, {
+          silent: true,
+        });
+      }
+      return {
+        envResult: envResult?.data || {},
+        restartResult,
+        message: buildControlEnvApplyMessage(contextLabel, envResult?.data || {}, restartResult),
+      };
     }
 
     function buildControlDiscordPatch() {

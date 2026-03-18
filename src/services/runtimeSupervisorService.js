@@ -245,6 +245,19 @@ function classifyRuntimeHealth(target, healthPayload, latencyMs) {
     if (!ready) {
       reason = reason || 'discord-not-ready';
     }
+  } else if (target.key === 'console-agent') {
+    if (typeof data.ready === 'boolean') {
+      ready = data.ready;
+    }
+    if (!ready) {
+      reason =
+        String(
+          data?.classification?.reason
+            || data?.statusCode
+            || reason
+            || 'agent-degraded',
+        ).trim() || 'agent-degraded';
+    }
   } else if (target.key === 'watcher') {
     const watcher = normalizeWatcherState(data);
     ready = watcher.ready;

@@ -1636,6 +1636,28 @@ function buildExecutionAuditMeta(job, meta = null, settings = null) {
   };
 }
 
+function extractAgentClassification(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  if (payload.classification && typeof payload.classification === 'object') {
+    return payload.classification;
+  }
+  if (payload.result?.classification && typeof payload.result.classification === 'object') {
+    return payload.result.classification;
+  }
+  return null;
+}
+
+function extractAgentRecovery(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  if (payload.recovery && typeof payload.recovery === 'object') {
+    return payload.recovery;
+  }
+  if (payload.result?.recovery && typeof payload.result.recovery === 'object') {
+    return payload.result.recovery;
+  }
+  return null;
+}
+
 async function fetchAgentHealth(settings) {
   const baseUrl = getAgentBaseUrl();
   const controller = new AbortController();
@@ -1657,8 +1679,11 @@ async function fetchAgentHealth(settings) {
         ok: false,
         reachable: false,
         baseUrl,
+        errorCode: String(payload?.errorCode || payload?.statusCode || 'AGENT_HEALTH_FAILED'),
         error:
           trimText(payload?.error || payload?.message || `agent health failed (${res.status})`, 300),
+        classification: extractAgentClassification(payload),
+        recovery: extractAgentRecovery(payload),
       };
     }
     return {
@@ -1672,7 +1697,10 @@ async function fetchAgentHealth(settings) {
       ok: false,
       reachable: false,
       baseUrl,
+      errorCode: error?.name === 'AbortError' ? 'AGENT_HEALTH_TIMEOUT' : 'AGENT_HEALTH_UNREACHABLE',
       error: trimText(error?.message || 'agent health request failed', 300),
+      classification: null,
+      recovery: null,
     };
   } finally {
     clearTimeout(timeout);
@@ -1715,6 +1743,8 @@ async function fetchAgentPreflight(settings) {
         errorCode: String(payload?.errorCode || 'AGENT_PREFLIGHT_FAILED'),
         error: trimText(payload?.error || payload?.message || `agent preflight failed (${res.status})`, 300),
         result: payload?.result || null,
+        classification: extractAgentClassification(payload),
+        recovery: extractAgentRecovery(payload),
       };
     }
     return {
@@ -1730,6 +1760,8 @@ async function fetchAgentPreflight(settings) {
       baseUrl,
       errorCode: 'AGENT_PREFLIGHT_UNREACHABLE',
       error: trimText(error?.message || 'agent preflight request failed', 300),
+      classification: null,
+      recovery: null,
     };
   } finally {
     clearTimeout(timeout);
@@ -2497,6 +2529,28 @@ async function getDeliveryPreflightReport(options = {}) {
         health?.ok && health?.reachable
           ? `Console agent reachable (${health.backend || health.status || 'ready'})`
           : health?.error || 'Console agent is unreachable',
+      meta: health,
+    }));
+    checks.push(buildPreflightCheck({
+      key: 'agent-runtime-state',
+      label: 'Console agent runtime state',
+      ok: health?.ready !== false,
+      required: false,
+      severity: 'warn',
+      scope: 'agent',
+      code:
+        health?.ready !== false
+          ? 'READY'
+          : String(health?.statusCode || health?.classification?.code || 'AGENT_RUNTIME_DEGRADED'),
+      detail:
+        health?.ready !== false
+          ? 'Console agent runtime reports ready'
+          : String(
+            health?.recovery?.hint
+              || health?.statusMessage
+              || health?.classification?.message
+              || 'Console agent runtime is degraded',
+          ).trim(),
       meta: health,
     }));
     checks.push(buildPreflightCheck({
@@ -3500,6 +3554,11 @@ async function runAgentCommand(gameCommand, settings) {
         retryable: true,
         step: 'agent-command',
         command: gameCommand,
+        meta: {
+          classification,
+          recovery,
+          result: payload?.result || null,
+        },
         recoveryHint: 'ตรวจ console-agent, Windows session และ SCUM client ก่อน retry',
       },
     );
@@ -3515,6 +3574,8 @@ async function runAgentCommand(gameCommand, settings) {
   }
 
   if (!res.ok || !payload?.ok || !payload?.result) {
+    const classification = extractAgentClassification(payload);
+    const recovery = extractAgentRecovery(payload);
     throw createDeliveryError(
       String(payload?.errorCode || `AGENT_HTTP_${res.status}`),
       trimText(
@@ -3524,7 +3585,10 @@ async function runAgentCommand(gameCommand, settings) {
         500,
       ),
       {
-        retryable: res.status >= 500 || res.status === 429,
+        retryable:
+          typeof classification?.retryable === 'boolean'
+            ? classification.retryable
+            : (res.status >= 500 || res.status === 429),
         step: 'agent-command',
         command: gameCommand,
         recoveryHint: 'ตรวจ agent health, auth token และ SCUM client ก่อน retry',

@@ -16,5 +16,6 @@ test('admin dashboard control renders env catalog editor helpers', () => {
   const text = fs.readFileSync(controlFile, 'utf8');
   assert.match(text, /function renderControlEnvCatalog\(/);
   assert.match(text, /function buildControlEnvCatalogPatch\(/);
+  assert.match(text, /function saveControlEnvPatch\(/);
   assert.match(text, /data-control-env-save="true"/);
 });

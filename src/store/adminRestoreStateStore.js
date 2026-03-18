@@ -46,6 +46,36 @@ function normalizeWarnings(value) {
     .filter(Boolean);
 }
 
+function normalizeVerificationChecks(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+      const id = normalizeString(entry.id, 80);
+      if (!id) return null;
+      return {
+        id,
+        label: normalizeString(entry.label, 160) || id,
+        ok: entry.ok === true,
+        detail: normalizeString(entry.detail, 400),
+      };
+    })
+    .filter(Boolean);
+}
+
+function normalizeVerification(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return {
+    checkedAt: normalizeIso(value.checkedAt),
+    ready: value.ready === true,
+    countsMatch: value.countsMatch === true,
+    configMatch: value.configMatch === true,
+    rollbackBackupCreated: value.rollbackBackupCreated === true,
+    checks: normalizeVerificationChecks(value.checks),
+    summary: normalizeObject(value.summary),
+  };
+}
+
 function buildDefaultState() {
   return {
     schemaVersion: 1,
@@ -71,6 +101,7 @@ function buildDefaultState() {
     currentCounts: null,
     diff: null,
     warnings: [],
+    verification: null,
     previewToken: null,
     previewBackup: null,
     previewIssuedAt: null,
@@ -121,6 +152,7 @@ function normalizeState(nextState = {}) {
     currentCounts: normalizeObject(merged.currentCounts),
     diff: normalizeObject(merged.diff),
     warnings: normalizeWarnings(merged.warnings),
+    verification: normalizeVerification(merged.verification),
     previewToken: normalizeString(merged.previewToken, 160),
     previewBackup: normalizeString(merged.previewBackup, 260),
     previewIssuedAt: normalizeIso(merged.previewIssuedAt),

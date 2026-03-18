@@ -243,6 +243,7 @@ const { updateEnvFile } = require('./utils/envFileEditor');
 const { resolveDatabaseRuntime } = require('./utils/dbEngine');
 const {
   buildControlPanelEnvCatalog: buildAdminEditableEnvCatalog,
+  buildControlPanelEnvApplySummary: buildAdminEditableEnvApplySummary,
   buildControlPanelEnvPatch: buildAdminEditableEnvPatch,
   buildControlPanelEnvPolicySummary: buildAdminEditableEnvPolicySummary,
   buildControlPanelEnvSection: buildAdminEditableEnvSection,
@@ -674,6 +675,7 @@ const handleAdminConfigPostRoute = createAdminConfigPostRoutes({
   parseStringArray,
   getAuthTenantId,
   buildControlPanelEnvPatch: buildAdminEditableEnvPatch,
+  buildControlPanelEnvApplySummary: buildAdminEditableEnvApplySummary,
   updateEnvFile,
   getRootEnvFilePath: resolveAdminEditableRootEnvFilePath,
   getPortalEnvFilePath: resolveAdminEditablePortalEnvFilePath,

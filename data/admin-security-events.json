@@ -1,7 +1,7 @@
 [
   {
-    "id": "admin-sec-1773754457152-306bc8b1",
-    "at": "2026-03-17T13:34:17.152Z",
+    "id": "admin-sec-1773771772415-815bec6e",
+    "at": "2026-03-17T18:22:52.416Z",
     "type": "login-succeeded",
     "severity": "info",
     "actor": "platform_owner_test",
@@ -16,15 +16,15 @@
     "data": null
   },
   {
-    "id": "admin-sec-1773754457153-bdd5193f",
-    "at": "2026-03-17T13:34:17.153Z",
+    "id": "admin-sec-1773771772417-89fa57b0",
+    "at": "2026-03-17T18:22:52.417Z",
     "type": "session-created",
     "severity": "info",
     "actor": "platform_owner_test",
     "targetUser": "platform_owner_test",
     "role": "owner",
     "authMethod": "password-db",
-    "sessionId": "bff323da2c84f5b4e69ee83f1ca397404843ac173313b1a8",
+    "sessionId": "0a1b92b44767ed82bc40e90ebdceb9888d856984827d627e",
     "ip": "127.0.0.1",
     "path": null,
     "reason": "login",

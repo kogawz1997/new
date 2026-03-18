@@ -528,6 +528,15 @@ test('agent enqueue is blocked when preflight fails before the job reaches the q
         ok: false,
         errorCode: 'AGENT_PREFLIGHT_FAILED',
         error: 'SCUM admin client is not ready',
+        classification: {
+          category: 'client-window',
+          reason: 'window-not-found',
+          retryable: true,
+        },
+        recovery: {
+          action: 'restore-scum-window',
+          hint: 'Restore the SCUM client window and rerun preflight.',
+        },
         result: {
           ok: false,
           backend: 'fake-agent',
@@ -568,6 +577,14 @@ test('agent enqueue is blocked when preflight fails before the job reaches the q
     assert.equal(api.listDeliveryQueue().length, 0);
     assert.equal(ctx.purchases.get('P-125B').status, 'pending');
     assert.equal(ctx.statuses.length, 0);
+    assert.equal(
+      queued.preflight?.failures?.find((entry) => entry.key === 'agent-preflight')?.meta?.classification?.reason,
+      'window-not-found',
+    );
+    assert.equal(
+      queued.preflight?.failures?.find((entry) => entry.key === 'agent-preflight')?.meta?.recovery?.action,
+      'restore-scum-window',
+    );
 
     const blockedAudit = ctx.audits.find(
       (entry) => entry.action === 'enqueue-blocked' && entry.purchaseCode === 'P-125B',

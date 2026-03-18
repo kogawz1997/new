@@ -370,6 +370,68 @@ function buildControlPanelEnvPolicySummary(fileKey = null) {
   return summary;
 }
 
+function getControlPanelEnvField(fileKey, key) {
+  const field = CONTROL_PANEL_ENV_INDEX.get(String(key || '').trim());
+  if (!field) return null;
+  if (fileKey && field.file !== fileKey) return null;
+  return field;
+}
+
+function normalizeControlPanelEnvChangeKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  if (value && typeof value === 'object') {
+    return Object.keys(value).map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+  return [];
+}
+
+function buildControlPanelEnvApplySummary(changeSet = {}) {
+  const changed = [];
+  for (const fileKey of ['root', 'portal']) {
+    for (const key of normalizeControlPanelEnvChangeKeys(changeSet?.[fileKey])) {
+      const field = getControlPanelEnvField(fileKey, key);
+      if (!field) continue;
+      changed.push({
+        file: field.file,
+        key: field.key,
+        policy: field.policy,
+        applyMode: field.applyMode,
+        description: field.description || '',
+      });
+    }
+  }
+
+  changed.sort((left, right) =>
+    `${left.file}:${left.key}`.localeCompare(`${right.file}:${right.key}`));
+
+  const restartRequiredEntries = changed.filter((entry) => entry.applyMode === 'restart-required');
+  const reloadSafeEntries = changed.filter((entry) => entry.applyMode === 'reload-safe');
+  const changedFiles = Array.from(new Set(changed.map((entry) => entry.file)));
+  const suggestedRestartTargets = [];
+  if (restartRequiredEntries.length > 0) {
+    if (changedFiles.includes('root')) {
+      suggestedRestartTargets.push('all');
+    } else if (changedFiles.includes('portal')) {
+      suggestedRestartTargets.push('player-portal');
+    }
+  }
+
+  return {
+    totalChanged: changed.length,
+    changedFiles,
+    changed,
+    restartRequired: restartRequiredEntries.length > 0,
+    restartRequiredCount: restartRequiredEntries.length,
+    reloadSafeCount: reloadSafeEntries.length,
+    restartRequiredKeys: restartRequiredEntries.map((entry) => entry.key),
+    reloadSafeKeys: reloadSafeEntries.map((entry) => entry.key),
+    hotReloadOnly: changed.length > 0 && restartRequiredEntries.length === 0,
+    suggestedRestartTargets,
+  };
+}
+
 function normalizeEnvPatchValue(field, value) {
   if (!field) return null;
   if (field.type === 'boolean') {
@@ -414,11 +476,13 @@ function buildControlPanelEnvPatch(body = {}) {
 
 module.exports = {
   buildControlPanelEnvCatalog,
+  buildControlPanelEnvApplySummary,
   buildControlPanelEnvPatch,
   buildControlPanelEnvPolicySummary,
   buildControlPanelEnvSection,
   CONTROL_PANEL_ENV_FIELDS,
   CONTROL_PANEL_ENV_INDEX,
+  getControlPanelEnvField,
   getControlPanelEnvFileValues,
   getPortalEnvFilePath,
   getRootEnvFilePath,

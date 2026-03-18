@@ -1045,6 +1045,92 @@ function buildRestoreDiff(currentSnapshot = {}, targetSnapshot = {}) {
   };
 }
 
+function compareRestoreConfig(targetConfig, restoredConfig) {
+  const targetPresent =
+    targetConfig && typeof targetConfig === 'object' && !Array.isArray(targetConfig);
+  const restoredPresent =
+    restoredConfig && typeof restoredConfig === 'object' && !Array.isArray(restoredConfig);
+  if (!targetPresent && !restoredPresent) return true;
+  if (!targetPresent || !restoredPresent) return false;
+  try {
+    return JSON.stringify(targetConfig, jsonReplacer) === JSON.stringify(restoredConfig, jsonReplacer);
+  } catch {
+    return false;
+  }
+}
+
+function buildRestoreVerificationPlan(targetSnapshot = {}, options = {}) {
+  const warnings = Array.isArray(options.warnings) ? options.warnings.filter(Boolean) : [];
+  const expectedCounts = options.expectedCounts || buildRestoreCounts(targetSnapshot);
+  return {
+    expectedCounts,
+    warnings,
+    checks: [
+      {
+        id: 'collections-match',
+        label: 'Rebuild an admin snapshot and compare collection counts with the backup',
+      },
+      {
+        id: 'config-match',
+        label: 'Compare the active runtime config against the backup snapshot',
+      },
+      {
+        id: 'rollback-backup-created',
+        label: 'Confirm a rollback backup exists before destructive restore writes run',
+      },
+    ],
+  };
+}
+
+function buildRestoreVerification(targetSnapshot = {}, restoredSnapshot = {}, options = {}) {
+  const diff = buildRestoreDiff(restoredSnapshot, targetSnapshot);
+  const mismatchedCollections = Object.entries(diff.counts || {})
+    .filter(([, row]) => row?.changed === true)
+    .map(([key]) => key)
+    .sort();
+  const countsMatch = mismatchedCollections.length === 0;
+  const configMatch = compareRestoreConfig(targetSnapshot.config, restoredSnapshot.config);
+  const rollbackBackupCreated = String(options.rollbackBackup || '').trim().length > 0;
+  const checks = [
+    {
+      id: 'collections-match',
+      label: 'Collection counts match the backup snapshot',
+      ok: countsMatch,
+      detail: countsMatch
+        ? 'All tracked collection counts match the backup snapshot'
+        : `Mismatched collections: ${mismatchedCollections.join(', ')}`,
+    },
+    {
+      id: 'config-match',
+      label: 'Runtime config matches the backup snapshot',
+      ok: configMatch,
+      detail: configMatch
+        ? 'Runtime config matches the backup snapshot'
+        : 'Runtime config differs from the backup snapshot',
+    },
+    {
+      id: 'rollback-backup-created',
+      label: 'Rollback backup was created before restore writes',
+      ok: rollbackBackupCreated,
+      detail: rollbackBackupCreated
+        ? `Rollback backup ${options.rollbackBackup} is available`
+        : 'Rollback backup was not created',
+    },
+  ];
+  return {
+    checkedAt: new Date().toISOString(),
+    ready: checks.every((check) => check.ok === true),
+    countsMatch,
+    configMatch,
+    rollbackBackupCreated,
+    checks,
+    summary: {
+      changedCollections: Number(diff.summary?.changedCollections || 0),
+      mismatchedCollections,
+    },
+  };
+}
+
 async function buildRestorePreviewData(loaded, options = {}) {
   const normalizedPayload = normalizeAdminBackupPayload(loaded?.payload);
   const snapshot = normalizedPayload.snapshot;
@@ -1057,6 +1143,10 @@ async function buildRestorePreviewData(loaded, options = {}) {
   if (normalizedPayload.schemaVersion === LEGACY_BACKUP_SCHEMA_VERSION) {
     warnings.push(`legacy-backup-schema:${normalizedPayload.compatibilityMode}`);
   }
+  const verificationPlan = buildRestoreVerificationPlan(snapshot, {
+    warnings,
+    expectedCounts: diff.targetCounts,
+  });
   const previewState =
     options.issuePreviewToken === true
       ? issueRestorePreviewState(loaded.file)
@@ -1074,6 +1164,7 @@ async function buildRestorePreviewData(loaded, options = {}) {
     currentCounts: diff.currentCounts,
     diff,
     warnings,
+    verificationPlan,
     previewToken: previewState.previewToken || null,
     previewIssuedAt: previewState.previewIssuedAt || null,
     previewExpiresAt: previewState.previewExpiresAt || null,
@@ -1338,6 +1429,7 @@ async function restoreAdminBackup(backupName, options = {}) {
   let rollbackBackup = null;
   let restoreStarted = false;
   let preview = null;
+  let verification = null;
 
   setAdminRestoreState({
     status: 'running',
@@ -1362,6 +1454,7 @@ async function restoreAdminBackup(backupName, options = {}) {
     currentCounts: null,
     diff: null,
     warnings: [],
+    verification: null,
     previewToken: null,
     previewBackup: null,
     previewIssuedAt: null,
@@ -1414,6 +1507,7 @@ async function restoreAdminBackup(backupName, options = {}) {
       currentCounts: preview.currentCounts,
       diff: preview.diff,
       warnings: preview.warnings,
+      verification: null,
       previewToken: null,
       previewBackup: null,
       previewIssuedAt: null,
@@ -1431,6 +1525,18 @@ async function restoreAdminBackup(backupName, options = {}) {
 
     restoreStarted = true;
     await restoreAdminSnapshotData(snapshot);
+    const restoredSnapshot = await buildAdminSnapshot({
+      client: options.client || null,
+      observabilitySnapshot: options.observabilitySnapshot || null,
+    });
+    verification = buildRestoreVerification(snapshot, restoredSnapshot, {
+      rollbackBackup,
+    });
+    if (!verification.ready) {
+      throw createRestoreError('Backup restore verification failed', 500, {
+        verification,
+      });
+    }
 
     const endedAt = new Date().toISOString();
     const durationMs = Math.max(0, new Date(endedAt) - new Date(startedAt));
@@ -1457,6 +1563,7 @@ async function restoreAdminBackup(backupName, options = {}) {
       currentCounts: preview.currentCounts,
       diff: preview.diff,
       warnings: preview.warnings,
+      verification,
       previewToken: null,
       previewBackup: null,
       previewIssuedAt: null,
@@ -1470,6 +1577,7 @@ async function restoreAdminBackup(backupName, options = {}) {
       role,
       operationId,
       durationMs,
+      verification,
     });
 
     return {
@@ -1483,6 +1591,7 @@ async function restoreAdminBackup(backupName, options = {}) {
       currentCounts: preview.currentCounts,
       diff: preview.diff,
       warnings: preview.warnings,
+      verification,
     };
   } catch (error) {
     let rollbackStatus = restoreStarted ? 'failed' : 'not-needed';
@@ -1538,6 +1647,7 @@ async function restoreAdminBackup(backupName, options = {}) {
       currentCounts: preview?.currentCounts || null,
       diff: preview?.diff || null,
       warnings: preview?.warnings || [],
+      verification,
       previewToken: null,
       previewBackup: null,
       previewIssuedAt: null,

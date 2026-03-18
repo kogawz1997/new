@@ -6,7 +6,7 @@
 ![discord.js](https://img.shields.io/badge/discord.js-v14.25.1-5865F2?style=for-the-badge&logo=discord&logoColor=white)
 ![Prisma](https://img.shields.io/badge/Prisma-5.22.0-2D3748?style=for-the-badge&logo=prisma&logoColor=white)
 
-Last updated: **2026-03-17**
+Last updated: **2026-03-18**
 
 SCUM TH Platform is a control plane for a SCUM community stack built around:
 
@@ -79,6 +79,8 @@ If a statement in this repository is not backed by code, tests, CI artifacts, or
 - Player portal with wallet, purchase history, redeem, profile, and Steam link flows
 - Control panel for a growing subset of runtime and bot settings
 - Control panel env metadata now classifies keys by policy and apply mode
+- Control panel env writes now return per-key apply summaries and restart guidance instead of a blanket restart-required response
+- Backup restore preview/live status now include post-restore verification and persisted rollback status
 - Bot and worker entrypoints are now mostly bootstrap/runtime composition
 - Admin browser shell/common helpers now live under `src/admin/assets/dashboard-shell.js`
 - Admin snapshot/session/form runtime helpers now live under `src/admin/assets/dashboard-runtime.js`
@@ -98,6 +100,7 @@ If a statement in this repository is not backed by code, tests, CI artifacts, or
 - User-facing Thai command and leaderboard text is now guarded by `lint:text` plus `test/mojibake-regression.test.js`
 - Policy checks now include runtime profile, control-panel config registry, smoke behavior, readiness sequencing, and module docs
 - Live runtime proof now exists on this workstation for `console-agent` preflight/execute and watcher `ready` state against a real `SCUM.log`
+- Console-agent health/preflight now also expose classified failure reasons, recovery hints, and managed-process auto-restart telemetry
 - Watcher health now exposes recent parsed `admin-command` events from the live server log
 - Delivery verification now supports a first-party native-proof backend that reads live SCUM save state from `SCUM.db`
 - Native proof now supports both inventory delta and world-spawn delta verification on this workstation
@@ -107,8 +110,8 @@ If a statement in this repository is not backed by code, tests, CI artifacts, or
 
 ## What Is Partial
 
-- Admin web still does not cover every `.env` or config setting
-- Restore still relies on a guarded maintenance flow rather than fully automatic rollback
+- Admin web still does not cover every `.env` or config setting, even though env-catalog writes now return apply summary and restart guidance
+- Restore still relies on a guarded maintenance flow rather than fully automatic rollback, even though success now depends on post-restore verification
 - Real captures now exist for admin login, authenticated admin dashboard, player landing, player login, authenticated player dashboard, player showcase, and a simple demo GIF under `docs/assets/`
 - `src/adminWebServer.js` and `apps/web-portal-standalone/server.js` are now thin bootstrap/composition entrypoints
 - `src/admin/dashboard.html` is now a thinner shell, and the browser runtime is split across focused assets under `src/admin/assets/`, though the surface is still large
@@ -155,7 +158,7 @@ npm run readiness:prod
 npm run smoke:postdeploy
 ```
 
-Latest local verification on this workstation completed on `2026-03-17` with all commands above passing.
+Latest local verification on this workstation completed on `2026-03-18` with all commands above passing.
 
 Additional live runtime evidence from this workstation:
 

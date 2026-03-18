@@ -3,7 +3,7 @@
 [![CI](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/ci.yml/badge.svg)](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/ci.yml)
 [![Release](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/release.yml/badge.svg)](https://github.com/kogawz1997/Scum-bot-discord-Full-/actions/workflows/release.yml)
 
-Last updated: **2026-03-17**
+Last updated: **2026-03-18**
 
 This document is the working status register for the repository. It should stay factual. Do not use it as a sales page.
 
@@ -54,6 +54,9 @@ This document is the working status register for the repository. It should stay 
 - `schema-per-tenant` is now the repository target for multi-tenant deployments; `database-per-tenant` remains supported for higher-isolation tiers
 - This workstation now boots with live `TENANT_DB_TOPOLOGY_MODE=schema-per-tenant` for default tenant `1259096998045421672`, and schema `tenant_1259096998045421672` is provisioned in PostgreSQL
 - This workstation has live `console-agent` proof: preflight passes against a real `SCUM` window and a live command reached the game log
+- Console-agent health/preflight now expose classified failure reasons, recovery hints, and managed-process auto-restart telemetry for operator use
+- Backup restore preview/live status now carry an explicit verification checklist/result so restore only reports success after counts/config verification passes
+- Admin control-panel env writes now return per-key apply summaries, restart guidance, and audit payloads instead of treating every edit as the same generic restart-required change
 - This workstation has live watcher proof: watcher reports `ready` against a real `SCUM.log` path and exposes recent parsed `admin-command` events
 - Delivery verification now has a first-party native-proof backend that reads `SCUM.db`
 - This workstation has live native delivery proof from game state for `Water_05l`, `BakedBeans`, `Emergency_bandage`, `Weapon_M1911`, `Weapon_AK47`, `Magazine_M1911`, `Backpack_02_01`, `Cal_7_62x39mm_Ammobox`, and representative `teleport_spawn` / `announce_teleport_spawn` wrapper profiles
@@ -67,8 +70,8 @@ This document is the working status register for the repository. It should stay 
 
 ### Partial
 
-- Admin web still does not expose every env/config switch
-- Restore remains a controlled maintenance workflow with confirmation gates
+- Admin web still does not expose every env/config switch, even though env-catalog edits now carry per-key apply summary and restart guidance
+- Restore remains a controlled maintenance workflow with confirmation gates, even though it now persists post-restore verification and rollback state
 - Exported diagrams, authenticated admin/player dashboard captures, and a simple demo GIF now exist under `docs/assets/`, but broader in-game evidence still depends on live runtime capture
 
 ### Runtime-dependent
@@ -111,8 +114,8 @@ Important detail:
 - `readiness:prod` now includes `smoke:postdeploy`
 - `smoke:postdeploy` no longer treats required runtimes as healthy based only on HTTP 200 and `{ ok: true }`
 - optional runtimes such as a disabled watcher or an optional console-agent are reported without failing the run
-- the latest local full pass on this workstation completed on `2026-03-17`
-- the latest live schema-per-tenant runtime pass on this workstation completed on `2026-03-17` with `npm test` and `node scripts/readiness-gate.js --production`
+- the latest local full pass on this workstation completed on `2026-03-18`
+- the latest live schema-per-tenant runtime pass on this workstation completed on `2026-03-18` with `npm test` and `node scripts/readiness-gate.js --production`
 - a targeted provider-backed tenant-topology suite covering admin/community/player/webhook paths also passed locally on `2026-03-17`
 
 ## Remaining Non-Delivery Gaps
