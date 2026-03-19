@@ -164,11 +164,20 @@ WORKER_ENABLE_DELIVERY=true
 ADMIN_WEB_HOST=127.0.0.1
 ADMIN_WEB_PORT=3200
 ADMIN_WEB_ALLOWED_ORIGINS=https://admin.genz.noah-dns.online
+ADMIN_WEB_ENFORCE_ORIGIN_CHECK=true
 ADMIN_WEB_SECURE_COOKIE=true
 ADMIN_WEB_TRUST_PROXY=true
 ADMIN_WEB_2FA_ENABLED=true
 ADMIN_WEB_STEP_UP_ENABLED=true
 ADMIN_WEB_SSO_DISCORD_ENABLED=true
+
+# Session hardening (ค่า default ของระบบ)
+ADMIN_WEB_SESSION_COOKIE_NAME=scum_admin_session
+ADMIN_WEB_SESSION_COOKIE_PATH=/admin
+ADMIN_WEB_SESSION_COOKIE_SAMESITE=Strict
+ADMIN_WEB_SESSION_IDLE_MINUTES=120
+ADMIN_WEB_SESSION_MAX_PER_USER=5
+ADMIN_WEB_SESSION_BIND_USER_AGENT=true
 ```
 
 สิ่งที่มีใน admin web:
@@ -182,6 +191,13 @@ ADMIN_WEB_SSO_DISCORD_ENABLED=true
 - backup / restore preview
 - delivery tools
 - tenant config scope บางส่วน
+
+หมายเหตุการใช้งาน/ความปลอดภัย:
+- การเรียก `POST /admin/api/*` จะถูกตรวจ CSRF ผ่าน `origin`/`sec-fetch-site` เมื่อผู้ใช้มี session แล้ว และเปิด `ADMIN_WEB_ENFORCE_ORIGIN_CHECK=true`
+- auth มี 3 โหมด:
+  - session cookie จาก `/admin/login`
+  - token auth ผ่าน `x-admin-token` หรือ `Authorization: Bearer <token>` (และจะยอมให้ query string ได้ก็ต่อเมื่อ `ADMIN_WEB_ALLOW_TOKEN_QUERY=true`)
+  - Discord SSO (ถ้าเปิด `ADMIN_WEB_SSO_DISCORD_ENABLED=true`)
 
 ## 7. Health / readiness / smoke
 

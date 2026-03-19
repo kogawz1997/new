@@ -1,0 +1,1031 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCUM Platform Owner Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/assets/console-surfaces.css">
+</head>
+<body>
+  <div class="surface-root">
+    <header class="surface-header">
+      <div class="surface-topline">
+        <div class="surface-brand">
+          <span class="surface-id">Platform Owner Console</span>
+          <h1>Global Operations</h1>
+          <p>Owner-only control surface for tenant fleet health, runtime posture, platform security, audit visibility, and guarded system changes. Daily tenant operations stay in the tenant console.</p>
+        </div>
+        <div class="surface-actions">
+          <button id="ownerPaletteBtn" class="command-chip" type="button">Command Palette</button>
+          <button id="ownerRefreshBtn" class="button button-primary" type="button">Refresh Console</button>
+          <button id="ownerMonitoringBtn" class="button button-warning" type="button">Run Monitoring</button>
+          <button id="ownerClearAlertsBtn" class="button" type="button">Clear Alerts</button>
+          <a class="ghost-link" href="/admin/legacy">Legacy Workbench</a>
+        </div>
+      </div>
+
+      <div id="ownerStatusBanner" class="status-banner banner-info">
+        <div>
+          <strong id="ownerStatusTitle">Loading owner console...</strong>
+          <p id="ownerStatusDetail">Preparing platform-wide runtime, tenant, security, and incident state.</p>
+        </div>
+        <div id="ownerStatusTags" class="tag-row"></div>
+      </div>
+
+      <div class="meta-grid">
+        <article class="meta-card">
+          <span class="meta-label">Surface</span>
+          <strong>Platform-wide control</strong>
+          <p class="muted">Tenant-scoped admins are redirected out of this view. Dangerous actions remain guarded and auditable.</p>
+        </article>
+        <article class="meta-card">
+          <span class="meta-label">Fast Keys</span>
+          <strong>Ctrl/Cmd + K</strong>
+          <p class="muted">Open command palette for sections, owner actions, and legacy workbench shortcuts.</p>
+        </article>
+        <article class="meta-card">
+          <span class="meta-label">Realtime</span>
+          <strong>Incident stream enabled</strong>
+          <p class="muted">Live events, notifications, and security signals are consolidated into one owner feed.</p>
+        </article>
+      </div>
+    </header>
+
+    <div class="surface-main">
+      <aside class="surface-sidebar">
+        <nav class="nav-card">
+          <h2>Navigate</h2>
+          <div class="nav-list">
+            <a class="nav-link" href="#overview">Overview</a>
+            <a class="nav-link" href="#fleet">Tenant Fleet</a>
+            <a class="nav-link" href="#fleet-assets">Fleet Assets</a>
+            <a class="nav-link" href="#runtime">Runtime Control</a>
+            <a class="nav-link" href="#observability">Observability</a>
+            <a class="nav-link" href="#security">Security + Audit</a>
+            <a class="nav-link" href="#access">Access Center</a>
+            <a class="nav-link" href="#audit">Audit Trail</a>
+            <a class="nav-link" href="#events">Live Events</a>
+            <a class="nav-link" href="#recovery">Recovery</a>
+            <a class="nav-link" href="#control">Control Center</a>
+            <a class="nav-link" href="#governance">Governance</a>
+          </div>
+        </nav>
+
+        <section class="nav-card">
+          <h2>Owner-only Areas</h2>
+          <p class="hint">Tenant lifecycle, global config, security policy, backup and restore, request observability, and runtime control belong here. Server-specific merchandising and support flows do not.</p>
+        </section>
+
+        <section class="nav-card">
+          <h2>Legacy Shortcuts</h2>
+          <div class="nav-list">
+            <a class="nav-link" href="/admin/legacy?tab=platform">Platform Center</a>
+            <a class="nav-link" href="/admin/legacy?tab=control">Global Config</a>
+            <a class="nav-link" href="/admin/legacy?tab=auth">Security Center</a>
+            <a class="nav-link" href="/admin/legacy?tab=danger">Recovery</a>
+            <a class="nav-link" href="/admin/legacy?tab=metrics">Observability</a>
+          </div>
+        </section>
+      </aside>
+
+      <main class="surface-grid">
+        <section class="surface-section" id="overview">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Platform Snapshot</span>
+              <h2 class="section-title">Health, capacity, and incident load</h2>
+              <p>Fast-scanning summary of platform health, tenant scale, runtime readiness, delivery posture, and open incident pressure.</p>
+            </div>
+          </div>
+          <div id="ownerOverviewStats" class="stats-grid"></div>
+        </section>
+
+        <section class="surface-section" id="fleet">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Tenant Fleet</span>
+              <h2 class="section-title">Tenant roster and operating posture</h2>
+              <p>Global view of tenant state, account ownership, recent changes, and routing into deeper platform workflows.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/legacy?tab=platform">Provision or edit tenants</a>
+            </div>
+          </div>
+          <div id="ownerTenantTable"></div>
+        </section>
+
+        <section class="surface-section" id="fleet-assets">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Fleet Assets</span>
+              <h2 class="section-title">Subscriptions, licenses, keys, and webhook footprint</h2>
+              <p>Owner-only platform asset visibility for commercial state, integration surface, and tenant fleet provisioning posture.</p>
+            </div>
+          </div>
+          <div class="panel-grid two-col">
+            <section class="panel-card">
+              <h3>Subscriptions</h3>
+              <div id="ownerSubscriptionTable"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Licenses</h3>
+              <div id="ownerLicenseTable"></div>
+            </section>
+            <section class="panel-card">
+              <h3>API Keys</h3>
+              <div id="ownerApiKeyTable"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Webhooks</h3>
+              <div id="ownerWebhookTable"></div>
+            </section>
+          </div>
+          <div class="panel-grid two-col">
+            <form id="ownerSubscriptionForm" class="panel-card">
+              <h3>Create Subscription</h3>
+              <div class="form-grid">
+                <label class="field span-6">
+                  <span>Tenant</span>
+                  <select class="owner-tenant-select" name="tenantId">
+                    <option value="">Choose tenant</option>
+                  </select>
+                </label>
+                <label class="field span-6">
+                  <span>Plan ID</span>
+                  <input name="planId" type="text" placeholder="starter-monthly">
+                </label>
+                <label class="field span-4">
+                  <span>Billing Cycle</span>
+                  <select name="billingCycle">
+                    <option value="monthly">monthly</option>
+                    <option value="quarterly">quarterly</option>
+                    <option value="yearly">yearly</option>
+                    <option value="trial">trial</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Status</span>
+                  <select name="status">
+                    <option value="active">active</option>
+                    <option value="trialing">trialing</option>
+                    <option value="paused">paused</option>
+                    <option value="past_due">past_due</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Currency</span>
+                  <input name="currency" type="text" placeholder="THB">
+                </label>
+                <label class="field span-4">
+                  <span>Amount Cents</span>
+                  <input name="amountCents" type="number" min="0" step="1" placeholder="9900">
+                </label>
+                <label class="field span-4">
+                  <span>Interval Days</span>
+                  <input name="intervalDays" type="number" min="1" step="1" placeholder="30">
+                </label>
+                <label class="field span-4">
+                  <span>External Ref</span>
+                  <input name="externalRef" type="text" placeholder="stripe-sub-001">
+                </label>
+                <label class="field span-6">
+                  <span>Started At</span>
+                  <input name="startedAt" type="datetime-local">
+                </label>
+                <label class="field span-6">
+                  <span>Renews At</span>
+                  <input name="renewsAt" type="datetime-local">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Create Subscription</button>
+              </div>
+            </form>
+
+            <form id="ownerLicenseForm" class="panel-card">
+              <h3>Issue License</h3>
+              <div class="form-grid">
+                <label class="field span-6">
+                  <span>Tenant</span>
+                  <select class="owner-tenant-select" name="tenantId">
+                    <option value="">Choose tenant</option>
+                  </select>
+                </label>
+                <label class="field span-6">
+                  <span>Status</span>
+                  <select name="status">
+                    <option value="active">active</option>
+                    <option value="trialing">trialing</option>
+                    <option value="expired">expired</option>
+                    <option value="revoked">revoked</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Seats</span>
+                  <input name="seats" type="number" min="1" step="1" value="1">
+                </label>
+                <label class="field span-4">
+                  <span>License Key</span>
+                  <input name="licenseKey" type="text" placeholder="Leave blank to auto-generate">
+                </label>
+                <label class="field span-4">
+                  <span>Legal Doc Version</span>
+                  <input name="legalDocVersion" type="text" placeholder="v1">
+                </label>
+                <label class="field span-6">
+                  <span>Issued At</span>
+                  <input name="issuedAt" type="datetime-local">
+                </label>
+                <label class="field span-6">
+                  <span>Expires At</span>
+                  <input name="expiresAt" type="datetime-local">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Issue License</button>
+              </div>
+            </form>
+
+            <form id="ownerApiKeyForm" class="panel-card">
+              <h3>Create API Key</h3>
+              <div class="form-grid">
+                <label class="field span-6">
+                  <span>Tenant</span>
+                  <select class="owner-tenant-select" name="tenantId">
+                    <option value="">Choose tenant</option>
+                  </select>
+                </label>
+                <label class="field span-6">
+                  <span>Name</span>
+                  <input name="name" type="text" placeholder="portal-integrator">
+                </label>
+                <label class="field span-4">
+                  <span>Status</span>
+                  <select name="status">
+                    <option value="active">active</option>
+                    <option value="disabled">disabled</option>
+                    <option value="revoked">revoked</option>
+                  </select>
+                </label>
+                <label class="field span-8">
+                  <span>Scopes</span>
+                  <input name="scopes" type="text" placeholder="platform.read, portal.player, webhook.dispatch">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Create API Key</button>
+              </div>
+            </form>
+
+            <div class="panel-grid">
+              <form id="ownerWebhookForm" class="panel-card">
+                <h3>Create Webhook</h3>
+                <div class="form-grid">
+                  <label class="field span-12">
+                    <span>Tenant</span>
+                    <select class="owner-tenant-select" name="tenantId">
+                      <option value="">Choose tenant</option>
+                    </select>
+                  </label>
+                  <label class="field span-6">
+                    <span>Name</span>
+                    <input name="name" type="text" placeholder="ops-webhook">
+                  </label>
+                  <label class="field span-6">
+                    <span>Event Type</span>
+                    <input name="eventType" type="text" placeholder="platform.delivery.updated">
+                  </label>
+                  <label class="field span-12">
+                    <span>Target URL</span>
+                    <input name="targetUrl" type="text" placeholder="https://hooks.example.com/scum">
+                  </label>
+                  <label class="field span-8">
+                    <span>Secret</span>
+                    <input name="secretValue" type="text" placeholder="Leave blank to auto-generate">
+                  </label>
+                  <label class="field span-4">
+                    <span>Enabled</span>
+                    <select name="enabled">
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="submit" class="button button-primary">Create Webhook</button>
+                </div>
+              </form>
+
+              <form id="ownerWebhookTestForm" class="panel-card">
+                <h3>Test Webhook Dispatch</h3>
+                <div class="form-grid">
+                  <label class="field span-6">
+                    <span>Tenant</span>
+                    <select class="owner-tenant-select" name="tenantId">
+                      <option value="">Choose tenant</option>
+                    </select>
+                  </label>
+                  <label class="field span-6">
+                    <span>Event Type</span>
+                    <input name="eventType" type="text" placeholder="platform.admin.test">
+                  </label>
+                  <label class="field span-12">
+                    <span>Payload JSON</span>
+                    <textarea name="payload" placeholder='{"source":"owner-console"}'></textarea>
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="submit" class="button button-warning">Dispatch Test Event</button>
+                </div>
+              </form>
+
+              <section class="panel-card">
+                <h3>Asset Result</h3>
+                <div id="ownerAssetResult" class="panel-grid"></div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="surface-section" id="runtime">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Runtime Control</span>
+              <h2 class="section-title">Managed services, agents, and current incidents</h2>
+              <p>Operational view for bot, worker, watcher, admin web, optional agents, and live issue aggregation.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/legacy?tab=control">Service control</a>
+              <a class="action-link" href="/admin/legacy?tab=metrics">Metrics timeline</a>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <div class="panel-grid">
+              <section class="panel-card">
+                <h3>Managed Runtime Services</h3>
+                <div id="ownerRuntimeTable"></div>
+              </section>
+              <section class="panel-card">
+                <h3>Agent Runtime Inventory</h3>
+                <div id="ownerAgentsTable"></div>
+              </section>
+            </div>
+            <div class="panel-grid">
+              <section class="panel-card">
+                <h3>Open Alerts</h3>
+                <div id="ownerNotificationFeed" class="list-feed"></div>
+              </section>
+              <section class="panel-card is-danger">
+                <h3>Request Anomalies</h3>
+                <div id="ownerRequestFeed" class="list-feed"></div>
+              </section>
+            </div>
+          </div>
+        </section>
+
+        <section class="surface-section" id="observability">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Observability</span>
+              <h2 class="section-title">Metrics, reconcile pressure, and monitoring state</h2>
+              <p>Owner-level system visibility for delivery health, webhook reliability, login spikes, request anomalies, and background monitoring cadence.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/api/observability/export?format=json" target="_blank" rel="noreferrer">Export observability JSON</a>
+              <a class="action-link" href="/admin/legacy?tab=metrics">Open full metrics workbench</a>
+            </div>
+          </div>
+          <div id="ownerObservabilityStats" class="stats-grid"></div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Time-Series Watch</h3>
+              <div id="ownerSeriesCards" class="series-grid"></div>
+            </section>
+            <section class="panel-card is-warning">
+              <h3>Reconcile + Incident Signals</h3>
+              <div id="ownerReconcileFeed" class="list-feed"></div>
+            </section>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Monitoring State</h3>
+              <div id="ownerOpsStateStats" class="stats-grid"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Recent Request Flow</h3>
+              <div id="ownerObservabilityRequestTable"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="surface-section" id="security">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Security + Audit</span>
+              <h2 class="section-title">Access posture and security signal review</h2>
+              <p>Recent security events, role boundaries, permission model summaries, and links to guarded owner workflows.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/legacy?tab=auth">Full security workbench</a>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Recent Security Events</h3>
+              <div id="ownerSecurityFeed" class="list-feed"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Policy Summary</h3>
+              <div id="ownerPolicyCards" class="panel-grid"></div>
+            </section>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Recent Device Footprints</h3>
+              <p class="hint">Built from recent authenticated request metadata so the owner can see who is operating from where, even when sessions only store IP and user-agent binding.</p>
+              <div id="ownerDeviceTable"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Permission Matrix</h3>
+              <div id="ownerPermissionTable"></div>
+            </section>
+          </div>
+          <div class="surface-two-col">
+            <form id="ownerSecurityPolicyForm" class="panel-card">
+              <h3>Session + Login Policy</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Session TTL Hours</span>
+                  <input name="ADMIN_WEB_SESSION_TTL_HOURS" type="number" min="1" step="1" placeholder="24">
+                </label>
+                <label class="field span-4">
+                  <span>Idle Timeout Minutes</span>
+                  <input name="ADMIN_WEB_SESSION_IDLE_MINUTES" type="number" min="1" step="1" placeholder="120">
+                </label>
+                <label class="field span-4">
+                  <span>Sessions Per User</span>
+                  <input name="ADMIN_WEB_SESSION_MAX_PER_USER" type="number" min="1" step="1" placeholder="5">
+                </label>
+                <label class="field span-4">
+                  <span>Login Window ms</span>
+                  <input name="ADMIN_WEB_LOGIN_WINDOW_MS" type="number" min="1000" step="1000" placeholder="300000">
+                </label>
+                <label class="field span-4">
+                  <span>Max Attempts</span>
+                  <input name="ADMIN_WEB_LOGIN_MAX_ATTEMPTS" type="number" min="1" step="1" placeholder="8">
+                </label>
+                <label class="field span-4">
+                  <span>Spike Window ms</span>
+                  <input name="ADMIN_WEB_LOGIN_SPIKE_WINDOW_MS" type="number" min="1000" step="1000" placeholder="600000">
+                </label>
+                <label class="field span-4">
+                  <span>Spike Threshold</span>
+                  <input name="ADMIN_WEB_LOGIN_SPIKE_THRESHOLD" type="number" min="1" step="1" placeholder="10">
+                </label>
+                <label class="field span-4">
+                  <span>Per-IP Threshold</span>
+                  <input name="ADMIN_WEB_LOGIN_SPIKE_IP_THRESHOLD" type="number" min="1" step="1" placeholder="4">
+                </label>
+                <label class="field span-4">
+                  <span>Alert Cooldown ms</span>
+                  <input name="ADMIN_WEB_LOGIN_SPIKE_ALERT_COOLDOWN_MS" type="number" min="1000" step="1000" placeholder="600000">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Save Session + Login Policy</button>
+              </div>
+            </form>
+
+            <form id="ownerMonitoringPolicyForm" class="panel-card">
+              <h3>Monitoring + Alert Policy</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Delivery Queue Alert</span>
+                  <input name="DELIVERY_QUEUE_ALERT_THRESHOLD" type="number" min="1" step="1" placeholder="15">
+                </label>
+                <label class="field span-4">
+                  <span>Delivery Fail Rate</span>
+                  <input name="DELIVERY_FAIL_RATE_ALERT_THRESHOLD" type="number" min="0" step="0.01" placeholder="0.15">
+                </label>
+                <label class="field span-4">
+                  <span>SCUM Queue Alert</span>
+                  <input name="SCUM_QUEUE_ALERT_THRESHOLD" type="number" min="1" step="1" placeholder="20">
+                </label>
+                <label class="field span-4">
+                  <span>SCUM Alert Cooldown ms</span>
+                  <input name="SCUM_ALERT_COOLDOWN_MS" type="number" min="1000" step="1000" placeholder="300000">
+                </label>
+                <label class="field span-4">
+                  <span>Webhook Error Threshold</span>
+                  <input name="SCUM_WEBHOOK_ERROR_ALERT_THRESHOLD" type="number" min="0" step="0.01" placeholder="0.3">
+                </label>
+                <label class="field span-4">
+                  <span>Webhook Min Attempts</span>
+                  <input name="SCUM_WEBHOOK_ERROR_ALERT_MIN_ATTEMPTS" type="number" min="1" step="1" placeholder="10">
+                </label>
+                <label class="field span-12">
+                  <span>Webhook Alert Window ms</span>
+                  <input name="SCUM_WEBHOOK_ERROR_ALERT_WINDOW_MS" type="number" min="1000" step="1000" placeholder="300000">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Save Monitoring Policy</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="surface-section" id="access">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Access Center</span>
+              <h2 class="section-title">Admin sessions and operator accounts</h2>
+              <p>Owner review area for who is signed in, what role they hold, which tenant scope they carry, and which admin accounts are active.</p>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Active Sessions</h3>
+              <div id="ownerSessionsTable"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Admin Users</h3>
+              <div id="ownerUsersTable"></div>
+            </section>
+          </div>
+          <div class="surface-two-col">
+            <form id="ownerSessionRevokeForm" class="panel-card">
+              <h3>Session Control</h3>
+              <div class="form-grid">
+                <label class="field span-6">
+                  <span>Session ID</span>
+                  <input name="sessionId" type="text" placeholder="Paste a specific admin session id">
+                </label>
+                <label class="field span-6">
+                  <span>Target User</span>
+                  <input name="targetUser" type="text" placeholder="Revoke all sessions for a username">
+                </label>
+                <label class="field span-8">
+                  <span>Reason</span>
+                  <input name="reason" type="text" placeholder="suspicious-activity">
+                </label>
+                <label class="field span-4">
+                  <span>Current Session</span>
+                  <select name="current">
+                    <option value="false">no</option>
+                    <option value="true">yes, if no target provided</option>
+                  </select>
+                </label>
+              </div>
+              <p class="hint">Use Session ID for one session, Target User for all sessions belonging to a user, or enable current session revoke when testing logout/recovery behavior.</p>
+              <div class="button-row">
+                <button type="submit" class="button button-warning">Revoke Session(s)</button>
+              </div>
+            </form>
+
+            <form id="ownerAdminUserForm" class="panel-card">
+              <h3>Admin User Provisioning</h3>
+              <div class="form-grid">
+                <label class="field span-6">
+                  <span>Username</span>
+                  <input name="username" type="text" placeholder="ops-admin">
+                </label>
+                <label class="field span-6">
+                  <span>Role</span>
+                  <select name="role">
+                    <option value="mod">moderator</option>
+                    <option value="admin">admin</option>
+                    <option value="owner">owner</option>
+                  </select>
+                </label>
+                <label class="field span-6">
+                  <span>Tenant Scope</span>
+                  <input name="tenantId" type="text" placeholder="Leave blank for global owner/admin">
+                </label>
+                <label class="field span-6">
+                  <span>Active</span>
+                  <select name="isActive">
+                    <option value="true">true</option>
+                    <option value="false">false</option>
+                  </select>
+                </label>
+                <label class="field span-12">
+                  <span>Password</span>
+                  <input name="password" type="password" placeholder="Leave blank to keep current password">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Save Admin User</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="surface-section" id="audit">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Audit Trail</span>
+              <h2 class="section-title">Who changed what, when, and why</h2>
+              <p>Owner-level audit review across wallet, reward, and event views with export paths that stay compatible with the existing audit dataset service.</p>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <form id="ownerAuditQueryForm" class="panel-card">
+              <h3>Audit Query</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>View</span>
+                  <select name="view">
+                    <option value="wallet">wallet</option>
+                    <option value="reward">reward</option>
+                    <option value="event">event</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>User ID</span>
+                  <input name="userId" type="text" placeholder="Optional Discord user id">
+                </label>
+                <label class="field span-4">
+                  <span>Window</span>
+                  <select name="windowMs">
+                    <option value="86400000">24h</option>
+                    <option value="604800000" selected>7d</option>
+                    <option value="2592000000">30d</option>
+                    <option value="">all</option>
+                  </select>
+                </label>
+                <label class="field span-12">
+                  <span>Query</span>
+                  <input name="query" type="text" placeholder="actor, reason, reference, or free-text query">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Load Audit View</button>
+                <button id="ownerAuditExportJsonBtn" type="button" class="button">Export JSON</button>
+                <button id="ownerAuditExportCsvBtn" type="button" class="button">Export CSV</button>
+              </div>
+            </form>
+            <section class="panel-card">
+              <h3>Audit Summary</h3>
+              <div id="ownerAuditStats" class="stats-grid"></div>
+            </section>
+          </div>
+          <section class="panel-card">
+            <h3>Audit Results</h3>
+            <div id="ownerAuditTable"></div>
+          </section>
+        </section>
+
+        <section class="surface-section" id="events">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Live Event Stream</span>
+              <h2 class="section-title">Realtime owner event feed</h2>
+              <p>Connected SSE stream for platform events, delivery anomalies, SCUM status updates, and operator actions.</p>
+            </div>
+          </div>
+          <div id="ownerLiveFeed" class="timeline-list"></div>
+        </section>
+
+        <section class="surface-section" id="recovery">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Recovery</span>
+              <h2 class="section-title">Backup posture, dry-run restore preview, and recovery readiness</h2>
+              <p>Owner-only recovery tools stay explicit. This surface supports backup creation and restore preview without collapsing into an unsafe one-click restore flow.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/legacy?tab=danger">Open full recovery workbench</a>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Restore Status</h3>
+              <div id="ownerRestoreStateStats" class="stats-grid"></div>
+            </section>
+            <form id="ownerBackupCreateForm" class="panel-card">
+              <h3>Create Backup</h3>
+              <div class="form-grid">
+                <label class="field span-12">
+                  <span>Operator Note</span>
+                  <textarea name="note" placeholder="Optional note for why this backup was created"></textarea>
+                </label>
+                <label class="field span-12">
+                  <span>Include Snapshot Data</span>
+                  <select name="includeSnapshot">
+                    <option value="true">Include full snapshot</option>
+                    <option value="false">Backup metadata only</option>
+                  </select>
+                </label>
+              </div>
+              <p class="hint">Use a note when the backup is tied to maintenance, incident response, or a risky config rollout.</p>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Create Backup</button>
+              </div>
+            </form>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Available Backups</h3>
+              <div id="ownerBackupTable"></div>
+            </section>
+            <form id="ownerBackupPreviewForm" class="panel-card">
+              <h3>Preview Restore</h3>
+              <div class="form-grid">
+                <label class="field span-12">
+                  <span>Backup</span>
+                  <select id="ownerBackupSelect" name="backup">
+                    <option value="">Choose a backup</option>
+                  </select>
+                </label>
+              </div>
+              <p class="hint">Preview computes the restore diff, warnings, and verification plan without mutating live state.</p>
+              <div class="button-row">
+                <button type="submit" class="button button-warning">Run Dry-Run Preview</button>
+              </div>
+              <div id="ownerBackupPreviewResult" class="panel-grid"></div>
+            </form>
+          </div>
+        </section>
+
+        <section class="surface-section" id="control">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Control Center</span>
+              <h2 class="section-title">Managed runtime control and tenant provisioning</h2>
+              <p>Fast owner actions for service restarts, control-plane summary, and new tenant creation while keeping deeper env editing in the guarded legacy workbench.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/legacy?tab=control">Open full config editor</a>
+              <a class="action-link" href="/admin/legacy?tab=platform">Open platform provisioning</a>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Control Summary</h3>
+              <div id="ownerControlSummaryStats" class="stats-grid"></div>
+              <div id="ownerManagedServiceTable"></div>
+              <form id="ownerRestartForm" class="panel-card">
+                <h3>Restart Managed Service</h3>
+                <div class="form-grid">
+                  <label class="field span-12">
+                    <span>Service Target</span>
+                    <select id="ownerRestartTarget" name="service">
+                      <option value="">Select a runtime service</option>
+                    </select>
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="submit" class="button button-warning">Restart Selected Service</button>
+                </div>
+              </form>
+            </section>
+
+            <div class="panel-grid">
+              <form id="ownerRuntimeFlagsForm" class="panel-card">
+                <h3>Runtime Flags</h3>
+                <div class="form-grid">
+                  <label class="field span-6">
+                    <span>Discord Guild ID</span>
+                    <input name="DISCORD_GUILD_ID" type="text" placeholder="123456789012345678">
+                  </label>
+                  <label class="field span-6">
+                    <span>Delivery Execution Mode</span>
+                    <select name="DELIVERY_EXECUTION_MODE">
+                      <option value="rcon">rcon</option>
+                      <option value="agent">agent</option>
+                    </select>
+                  </label>
+                  <label class="field span-4">
+                    <span>Admin Web</span>
+                    <select name="BOT_ENABLE_ADMIN_WEB">
+                      <option value="true">enabled</option>
+                      <option value="false">disabled</option>
+                    </select>
+                  </label>
+                  <label class="field span-4">
+                    <span>Embedded Delivery Worker</span>
+                    <select name="BOT_ENABLE_DELIVERY_WORKER">
+                      <option value="true">enabled</option>
+                      <option value="false">disabled</option>
+                    </select>
+                  </label>
+                  <label class="field span-4">
+                    <span>Worker Delivery Runtime</span>
+                    <select name="WORKER_ENABLE_DELIVERY">
+                      <option value="true">enabled</option>
+                      <option value="false">disabled</option>
+                    </select>
+                  </label>
+                  <label class="field span-6">
+                    <span>SCUM Webhook Mount</span>
+                    <select name="BOT_ENABLE_SCUM_WEBHOOK">
+                      <option value="true">enabled</option>
+                      <option value="false">disabled</option>
+                    </select>
+                  </label>
+                  <label class="field span-6">
+                    <span>Watcher Runtime</span>
+                    <select name="SCUM_WATCHER_ENABLED">
+                      <option value="true">enabled</option>
+                      <option value="false">disabled</option>
+                    </select>
+                  </label>
+                </div>
+                <p class="hint">These keys are common production toggles. If the apply summary requires restart, the currently selected restart target is used.</p>
+                <div class="button-row">
+                  <button type="submit" class="button button-primary">Save Runtime Flags</button>
+                </div>
+              </form>
+
+              <form id="ownerPortalAccessForm" class="panel-card">
+                <h3>Portal + Access Policy</h3>
+                <div class="form-grid">
+                  <label class="field span-12">
+                    <span>Portal Base URL</span>
+                    <input name="WEB_PORTAL_BASE_URL" type="text" placeholder="https://portal.example.com">
+                  </label>
+                  <label class="field span-6">
+                    <span>Player Open Access</span>
+                    <select name="WEB_PORTAL_PLAYER_OPEN_ACCESS">
+                      <option value="false">false</option>
+                      <option value="true">true</option>
+                    </select>
+                  </label>
+                  <label class="field span-6">
+                    <span>Require Guild Member</span>
+                    <select name="WEB_PORTAL_REQUIRE_GUILD_MEMBER">
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  </label>
+                  <label class="field span-4">
+                    <span>Admin 2FA</span>
+                    <select name="ADMIN_WEB_2FA_ENABLED">
+                      <option value="true">enabled</option>
+                      <option value="false">disabled</option>
+                    </select>
+                  </label>
+                  <label class="field span-4">
+                    <span>Step-up Auth</span>
+                    <select name="ADMIN_WEB_STEP_UP_ENABLED">
+                      <option value="true">enabled</option>
+                      <option value="false">disabled</option>
+                    </select>
+                  </label>
+                  <label class="field span-4">
+                    <span>Secure Portal Cookie</span>
+                    <select name="WEB_PORTAL_SECURE_COOKIE">
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  </label>
+                  <label class="field span-12">
+                    <span>Allowed Admin Origins</span>
+                    <input name="ADMIN_WEB_ALLOWED_ORIGINS" type="text" placeholder="https://admin.example.com,https://ops.example.com">
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="submit" class="button button-primary">Save Portal + Access</button>
+                </div>
+              </form>
+
+              <form id="ownerRconAgentForm" class="panel-card">
+                <h3>RCON + Agent Routing</h3>
+                <div class="form-grid">
+                  <label class="field span-4">
+                    <span>RCON Host</span>
+                    <input name="RCON_HOST" type="text" placeholder="127.0.0.1">
+                  </label>
+                  <label class="field span-4">
+                    <span>RCON Port</span>
+                    <input name="RCON_PORT" type="number" min="1" step="1" placeholder="27015">
+                  </label>
+                  <label class="field span-4">
+                    <span>RCON Protocol</span>
+                    <input name="RCON_PROTOCOL" type="text" placeholder="telnet">
+                  </label>
+                  <label class="field span-6">
+                    <span>Console Agent Base URL</span>
+                    <input name="SCUM_CONSOLE_AGENT_BASE_URL" type="text" placeholder="http://127.0.0.1:3006">
+                  </label>
+                  <label class="field span-6">
+                    <span>Console Agent Required</span>
+                    <select name="SCUM_CONSOLE_AGENT_REQUIRED">
+                      <option value="true">true</option>
+                      <option value="false">false</option>
+                    </select>
+                  </label>
+                  <label class="field span-6">
+                    <span>RCON Password</span>
+                    <input name="RCON_PASSWORD" type="password" placeholder="Leave blank to keep current secret">
+                  </label>
+                  <label class="field span-6">
+                    <span>Console Agent Token</span>
+                    <input name="SCUM_CONSOLE_AGENT_TOKEN" type="password" placeholder="Leave blank to keep current secret">
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="submit" class="button button-primary">Save RCON + Agent</button>
+                </div>
+              </form>
+
+              <form id="ownerTenantCreateForm" class="panel-card">
+                <h3>Create Tenant</h3>
+                <div class="form-grid">
+                  <label class="field span-6">
+                    <span>Tenant ID</span>
+                    <input name="id" type="text" placeholder="tenant-prod-001">
+                  </label>
+                  <label class="field span-6">
+                    <span>Slug</span>
+                    <input name="slug" type="text" placeholder="scum-th-renter">
+                  </label>
+                  <label class="field span-6">
+                    <span>Display Name</span>
+                    <input name="name" type="text" placeholder="SCUM TH Renter">
+                  </label>
+                  <label class="field span-6">
+                    <span>Type</span>
+                    <select name="type">
+                      <option value="direct">direct</option>
+                      <option value="reseller">reseller</option>
+                      <option value="trial">trial</option>
+                    </select>
+                  </label>
+                  <label class="field span-6">
+                    <span>Status</span>
+                    <select name="status">
+                      <option value="active">active</option>
+                      <option value="trialing">trialing</option>
+                      <option value="suspended">suspended</option>
+                    </select>
+                  </label>
+                  <label class="field span-6">
+                    <span>Locale</span>
+                    <input name="locale" type="text" placeholder="th-TH">
+                  </label>
+                  <label class="field span-6">
+                    <span>Owner Name</span>
+                    <input name="ownerName" type="text" placeholder="Tenant Owner">
+                  </label>
+                  <label class="field span-6">
+                    <span>Owner Email</span>
+                    <input name="ownerEmail" type="email" placeholder="owner@example.com">
+                  </label>
+                  <label class="field span-6">
+                    <span>Parent Tenant ID</span>
+                    <input name="parentTenantId" type="text" placeholder="Optional reseller parent">
+                  </label>
+                  <label class="field span-6">
+                    <span>Metadata JSON</span>
+                    <input name="metadata" type="text" placeholder='{"region":"ap-southeast"}'>
+                  </label>
+                </div>
+                <p class="hint">Create the tenant record here, then move into the platform center for deeper subscription, license, and webhook setup.</p>
+                <div class="button-row">
+                  <button type="submit" class="button button-primary">Create Tenant</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section class="surface-section" id="governance">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Governance</span>
+              <h2 class="section-title">Global config, recovery, and owner-only workflows</h2>
+              <p>High-friction paths stay explicit here so global actions are intentional, auditable, and separate from tenant operations.</p>
+            </div>
+          </div>
+          <div id="ownerGovernanceCards" class="panel-grid two-col"></div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="surface-footer">
+      <span>Owner console keeps platform-wide controls separate from tenant day-to-day operations.</span>
+      <span class="code">/owner</span>
+    </footer>
+  </div>
+
+  <div id="ownerPalette" class="palette-backdrop" hidden>
+    <div class="palette-card" role="dialog" aria-modal="true" aria-labelledby="ownerPaletteTitle">
+      <div class="palette-head">
+        <h2 id="ownerPaletteTitle">Owner Command Palette</h2>
+        <button id="ownerPaletteCloseBtn" class="button" type="button">Close</button>
+      </div>
+      <input id="ownerPaletteSearch" class="palette-search" type="text" placeholder="Jump to section, action, or workbench shortcut">
+      <div id="ownerPaletteEmpty" class="empty-state" hidden>No matching owner actions.</div>
+      <div id="ownerPaletteList" class="palette-list"></div>
+    </div>
+  </div>
+
+  <script src="/admin/assets/console-shared.js"></script>
+  <script src="/admin/assets/owner-console.js"></script>
+</body>
+</html>

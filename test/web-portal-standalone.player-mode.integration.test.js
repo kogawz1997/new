@@ -99,8 +99,8 @@ test('web-portal-standalone player-only mode: routes and api behavior', async ()
     const showcase = await request('/showcase', baseUrl);
     assert.equal(showcase.status, 200);
     const showcaseHtml = await showcase.text();
-    assert.match(showcaseHtml, /SCUM Ops Platform Showcase/i);
-    assert.match(showcaseHtml, /Validated Delivery Flow/i);
+    assert.match(showcaseHtml, /SCUM Platform Showcase/i);
+    assert.match(showcaseHtml, /Role-based platform surfaces/i);
 
     const showcaseSlash = await request('/showcase/', baseUrl);
     assert.equal(showcaseSlash.status, 302);

@@ -1,4 +1,3 @@
-﻿const { EmbedBuilder } = require('discord.js');
 const { channels, killFeed: killFeedConfig = {} } = require('../config');
 const { updateStatus } = require('../store/scumStore');
 const { listBounties, claimBounty } = require('../store/bountyStore');
@@ -12,6 +11,14 @@ const { recordWeaponKill } = require('../store/weaponStatsStore');
 const { publishAdminLiveUpdate } = require('./adminLiveBus');
 const { queueLeaderboardRefreshForGuild } = require('./leaderboardPanels');
 const { looksLikeMojibake } = require('../utils/mojibake');
+const {
+  buildProgressBar,
+  createDiscordCard,
+  createMetricFields,
+  createSection,
+  formatCoins,
+  formatDurationMinutes,
+} = require('../utils/discordEmbedTheme');
 
 const killStreak = new Map();
 
@@ -177,14 +184,31 @@ async function sendStatusOnline(guild, payload, options = {}) {
   updateStatus(payload, scopeOptions);
 
   const { onlinePlayers, maxPlayers, pingMs, uptimeMinutes } = payload;
-  const lines = [];
-  lines.push(`ผู้เล่นออนไลน์: **${onlinePlayers}/${maxPlayers}**`);
-  if (pingMs != null) lines.push(`Ping: **${pingMs} ms**`);
-  if (uptimeMinutes != null) {
-    lines.push(`Uptime: **${Math.floor(uptimeMinutes)} นาที**`);
-  }
   if (channel) {
-    await channel.send(lines.join('\n'));
+    await channel.send({
+      embeds: [
+        createDiscordCard({
+          context: { guild },
+          tone: Number(onlinePlayers || 0) > 0 ? 'success' : 'info',
+          authorName: 'Live Server Status',
+          title: 'สถานะเซิร์ฟเวอร์ล่าสุด',
+          description: createSection('Online Capacity', [
+            `${buildProgressBar(onlinePlayers, maxPlayers, 10)} **${onlinePlayers}/${maxPlayers}**`,
+          ]),
+          fields: createMetricFields([
+            { name: 'Ping', value: pingMs != null ? `${pingMs} ms` : 'ไม่ทราบ' },
+            {
+              name: 'Uptime',
+              value:
+                uptimeMinutes != null
+                  ? formatDurationMinutes(Math.floor(uptimeMinutes))
+                  : 'ไม่ทราบ',
+            },
+          ]),
+          footerText: 'อัปเดตจาก SCUM runtime',
+        }),
+      ],
+    });
   }
   publishAdminLiveUpdate('scum-status', {
     guildId: guild.id,
@@ -202,12 +226,19 @@ async function sendPlayerJoinLeave(guild, event, options = {}) {
   if (steamId && playerName) {
     updateInGameNameBySteamId(steamId, playerName, scopeOptions);
   }
-  const text =
-    type === 'join'
-      ? `✅ **${playerName}** เข้าเซิร์ฟเวอร์`
-      : `🚪 **${playerName}** ออกจากเซิร์ฟเวอร์`;
   if (channel) {
-    await channel.send(text);
+    await channel.send({
+      embeds: [
+        createDiscordCard({
+          context: { guild },
+          tone: type === 'join' ? 'success' : 'neutral',
+          authorName: 'Player Activity',
+          title: type === 'join' ? 'ผู้เล่นเข้าเซิร์ฟเวอร์' : 'ผู้เล่นออกจากเซิร์ฟเวอร์',
+          description: createSection('Player', [`**${playerName}**`]),
+          footerText: type === 'join' ? 'Realtime join event' : 'Realtime leave event',
+        }),
+      ],
+    });
   }
   publishAdminLiveUpdate('scum-player', {
     guildId: guild.id,
@@ -258,19 +289,21 @@ async function sendKillFeed(guild, event, options = {}) {
     notes.push(`🧊 หยุดสตรีคของ ${victimName} ที่ **${victimBeforeStreak}**`);
   }
 
-  const embed = new EmbedBuilder()
-    .setColor(0xd97706)
-    .setTitle(`🏅 ${killerName}`)
-    .setDescription(notes.join('\n'))
-    .addFields(
-      { name: 'Weapon', value: `*${normalizedWeapon}*`, inline: true },
-      { name: 'Distance', value: formatDistance(event.distance), inline: true },
-      { name: 'Sector', value: resolvedSector || '-', inline: true },
-      { name: 'Hit Zone', value: hitZoneLabel(resolvedHitZone), inline: true },
-      { name: 'Kill Streak', value: String(killerNowStreak), inline: true },
-    )
-    .setFooter({ text: 'SCUM Kill Feed (Realtime)' })
-    .setTimestamp();
+  const embed = createDiscordCard({
+    context: { guild },
+    tone: 'combat',
+    authorName: 'SCUM Kill Feed',
+    title: `${killerName} eliminated ${victimName}`,
+    description: createSection('Combat Snapshot', notes),
+    fields: createMetricFields([
+      { name: 'Weapon', value: normalizedWeapon },
+      { name: 'Distance', value: formatDistance(event.distance) },
+      { name: 'Sector', value: resolvedSector || '-' },
+      { name: 'Hit Zone', value: hitZoneLabel(resolvedHitZone) },
+      { name: 'Kill Streak', value: String(killerNowStreak) },
+    ]),
+    footerText: 'Realtime combat event',
+  });
 
   if (weaponImageUrl) {
     embed.setThumbnail(weaponImageUrl);
@@ -336,25 +369,63 @@ async function sendKillFeed(guild, event, options = {}) {
   if (!bountyChannel) return;
 
   if (killerDiscordId) {
-    await bountyChannel.send(
-      `🎯 ค่าหัวสำเร็จ! <@${killerDiscordId}> ฆ่าเป้าหมาย **${victimName}**\n`
-      + `ค่าหัว: **${amount.toLocaleString()} เหรียญ** (โอนเหรียญอัตโนมัติแล้ว ✅)`,
-    );
+    await bountyChannel.send({
+      embeds: [
+        createDiscordCard({
+          context: { guild },
+          tone: 'economy',
+          authorName: 'Bounty Claimed',
+          title: 'ภารกิจค่าหัวสำเร็จ',
+          description: createSection('นักล่า', [`<@${killerDiscordId}> จัดการเป้าหมาย **${victimName}**`]),
+          fields: createMetricFields([
+            { name: 'Reward', value: formatCoins(amount) },
+            { name: 'สถานะ', value: 'โอนเหรียญอัตโนมัติแล้ว ✅', inline: false },
+          ]),
+          footerText: `Bounty ID: ${matchedBounty.id}`,
+        }),
+      ],
+    });
     return;
   }
 
-  await bountyChannel.send(
-    `🎯 ค่าหัวสำเร็จ! **${killerName}** ฆ่าเป้าหมาย **${victimName}**\n`
-    + `ค่าหัว: **${amount.toLocaleString()} เหรียญ**\n`
-    + 'ยังโอนอัตโนมัติไม่ได้ (ยังไม่ลิงก์ SteamID) ให้ผู้สังหารใช้ `/linksteam set` แล้วทีมงานค่อยโอนเหรียญ',
-  );
+  await bountyChannel.send({
+    embeds: [
+      createDiscordCard({
+        context: { guild },
+        tone: 'warn',
+        authorName: 'Bounty Claimed',
+        title: 'ภารกิจค่าหัวสำเร็จ',
+        description: createSection('นักล่า', [`**${killerName}** จัดการเป้าหมาย **${victimName}**`]),
+        fields: createMetricFields([
+          { name: 'Reward', value: formatCoins(amount) },
+          {
+            name: 'สถานะการจ่าย',
+            value: 'ยังโอนอัตโนมัติไม่ได้ ผู้สังหารต้องลิงก์ SteamID ก่อน',
+            inline: false,
+          },
+        ]),
+        footerText: `Bounty ID: ${matchedBounty.id}`,
+      }),
+    ],
+  });
 }
 
 async function sendRestartAlert(guild, message, options = {}) {
   const scopeOptions = normalizeScopeOptions(options);
   const channel = findNamedChannel(guild, channels.restartAlerts);
   if (channel) {
-    await channel.send(message);
+    await channel.send({
+      embeds: [
+        createDiscordCard({
+          context: { guild },
+          tone: 'warn',
+          authorName: 'Restart Alert',
+          title: 'แจ้งเตือนการรีสตาร์ต',
+          description: String(message || '-'),
+          footerText: 'Runtime restart scheduler',
+        }),
+      ],
+    });
   }
   publishAdminLiveUpdate('scum-restart', {
     guildId: guild.id,

@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCUM Tenant Admin Console</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin/assets/console-surfaces.css">
+</head>
+<body>
+  <div class="surface-root">
+    <header class="surface-header">
+      <div class="surface-topline">
+        <div class="surface-brand">
+          <span class="surface-id">Tenant Admin Console</span>
+          <h1>Scoped Server Operations</h1>
+          <p>Tenant-facing console for server operations, delivery flow, shop and wallet control, scoped config edits, and support activity. Global owner controls are intentionally excluded.</p>
+        </div>
+        <div class="surface-actions">
+          <button id="tenantPaletteBtn" class="command-chip" type="button">Command Palette</button>
+          <button id="tenantRefreshBtn" class="button button-primary" type="button">Refresh Console</button>
+          <button id="tenantAckAlertsBtn" class="button" type="button">Acknowledge Alerts</button>
+          <a class="ghost-link" href="/admin/legacy">Legacy Workbench</a>
+        </div>
+      </div>
+
+      <div id="tenantStatusBanner" class="status-banner banner-info">
+        <div>
+          <strong id="tenantStatusTitle">Loading tenant console...</strong>
+          <p id="tenantStatusDetail">Preparing scoped runtime, commerce, and support state.</p>
+        </div>
+        <div id="tenantStatusTags" class="tag-row"></div>
+      </div>
+
+      <div class="meta-grid">
+        <article class="meta-card">
+          <span class="meta-label">Surface</span>
+          <strong>Tenant-only operations</strong>
+          <p class="muted">This console stays scoped to one tenant. Platform-wide config, security policy, and global recovery remain owner-only.</p>
+        </article>
+        <article class="meta-card">
+          <span class="meta-label">Guardrails</span>
+          <strong>Confirm, validate, then apply</strong>
+          <p class="muted">Config save, wallet adjustment, and delivery recovery actions require explicit confirmation and stay bound to the tenant scope.</p>
+        </article>
+        <article class="meta-card">
+          <span class="meta-label">Realtime</span>
+          <strong>Alerts and delivery stream</strong>
+          <p class="muted">Delivery events, anomalies, and notifications refresh into this tenant console without exposing owner-only data.</p>
+        </article>
+      </div>
+    </header>
+
+    <div class="surface-main">
+      <aside class="surface-sidebar">
+        <nav class="nav-card">
+          <h2>Navigate</h2>
+          <div class="nav-list">
+            <a class="nav-link" href="#overview">Overview</a>
+            <a class="nav-link" href="#operations">Runtime + Alerts</a>
+            <a class="nav-link" href="#insights">Insights</a>
+            <a class="nav-link" href="#commerce">Commerce + Delivery</a>
+            <a class="nav-link" href="#sandbox">Delivery Lab</a>
+            <a class="nav-link" href="#catalog-tools">Catalog Tools</a>
+            <a class="nav-link" href="#players">Players + Activity</a>
+            <a class="nav-link" href="#transactions">Transactions</a>
+            <a class="nav-link" href="#support-tools">Support Tools</a>
+            <a class="nav-link" href="#config">Tenant Config</a>
+            <a class="nav-link" href="#audit">Audit Trail</a>
+            <a class="nav-link" href="#actions">Safe Actions</a>
+          </div>
+        </nav>
+
+        <section class="nav-card">
+          <h2>Scoped Context</h2>
+          <p id="tenantScopeText" class="hint">Checking tenant scope and role binding...</p>
+        </section>
+
+        <section class="nav-card">
+          <h2>Workbench Shortcuts</h2>
+          <div class="nav-list">
+            <a class="nav-link" href="/admin/legacy?tab=economy">Shop + Economy</a>
+            <a class="nav-link" href="/admin/legacy?tab=delivery">Delivery Runtime</a>
+            <a class="nav-link" href="/admin/legacy?tab=players">Player Tools</a>
+            <a class="nav-link" href="/admin/legacy?tab=platform">Scoped Config</a>
+          </div>
+        </section>
+      </aside>
+
+      <main class="surface-grid">
+        <section class="surface-section" id="overview">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Tenant Snapshot</span>
+              <h2 class="section-title">Status, workload, and support visibility</h2>
+              <p>Fast-scanning view for the tenant operator: purchases, queue depth, player coverage, delivery state, and quota posture.</p>
+            </div>
+          </div>
+          <div id="tenantOverviewStats" class="stats-grid"></div>
+        </section>
+
+        <section class="surface-section" id="operations">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Runtime + Alerts</span>
+              <h2 class="section-title">Delivery posture and scoped incident stream</h2>
+              <p>Monitor delivery runtime, tenant alerts, request pressure, and live event flow without exposing platform-wide owner controls.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/legacy?tab=delivery">Open delivery workbench</a>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Tenant Alerts</h3>
+              <div id="tenantNotificationFeed" class="list-feed"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Live Activity Stream</h3>
+              <div id="tenantActivityFeed" class="timeline-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="surface-section" id="insights">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Insights</span>
+              <h2 class="section-title">Tenant anomalies, abuse signals, and quota posture</h2>
+              <p>Scoped insight surface for delivery reconcile findings, abuse heuristics, and quota-driven operational pressure without exposing any cross-tenant state.</p>
+            </div>
+          </div>
+          <div id="tenantInsightStats" class="stats-grid"></div>
+          <div class="surface-two-col">
+            <section class="panel-card is-warning">
+              <h3>Reconcile Findings</h3>
+              <div id="tenantReconcileFeed" class="list-feed"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Runtime Guidance</h3>
+              <div id="tenantInsightCards" class="panel-grid"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="surface-section" id="commerce">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Commerce + Delivery</span>
+              <h2 class="section-title">Catalog, queue, and dead-letter handling</h2>
+              <p>Manage the active catalog and keep purchase delivery visible with queue and dead-letter states grouped together.</p>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <section class="panel-card">
+              <h3>Catalog</h3>
+              <div id="tenantShopTable"></div>
+            </section>
+            <section class="panel-card">
+              <h3>Delivery Queue</h3>
+              <div id="tenantQueueTable"></div>
+            </section>
+          </div>
+          <section class="panel-card">
+            <h3>Dead Letters</h3>
+            <div id="tenantDeadLetterTable"></div>
+          </section>
+        </section>
+
+        <section class="surface-section" id="sandbox">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Delivery Lab</span>
+              <h2 class="section-title">Safe preview, preflight, simulate, and guarded test-send</h2>
+              <p>Use preview, preflight, and simulate when validating delivery behavior safely. Test-send remains available but is explicitly marked as live runtime execution.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/legacy?tab=delivery">Open deep delivery workbench</a>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <form id="tenantDeliveryLabForm" class="panel-card">
+              <h3>Delivery Lab Request</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Action</span>
+                  <select name="action">
+                    <option value="preview">preview</option>
+                    <option value="preflight">preflight</option>
+                    <option value="simulate">simulate</option>
+                    <option value="test-send">test-send (live)</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Item ID</span>
+                  <input name="itemId" type="text" placeholder="item-ak47">
+                </label>
+                <label class="field span-4">
+                  <span>Game Item ID</span>
+                  <input name="gameItemId" type="text" placeholder="Weapon_AK47">
+                </label>
+                <label class="field span-6">
+                  <span>Item Name</span>
+                  <input name="itemName" type="text" placeholder="AK-47 Bundle">
+                </label>
+                <label class="field span-3">
+                  <span>Quantity</span>
+                  <input name="quantity" type="number" min="1" step="1" value="1">
+                </label>
+                <label class="field span-3">
+                  <span>Purchase Code</span>
+                  <input name="purchaseCode" type="text" placeholder="Pxxxxxxxx">
+                </label>
+                <label class="field span-6">
+                  <span>Discord User ID</span>
+                  <input name="userId" type="text" placeholder="123456789012345678">
+                </label>
+                <label class="field span-6">
+                  <span>Steam ID</span>
+                  <input name="steamId" type="text" placeholder="7656119...">
+                </label>
+                <label class="field span-4">
+                  <span>In-game Name</span>
+                  <input name="inGameName" type="text" placeholder="Optional player name">
+                </label>
+                <label class="field span-4">
+                  <span>Teleport Mode</span>
+                  <input name="teleportMode" type="text" placeholder="optional">
+                </label>
+                <label class="field span-4">
+                  <span>Teleport Target</span>
+                  <input name="teleportTarget" type="text" placeholder="x y z or profile target">
+                </label>
+                <label class="field span-12">
+                  <span>Return Target</span>
+                  <input name="returnTarget" type="text" placeholder="Optional return target after delivery">
+                </label>
+              </div>
+              <p class="hint">`preview`, `preflight`, and `simulate` are safe validation modes. `test-send` executes a live delivery command and should only be used when you intentionally want a runtime command test.</p>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Run Delivery Lab</button>
+              </div>
+            </form>
+
+            <section class="panel-card">
+              <h3>Lab Result</h3>
+              <div id="tenantDeliveryLabStats" class="stats-grid"></div>
+              <div id="tenantDeliveryLabFeed" class="list-feed"></div>
+              <pre id="tenantDeliveryLabRaw" class="code-block">Run a lab action to inspect checks, timeline, and raw payload.</pre>
+            </section>
+          </div>
+        </section>
+
+        <section class="surface-section" id="catalog-tools">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Catalog Tools</span>
+              <h2 class="section-title">Quick add, reprice, and retire tenant catalog entries</h2>
+              <p>Common catalog maintenance now lives in the tenant console. Advanced bundle composition, capability presets, and complex delivery overrides still remain in the legacy workbench.</p>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <form id="tenantShopCreateForm" class="panel-card">
+              <h3>Add Catalog Entry</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Kind</span>
+                  <select name="kind">
+                    <option value="item">item</option>
+                    <option value="vip">vip</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Item ID</span>
+                  <input name="id" type="text" placeholder="item-ak47">
+                </label>
+                <label class="field span-4">
+                  <span>Price</span>
+                  <input name="price" type="number" min="0" step="1" placeholder="500">
+                </label>
+                <label class="field span-6">
+                  <span>Name</span>
+                  <input name="name" type="text" placeholder="AK-47 Bundle">
+                </label>
+                <label class="field span-6">
+                  <span>Game Item ID</span>
+                  <input name="gameItemId" type="text" placeholder="Weapon_AK47">
+                </label>
+                <label class="field span-3">
+                  <span>Quantity</span>
+                  <input name="quantity" type="number" min="1" step="1" value="1">
+                </label>
+                <label class="field span-9">
+                  <span>Icon URL</span>
+                  <input name="iconUrl" type="text" placeholder="https://.../ak47.png">
+                </label>
+                <label class="field span-12">
+                  <span>Description</span>
+                  <textarea name="description" placeholder="Visible description for the player portal"></textarea>
+                </label>
+              </div>
+              <p class="hint">For simple item entries, Game Item ID plus quantity is enough. Use the legacy economy workbench when you need delivery bundles, teleport overrides, or pre/post commands.</p>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Add Catalog Entry</button>
+              </div>
+            </form>
+
+            <div class="panel-grid">
+              <form id="tenantShopPriceForm" class="panel-card">
+                <h3>Update Price</h3>
+                <div class="form-grid">
+                  <label class="field span-6">
+                    <span>ID or Name</span>
+                    <input name="idOrName" type="text" placeholder="item-ak47">
+                  </label>
+                  <label class="field span-6">
+                    <span>New Price</span>
+                    <input name="price" type="number" min="0" step="1" placeholder="650">
+                  </label>
+                </div>
+                <div class="button-row">
+                  <button type="submit" class="button button-warning">Update Price</button>
+                </div>
+              </form>
+
+              <form id="tenantShopDeleteForm" class="panel-card">
+                <h3>Remove Catalog Entry</h3>
+                <div class="form-grid">
+                  <label class="field span-12">
+                    <span>ID or Name</span>
+                    <input name="idOrName" type="text" placeholder="item-ak47">
+                  </label>
+                </div>
+                <p class="hint">This removes the catalog entry from the tenant store. Historical purchases remain part of transaction history.</p>
+                <div class="button-row">
+                  <button type="submit" class="button button-danger">Delete Entry</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </section>
+
+        <section class="surface-section" id="players">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Players + Support</span>
+              <h2 class="section-title">Player account and activity review</h2>
+              <p>See the tenant player roster, Steam binding context, and latest activity needed for support and commerce follow-up.</p>
+            </div>
+            <div class="section-tools">
+              <a class="action-link" href="/admin/legacy?tab=players">Open player tools</a>
+            </div>
+          </div>
+          <div id="tenantPlayersTable"></div>
+        </section>
+
+        <section class="surface-section" id="transactions">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Transactions</span>
+              <h2 class="section-title">Inspect player purchases and apply controlled status fixes</h2>
+              <p>Purchase inspection stays scoped to one tenant. Lookup is per player, and status changes require an explicit code plus a selected target status.</p>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <form id="tenantPurchaseLookupForm" class="panel-card">
+              <h3>Purchase Lookup</h3>
+              <div class="form-grid">
+                <label class="field span-6">
+                  <span>Discord User ID</span>
+                  <input name="userId" type="text" placeholder="123456789012345678">
+                </label>
+                <label class="field span-6">
+                  <span>Status Filter</span>
+                  <select id="tenantPurchaseFilterStatus" name="status">
+                    <option value="">All statuses</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Load Purchases</button>
+              </div>
+            </form>
+
+            <form id="tenantPurchaseStatusForm" class="panel-card">
+              <h3>Update Purchase Status</h3>
+              <div class="form-grid">
+                <label class="field span-6">
+                  <span>Purchase Code</span>
+                  <input name="code" type="text" placeholder="Pxxxxxxxx">
+                </label>
+                <label class="field span-6">
+                  <span>Target Status</span>
+                  <select id="tenantPurchaseTargetStatus" name="status">
+                    <option value="">Choose a status</option>
+                  </select>
+                </label>
+                <label class="field span-12">
+                  <span>Reason</span>
+                  <input name="reason" type="text" placeholder="manual-review">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-warning">Apply Status Change</button>
+              </div>
+            </form>
+          </div>
+          <section class="panel-card">
+            <h3>Purchase Results</h3>
+            <div id="tenantPurchaseTable"></div>
+          </section>
+        </section>
+
+        <section class="surface-section" id="support-tools">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Support Tools</span>
+              <h2 class="section-title">Steam link, VIP, and redeem-code operations</h2>
+              <p>Scoped support actions stay inside the tenant boundary. These forms are for frequent support work; deeper community workflows can still fall back to the legacy workbench.</p>
+            </div>
+          </div>
+          <div class="panel-grid two-col">
+            <form id="tenantSteamLinkForm" class="panel-card">
+              <h3>Steam Link Support</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Action</span>
+                  <select name="action">
+                    <option value="set">set</option>
+                    <option value="remove">remove</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Discord User ID</span>
+                  <input name="userId" type="text" placeholder="123456789012345678">
+                </label>
+                <label class="field span-4">
+                  <span>Steam ID</span>
+                  <input name="steamId" type="text" placeholder="7656119...">
+                </label>
+                <label class="field span-12">
+                  <span>In-game Name</span>
+                  <input name="inGameName" type="text" placeholder="Optional display name for link set">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Apply Steam Link Action</button>
+              </div>
+            </form>
+
+            <form id="tenantVipForm" class="panel-card">
+              <h3>VIP Access</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Action</span>
+                  <select name="action">
+                    <option value="set">grant</option>
+                    <option value="remove">revoke</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Discord User ID</span>
+                  <input name="userId" type="text" placeholder="123456789012345678">
+                </label>
+                <label class="field span-4">
+                  <span>Plan ID</span>
+                  <input name="planId" type="text" placeholder="vip-gold">
+                </label>
+                <label class="field span-12">
+                  <span>Duration Days</span>
+                  <input name="durationDays" type="number" min="1" step="1" value="30">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Apply VIP Action</button>
+              </div>
+            </form>
+
+            <form id="tenantRedeemForm" class="panel-card">
+              <h3>Redeem Code</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Action</span>
+                  <select name="action">
+                    <option value="add">create</option>
+                    <option value="delete">delete</option>
+                    <option value="reset-usage">reset usage</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Code</span>
+                  <input name="code" type="text" placeholder="WELCOME100">
+                </label>
+                <label class="field span-4">
+                  <span>Type</span>
+                  <select name="type">
+                    <option value="coins">coins</option>
+                    <option value="item">item</option>
+                  </select>
+                </label>
+                <label class="field span-6">
+                  <span>Amount</span>
+                  <input name="amount" type="number" min="0" step="1" placeholder="100">
+                </label>
+                <label class="field span-6">
+                  <span>Item ID</span>
+                  <input name="itemId" type="text" placeholder="item-ak47">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-warning">Apply Redeem Action</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="surface-section" id="config">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Scoped Config</span>
+              <h2 class="section-title">Validated tenant configuration patches</h2>
+              <p>Apply feature flags, config patches, and portal environment patches inside the tenant boundary. Empty fields are ignored and JSON is validated before submit.</p>
+            </div>
+          </div>
+
+          <div class="surface-two-col">
+            <form id="tenantConfigForm" class="panel-card">
+              <h3>Tenant Config Editor</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Feature Flags JSON</span>
+                  <textarea name="featureFlags" placeholder="{ }"></textarea>
+                </label>
+                <label class="field span-4">
+                  <span>Config Patch JSON</span>
+                  <textarea name="configPatch" placeholder="{ }"></textarea>
+                </label>
+                <label class="field span-4">
+                  <span>Portal Env Patch JSON</span>
+                  <textarea name="portalEnvPatch" placeholder="{ }"></textarea>
+                </label>
+              </div>
+              <p class="hint">Leave a box empty to skip that patch group. This form never edits platform-wide environment directly.</p>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Save Tenant Config</button>
+              </div>
+            </form>
+
+            <section class="panel-card">
+              <h3>Preset + Guided Paths</h3>
+              <div id="tenantPresetCards" class="panel-grid"></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="surface-section" id="audit">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Audit Trail</span>
+              <h2 class="section-title">Tenant-scoped wallet, reward, and event audit views</h2>
+              <p>Scoped audit review for support and commerce investigations. This stays inside the tenant boundary and reuses the existing audit dataset/export service.</p>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <form id="tenantAuditQueryForm" class="panel-card">
+              <h3>Audit Query</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>View</span>
+                  <select name="view">
+                    <option value="wallet">wallet</option>
+                    <option value="reward">reward</option>
+                    <option value="event">event</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>User ID</span>
+                  <input name="userId" type="text" placeholder="Optional Discord user id">
+                </label>
+                <label class="field span-4">
+                  <span>Window</span>
+                  <select name="windowMs">
+                    <option value="86400000">24h</option>
+                    <option value="604800000" selected>7d</option>
+                    <option value="2592000000">30d</option>
+                    <option value="">all</option>
+                  </select>
+                </label>
+                <label class="field span-12">
+                  <span>Query</span>
+                  <input name="query" type="text" placeholder="actor, reason, reference, or free-text query">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Load Audit View</button>
+                <button id="tenantAuditExportJsonBtn" type="button" class="button">Export JSON</button>
+                <button id="tenantAuditExportCsvBtn" type="button" class="button">Export CSV</button>
+              </div>
+            </form>
+            <section class="panel-card">
+              <h3>Audit Summary</h3>
+              <div id="tenantAuditStats" class="stats-grid"></div>
+            </section>
+          </div>
+          <section class="panel-card">
+            <h3>Audit Results</h3>
+            <div id="tenantAuditTable"></div>
+          </section>
+        </section>
+
+        <section class="surface-section" id="actions">
+          <div class="section-head">
+            <div class="section-copy">
+              <span class="section-kicker">Safe Actions</span>
+              <h2 class="section-title">Scoped wallet and delivery recovery</h2>
+              <p>Frequent operational actions stay grouped here with tenant-scoped confirmation and without leaking owner-only controls.</p>
+            </div>
+          </div>
+          <div class="surface-two-col">
+            <form id="tenantWalletForm" class="panel-card">
+              <h3>Wallet Adjustment</h3>
+              <div class="form-grid">
+                <label class="field span-4">
+                  <span>Action</span>
+                  <select name="action">
+                    <option value="add">Add coins</option>
+                    <option value="remove">Remove coins</option>
+                    <option value="set">Set exact balance</option>
+                  </select>
+                </label>
+                <label class="field span-4">
+                  <span>Discord User ID</span>
+                  <input name="userId" type="text" placeholder="123456789012345678">
+                </label>
+                <label class="field span-4">
+                  <span>Amount</span>
+                  <input name="amount" type="number" min="0" step="1" placeholder="100">
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Apply Wallet Action</button>
+              </div>
+            </form>
+
+            <form id="tenantDeliveryForm" class="panel-card">
+              <h3>Delivery Recovery</h3>
+              <div class="form-grid">
+                <label class="field span-6">
+                  <span>Purchase Code</span>
+                  <input name="code" type="text" placeholder="Pxxxxxxxx">
+                </label>
+                <label class="field span-6">
+                  <span>Action</span>
+                  <select name="action">
+                    <option value="retry">Retry queue job</option>
+                    <option value="dead-letter-retry">Retry dead-letter</option>
+                    <option value="cancel">Cancel queue job</option>
+                  </select>
+                </label>
+              </div>
+              <div class="button-row">
+                <button type="submit" class="button button-warning">Run Delivery Action</button>
+              </div>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer class="surface-footer">
+      <span>Tenant console only operates within the signed-in tenant scope.</span>
+      <span class="code">/tenant</span>
+    </footer>
+  </div>
+
+  <div id="tenantPalette" class="palette-backdrop" hidden>
+    <div class="palette-card" role="dialog" aria-modal="true" aria-labelledby="tenantPaletteTitle">
+      <div class="palette-head">
+        <h2 id="tenantPaletteTitle">Tenant Command Palette</h2>
+        <button id="tenantPaletteCloseBtn" class="button" type="button">Close</button>
+      </div>
+      <input id="tenantPaletteSearch" class="palette-search" type="text" placeholder="Jump to section, action, or tenant workbench shortcut">
+      <div id="tenantPaletteEmpty" class="empty-state" hidden>No matching tenant actions.</div>
+      <div id="tenantPaletteList" class="palette-list"></div>
+    </div>
+  </div>
+
+  <script src="/admin/assets/console-shared.js"></script>
+  <script src="/admin/assets/tenant-console.js"></script>
+</body>
+</html>

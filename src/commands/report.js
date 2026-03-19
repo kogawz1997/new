@@ -1,5 +1,10 @@
-﻿const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { channels } = require('../config');
+const {
+  createDiscordCard,
+  createMetricFields,
+  createSection,
+} = require('../utils/discordEmbedTheme');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -40,29 +45,46 @@ module.exports = {
       (channel) => channel.name === channels.evidence,
     );
 
-    const embed = new EmbedBuilder()
-      .setTitle('🚨 รายงานผู้เล่น / ผู้ใช้')
-      .addFields(
-        { name: 'ผู้รายงาน', value: `${interaction.user} (\`${interaction.user.tag}\`)` },
-        { name: 'ผู้ถูกกล่าวหา', value: `${target} (\`${target.tag}\`)` },
-        { name: 'เหตุผล', value: reason },
-      )
-      .setColor(0xff0000)
-      .setTimestamp(new Date());
+    const embed = createDiscordCard({
+      context: interaction,
+      tone: 'danger',
+      authorName: 'Incident Report',
+      title: 'รายงานผู้เล่น / ผู้ใช้',
+      description: createSection('เหตุผล', [reason]),
+      fields: createMetricFields([
+        { name: 'ผู้รายงาน', value: `${interaction.user} (\`${interaction.user.tag}\`)`, inline: false },
+        { name: 'ผู้ถูกรายงาน', value: `${target} (\`${target.tag}\`)`, inline: false },
+        { name: 'หลักฐาน', value: evidence?.url || 'ไม่มีไฟล์แนบ', inline: false },
+      ]),
+      thumbnail:
+        target.displayAvatarURL?.({ extension: 'png', size: 256 })
+        || target.avatarURL?.({ extension: 'png', size: 256 })
+        || null,
+      footerText: 'ระบบส่งต่อให้ทีมงานใน evidence channel แล้ว',
+    });
 
     if (evidence?.url) {
-      embed.addFields({
-        name: 'หลักฐาน',
-        value: evidence.url,
-      });
+      embed.setImage(evidence.url);
     }
 
     if (evidenceChannel && evidenceChannel.isTextBased && evidenceChannel.isTextBased()) {
       await evidenceChannel.send({ embeds: [embed] });
     }
 
+    const replyEmbed = createDiscordCard({
+      context: interaction,
+      tone: 'success',
+      authorName: 'Report Submitted',
+      title: 'ส่งรายงานให้ทีมงานแล้ว',
+      description: createSection('ขอบคุณ', [
+        'ทีมงานได้รับรายงานของคุณแล้ว',
+        'หากมีหลักฐานเพิ่ม สามารถเปิด ticket หรือส่งเพิ่มให้ทีมงานได้',
+      ]),
+      footerText: 'ขอบคุณที่ช่วยดูแลคอมมูนิตี้',
+    });
+
     await interaction.reply({
-      content: 'ส่งรายงานให้ทีมงานแล้ว ขอบคุณที่ช่วยดูแลคอมมูนิตี้',
+      embeds: [replyEmbed],
       flags: MessageFlags.Ephemeral,
     });
   },

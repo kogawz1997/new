@@ -28,6 +28,7 @@ function buildRoutes(overrides = {}) {
     captureAuthToken: '',
     createCaptureSession: () => 'capture-session-id',
     buildSessionCookie: () => 'scum_portal_session=capture-session-id; Path=/; HttpOnly',
+    tryServePortalStaticAsset: async () => false,
     tryServeStaticScumIcon: async () => false,
     buildLegacyAdminUrl: (pathname) => `https://admin.example.com${pathname}`,
     getCanonicalRedirectUrl: () => null,
@@ -49,6 +50,7 @@ function buildRoutes(overrides = {}) {
     getShowcaseHtml: () => '<showcase/>',
     getTrialHtml: () => '<trial/>',
     getPlayerHtml: () => '<player/>',
+    getLegacyPlayerHtml: () => '<legacy-player/>',
     getPlatformPublicOverview: async () => ({ tenantCount: 1 }),
     isDiscordStartPath: (pathname) => pathname === '/auth/discord/start',
     isDiscordCallbackPath: (pathname) => pathname === '/auth/discord/callback',
@@ -98,6 +100,25 @@ test('portal page routes gate /player behind session', async () => {
   assert.equal(handled, true);
   assert.equal(res.statusCode, 302);
   assert.equal(res.headers.Location, '/player/login');
+});
+
+test('portal page routes serve legacy player html behind session', async () => {
+  const handler = buildRoutes({
+    getSession: () => ({ user: 'player' }),
+  });
+  const res = createMockRes();
+
+  const handled = await handler({
+    req: { headers: {} },
+    res,
+    urlObj: new URL('https://player.example.com/player/legacy'),
+    pathname: '/player/legacy',
+    method: 'GET',
+  });
+
+  assert.equal(handled, true);
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body, '<legacy-player/>');
 });
 
 test('portal page routes serve landing html directly', async () => {

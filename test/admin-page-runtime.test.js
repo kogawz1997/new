@@ -42,11 +42,15 @@ test('admin page runtime loads templates and serves dashboard assets', async () 
   fs.mkdirSync(assetsDir, { recursive: true });
   fs.mkdirSync(scumItemsDir, { recursive: true });
   fs.writeFileSync(path.join(root, 'dashboard.html'), '<h1>dashboard</h1>');
+  fs.writeFileSync(path.join(root, 'owner-console.html'), '<h1>owner</h1>');
+  fs.writeFileSync(path.join(root, 'tenant-console.html'), '<h1>tenant</h1>');
   fs.writeFileSync(path.join(root, 'login.html'), '<h1>login</h1>');
   fs.writeFileSync(path.join(assetsDir, 'dashboard.css'), 'body{color:red}');
 
   const runtime = createAdminPageRuntime({
     dashboardHtmlPath: path.join(root, 'dashboard.html'),
+    ownerConsoleHtmlPath: path.join(root, 'owner-console.html'),
+    tenantConsoleHtmlPath: path.join(root, 'tenant-console.html'),
     loginHtmlPath: path.join(root, 'login.html'),
     assetsDirPath: assetsDir,
     scumItemsDirPath: scumItemsDir,
@@ -58,6 +62,8 @@ test('admin page runtime loads templates and serves dashboard assets', async () 
   });
 
   assert.equal(runtime.getDashboardHtml(), '<h1>dashboard</h1>');
+  assert.equal(runtime.getOwnerConsoleHtml(), '<h1>owner</h1>');
+  assert.equal(runtime.getTenantConsoleHtml(), '<h1>tenant</h1>');
   assert.equal(runtime.getLoginHtml(), '<h1>login</h1>');
 
   const res = createResponse();

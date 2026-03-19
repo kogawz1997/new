@@ -75,8 +75,10 @@ function createPortalEnvRuntime(deps = {}) {
     10_000,
     10 * 60 * 1000,
   );
+  const publicAssetsDirPath = path.join(__dirname, '..', 'public', 'assets');
   const loginHtmlPath = path.join(__dirname, '..', 'public', 'login.html');
-  const playerHtmlPath = path.join(__dirname, '..', 'public', 'player.html');
+  const playerHtmlPath = path.join(__dirname, '..', 'public', 'player-core.html');
+  const legacyPlayerHtmlPath = path.join(__dirname, '..', 'public', 'player.html');
   const landingHtmlPath = path.join(__dirname, '..', 'public', 'landing.html');
   const trialHtmlPath = path.join(__dirname, '..', 'public', 'trial.html');
   const showcaseHtmlPath = path.join(__dirname, '..', 'public', 'showcase.html');
@@ -113,9 +115,11 @@ function createPortalEnvRuntime(deps = {}) {
     oauthStateTtlMs,
     discordRedirectPath,
     cleanupIntervalMs,
+    publicAssetsDirPath,
     discordApiBase: 'https://discord.com/api/v10',
     loginHtmlPath,
     playerHtmlPath,
+    legacyPlayerHtmlPath,
     landingHtmlPath,
     trialHtmlPath,
     showcaseHtmlPath,

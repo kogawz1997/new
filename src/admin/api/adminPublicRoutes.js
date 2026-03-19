@@ -16,7 +16,10 @@ function createAdminPublicRoutes(deps) {
     sendText,
     sendHtml,
     isAuthorized,
+    getAuthContext,
     getLoginHtml,
+    getOwnerConsoleHtml,
+    getTenantConsoleHtml,
     getDashboardHtml,
     getPersistenceStatus,
     getDeliveryMetricsSnapshot,
@@ -113,7 +116,52 @@ function createAdminPublicRoutes(deps) {
         res.end();
         return true;
       }
+      const auth = getAuthContext(req, urlObj);
+      const target = auth?.tenantId ? '/tenant' : '/owner';
+      res.writeHead(302, { Location: target });
+      res.end();
+      return true;
+    }
+
+    if (req.method === 'GET' && (pathname === '/admin/legacy' || pathname === '/admin/legacy/')) {
+      if (!isAuthorized(req, urlObj)) {
+        res.writeHead(302, { Location: '/admin/login' });
+        res.end();
+        return true;
+      }
       sendHtml(res, 200, getDashboardHtml());
+      return true;
+    }
+
+    if (req.method === 'GET' && (pathname === '/owner' || pathname === '/owner/')) {
+      if (!isAuthorized(req, urlObj)) {
+        res.writeHead(302, { Location: '/admin/login' });
+        res.end();
+        return true;
+      }
+      const auth = getAuthContext(req, urlObj);
+      if (auth?.tenantId) {
+        res.writeHead(302, { Location: '/tenant' });
+        res.end();
+        return true;
+      }
+      sendHtml(res, 200, getOwnerConsoleHtml());
+      return true;
+    }
+
+    if (req.method === 'GET' && (pathname === '/tenant' || pathname === '/tenant/')) {
+      if (!isAuthorized(req, urlObj)) {
+        res.writeHead(302, { Location: '/admin/login' });
+        res.end();
+        return true;
+      }
+      const auth = getAuthContext(req, urlObj);
+      if (!auth?.tenantId) {
+        res.writeHead(302, { Location: '/owner' });
+        res.end();
+        return true;
+      }
+      sendHtml(res, 200, getTenantConsoleHtml());
       return true;
     }
 

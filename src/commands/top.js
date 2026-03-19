@@ -1,19 +1,12 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { listStatsSnapshots } = require('../services/playerQueryService');
+const {
+  createDiscordCard,
+  createSection,
+} = require('../utils/discordEmbedTheme');
 
-function pad(value, width) {
-  const text = String(value);
-  if (text.length >= width) return text.slice(0, width);
-  return `${text}${' '.repeat(width - text.length)}`;
-}
-
-function table(headers, rows) {
-  const head = headers.map((entry) => pad(entry.label, entry.width)).join(' ');
-  const sep = headers.map((entry) => '-'.repeat(entry.width)).join(' ');
-  const body = rows
-    .map((row) => headers.map((entry) => pad(row[entry.key] ?? '', entry.width)).join(' '))
-    .join('\n');
-  return ['```', head, sep, body || '(ไม่มีข้อมูล)', '```'].join('\n');
+function medalForRank(index) {
+  return ['🥇', '🥈', '🥉'][index] || `#${index + 1}`;
 }
 
 module.exports = {
@@ -57,49 +50,35 @@ module.exports = {
     }
 
     const rows = await Promise.all(
-      all.slice(0, 25).map(async (entry, index) => {
+      all.slice(0, 10).map(async (entry, index) => {
         const user = await interaction.client.users.fetch(entry.userId).catch(() => null);
         const name = user ? user.username : entry.userId;
         const kd = Number(entry.deaths || 0) === 0
           ? Number(entry.kills || 0)
           : Number(entry.kills || 0) / Number(entry.deaths || 1);
-        return {
-          rank: `[${index + 1}]`,
-          kills: Number(entry.kills || 0),
-          deaths: Number(entry.deaths || 0),
-          kd: kd.toFixed(2),
-          playtime: `${Math.floor(Number(entry.playtimeMinutes || 0) / 60)}h`,
-          name,
-        };
+        if (type === 'playtime') {
+          return `${medalForRank(index)} **${name}** • ${Math.floor(Number(entry.playtimeMinutes || 0) / 60)} ชม.`;
+        }
+        if (type === 'kd') {
+          return `${medalForRank(index)} **${name}** • K/D ${kd.toFixed(2)} (${Number(entry.kills || 0)}/${Number(entry.deaths || 0)})`;
+        }
+        return `${medalForRank(index)} **${name}** • ${Number(entry.kills || 0)} kills`;
       }),
     );
 
-    const headers = type === 'playtime'
-      ? [
-          { key: 'rank', label: 'อันดับ', width: 6 },
-          { key: 'playtime', label: 'เวลาเล่น', width: 9 },
-          { key: 'kills', label: 'คิล', width: 7 },
-          { key: 'deaths', label: 'ตาย', width: 7 },
-          { key: 'name', label: 'ชื่อ', width: 18 },
-        ]
-      : [
-          { key: 'rank', label: 'อันดับ', width: 6 },
-          { key: 'kills', label: 'คิล', width: 7 },
-          { key: 'deaths', label: 'ตาย', width: 7 },
-          { key: 'kd', label: 'K/D', width: 6 },
-          { key: 'name', label: 'ชื่อ', width: 18 },
-        ];
-
-    const embed = new EmbedBuilder()
-      .setTitle(
+    const embed = createDiscordCard({
+      context: interaction,
+      tone: type === 'kills' ? 'combat' : type === 'playtime' ? 'info' : 'brand',
+      authorName: 'Leaderboard Snapshot',
+      title:
         type === 'kills'
-          ? 'อันดับคิล'
+          ? 'Top Kills'
           : type === 'kd'
-            ? 'อันดับคิลต่อเดธ'
-            : 'อันดับเวลาเล่น',
-      )
-      .setDescription(table(headers, rows))
-      .setColor(0xffb347);
+            ? 'Top K/D'
+            : 'Top Playtime',
+      description: createSection('อันดับล่าสุด', rows),
+      footerText: 'ดูแบบ panel ถาวรได้ผ่าน /panel',
+    });
 
     return interaction.reply({ embeds: [embed] });
   },

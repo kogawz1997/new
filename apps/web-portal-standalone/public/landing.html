@@ -1,582 +1,182 @@
 <!doctype html>
-<html lang="th">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SCUM Platform Landing</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg: #071116;
-      --bg-soft: #0f1e26;
-      --panel: rgba(10, 22, 28, 0.78);
-      --text: #ebf6f4;
-      --muted: #9cb8b5;
-      --line: rgba(140, 204, 194, 0.16);
-      --gold: #d8b56d;
-      --mint: #89d0c5;
-      --ice: #95b7ff;
-      --ok: #79d28a;
-      --radius: 24px;
-      --shadow: 0 30px 70px rgba(0, 0, 0, 0.36);
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      color: var(--text);
-      background:
-        radial-gradient(1200px 700px at 0% 0%, rgba(137, 208, 197, 0.14), transparent 55%),
-        radial-gradient(1000px 600px at 100% 100%, rgba(149, 183, 255, 0.12), transparent 52%),
-        linear-gradient(150deg, var(--bg), #12242d 50%, #172f38);
-      font-family: "IBM Plex Sans Thai", sans-serif;
-      min-height: 100vh;
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.025) 1px, transparent 1px);
-      background-size: 38px 38px;
-      opacity: 0.18;
-    }
-
-    .shell {
-      position: relative;
-      z-index: 1;
-      width: min(1240px, calc(100% - 32px));
-      margin: 0 auto;
-      padding: 24px 0 48px;
-      display: grid;
-      gap: 18px;
-    }
-
-    .panel {
-      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)), var(--panel);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(12px);
-    }
-
-    .topbar, .hero, .section {
-      padding: 20px 22px;
-    }
-
-    .topbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-    }
-
-    .brand {
-      display: grid;
-      gap: 2px;
-    }
-
-    .brand b {
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 28px;
-      letter-spacing: 0.6px;
-      text-transform: uppercase;
-    }
-
-    .brand span {
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    .actions, .locale {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .btn, .locale button {
-      appearance: none;
-      border: 1px solid rgba(216, 181, 109, 0.25);
-      color: var(--text);
-      background: rgba(255,255,255,0.05);
-      border-radius: 999px;
-      padding: 10px 16px;
-      font: inherit;
-      text-decoration: none;
-      cursor: pointer;
-      transition: transform .18s ease, background .18s ease, border-color .18s ease;
-    }
-
-    .btn.primary, .locale button.active {
-      background: linear-gradient(135deg, rgba(216, 181, 109, 0.95), rgba(137, 208, 197, 0.92));
-      color: #0a1114;
-      border-color: transparent;
-      font-weight: 700;
-    }
-
-    .btn:hover, .locale button:hover {
-      transform: translateY(-1px);
-      border-color: rgba(216, 181, 109, 0.5);
-    }
-
-    .hero {
-      display: grid;
-      gap: 18px;
-      grid-template-columns: 1.2fr 0.8fr;
-    }
-
-    .hero-copy h1 {
-      margin: 0 0 10px;
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: clamp(38px, 7vw, 76px);
-      line-height: 0.95;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    }
-
-    .hero-copy p {
-      margin: 0;
-      max-width: 680px;
-      color: var(--muted);
-      line-height: 1.65;
-      font-size: 16px;
-    }
-
-    .hero-meta {
-      display: grid;
-      gap: 12px;
-      align-content: start;
-    }
-
-    .mini {
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 16px;
-      background: rgba(255,255,255,0.04);
-    }
-
-    .mini strong {
-      display: block;
-      font-size: 13px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--mint);
-      margin-bottom: 8px;
-    }
-
-    .mini p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.55;
-    }
-
-    .grid {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: repeat(12, minmax(0, 1fr));
-    }
-
-    .stats {
-      grid-column: span 12;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .stat {
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      padding: 16px;
-      background: rgba(255,255,255,0.04);
-    }
-
-    .stat label {
-      display: block;
-      color: var(--muted);
-      font-size: 13px;
-      margin-bottom: 8px;
-    }
-
-    .stat b {
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 34px;
-      letter-spacing: 0.3px;
-    }
-
-    .col-7 { grid-column: span 7; }
-    .col-5 { grid-column: span 5; }
-
-    h2 {
-      margin: 0 0 12px;
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 34px;
-      letter-spacing: 0.4px;
-      text-transform: uppercase;
-    }
-
-    .lead {
-      margin: 0 0 18px;
-      color: var(--muted);
-      line-height: 1.65;
-    }
-
-    .cards {
-      display: grid;
-      gap: 12px;
-    }
-
-    .cards.plans {
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-
-    .card {
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 16px;
-      background: rgba(255,255,255,0.04);
-      display: grid;
-      gap: 10px;
-    }
-
-    .card .eyebrow {
-      font-size: 12px;
-      color: var(--mint);
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-    }
-
-    .card h3 {
-      margin: 0;
-      font-size: 22px;
-    }
-
-    .card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.55;
-      font-size: 14px;
-    }
-
-    .price {
-      font-family: "Barlow Condensed", sans-serif;
-      font-size: 30px;
-      color: var(--gold);
-    }
-
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      width: fit-content;
-      padding: 6px 10px;
-      border-radius: 999px;
-      background: rgba(121, 210, 138, 0.14);
-      color: var(--ok);
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
-
-    .legal-list, .feature-list {
-      margin: 0;
-      padding-left: 18px;
-      color: var(--muted);
-      line-height: 1.7;
-    }
-
-    .loading, .empty {
-      color: var(--muted);
-      padding: 18px 0;
-    }
-
-    @media (max-width: 980px) {
-      .hero, .stats {
-        grid-template-columns: 1fr;
-      }
-      .col-7, .col-5 {
-        grid-column: span 12;
-      }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/player/assets/ui/portal-public.css">
 </head>
 <body>
-  <div class="shell">
-    <section class="panel topbar">
-      <div class="brand">
-        <b id="brand-name">SCUM Ops Platform</b>
-        <span id="brand-tagline">แพลตฟอร์มร้าน, ส่งของ, เว็บผู้เล่น, แอดมิน และ runtime operations</span>
+  <div class="public-shell">
+    <header class="public-header">
+      <div class="public-brand">
+        <span class="public-badge">SCUM Multi-tenant Platform</span>
+        <h1 id="brandTitle">SCUM Commerce + Operations Control Plane</h1>
+        <p id="brandSubtitle">A multi-tenant control platform with separate owner, tenant, and player surfaces built around live runtime operations.</p>
       </div>
-      <div class="actions">
-        <div class="locale">
-          <button id="locale-th" class="active" type="button">TH</button>
-          <button id="locale-en" type="button">EN</button>
-        </div>
-        <a class="btn" href="/showcase">Showcase</a>
-        <a class="btn" href="/trial">Trial</a>
-        <a class="btn" href="/player/login">Player Portal</a>
-        <a class="btn primary" href="/admin">Admin</a>
+      <div class="public-actions">
+        <a class="button button-primary" href="/player/login">Open Player Portal</a>
+        <a class="button" href="/admin">Open Admin Web</a>
+        <a class="button" href="/showcase">Showcase</a>
       </div>
-    </section>
+    </header>
 
-    <section class="panel hero">
-      <div class="hero-copy">
-        <div class="pill" id="hero-badge">Live Platform</div>
-        <h1 id="hero-title">SCUM Commerce + Operations Control Plane</h1>
-        <p id="hero-description">กำลังโหลดข้อมูลแพลตฟอร์ม...</p>
-      </div>
-      <div class="hero-meta">
-        <div class="mini">
-          <strong id="trial-title">Trial Readiness</strong>
-          <p id="trial-copy">ตรวจ topology, security และ delivery runtime ก่อนเปิดลูกค้าจริง พร้อม CTA ไปหน้า trial และ go-live runbook</p>
-        </div>
-        <div class="mini">
-          <strong id="api-title">API + Tenant</strong>
-          <p id="api-copy">รองรับ tenant, subscription, license, API key, outbound webhook, agent heartbeat และ reconcile ผ่าน platform layer เดียวกัน</p>
+    <section class="public-hero public-panel">
+      <div>
+        <span class="eyebrow">Role-separated experience</span>
+        <h2>Three surfaces. One platform spine.</h2>
+        <p>The platform stays multi-tenant and role-based. Platform owner control, tenant operations, and player journeys are intentionally separated while sharing the same runtime, data contracts, and trust posture.</p>
+        <div class="button-row">
+          <a class="button button-primary" href="/trial">Review trial readiness</a>
+          <a class="button" href="/docs/WORKLIST.md">Open worklist</a>
         </div>
       </div>
-    </section>
-
-    <section class="panel section">
-      <div class="stats" id="stats-grid">
-        <div class="stat"><label id="stat-tenants-label">Active Tenants</label><b id="stat-tenants">-</b></div>
-        <div class="stat"><label id="stat-mrr-label">MRR</label><b id="stat-mrr">-</b></div>
-        <div class="stat"><label id="stat-success-label">Delivery Success</label><b id="stat-success">-</b></div>
-        <div class="stat"><label id="stat-offers-label">Marketplace Offers</label><b id="stat-offers">-</b></div>
+      <div class="hero-side">
+        <article class="surface-card">
+          <span class="eyebrow">Owner</span>
+          <h3>Platform Owner Console</h3>
+          <p class="muted">Manages tenant fleet, runtime health, security posture, audit visibility, and guarded global configuration.</p>
+        </article>
+        <article class="surface-card">
+          <span class="eyebrow">Tenant</span>
+          <h3>Tenant Admin Console</h3>
+          <p class="muted">Handles server-scoped config, shop and delivery operations, wallet controls, and tenant support workflows.</p>
+        </article>
+        <article class="surface-card">
+          <span class="eyebrow">Player</span>
+          <h3>Player Portal</h3>
+          <p class="muted">Focused on wallet visibility, purchase flow, redeem flow, profile review, and Steam linking.</p>
+        </article>
       </div>
     </section>
 
-    <section class="grid">
-      <section class="panel section col-7">
-        <h2 id="plans-title">Plans</h2>
-        <p class="lead" id="plans-lead">ราคาและแพ็กเกจจาก config ของระบบ ถูกดึงมาแสดงแบบ live เพื่อใช้เป็นฐานขายงานหรือเปิด trial</p>
-        <div id="plans" class="cards plans">
-          <div class="loading" id="plans-loading">Loading plans...</div>
+    <section class="public-panel section">
+      <div class="section-head">
+        <div>
+          <span class="eyebrow">Live Overview</span>
+          <h2 class="section-title">Public platform snapshot</h2>
+          <p class="muted">Metrics below are pulled from the platform public overview endpoint used by the standalone portal.</p>
+        </div>
+      </div>
+      <div class="metric-grid">
+        <article class="metric-card">
+          <span class="eyebrow">Tenants</span>
+          <strong id="metricTenants" class="metric-value">-</strong>
+          <p class="muted">Active tenant count</p>
+        </article>
+        <article class="metric-card">
+          <span class="eyebrow">Delivery</span>
+          <strong id="metricDelivery" class="metric-value">-</strong>
+          <p class="muted">Recent delivery success</p>
+        </article>
+        <article class="metric-card">
+          <span class="eyebrow">Subscriptions</span>
+          <strong id="metricSubscriptions" class="metric-value">-</strong>
+          <p class="muted">Active subscription records</p>
+        </article>
+        <article class="metric-card">
+          <span class="eyebrow">Marketplace</span>
+          <strong id="metricOffers" class="metric-value">-</strong>
+          <p class="muted">Offer count</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="public-grid two-col">
+      <section class="public-panel section">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Surface Map</span>
+            <h2 class="section-title">What belongs where</h2>
+            <p class="muted">This platform avoids role confusion by keeping responsibilities and risk levels separate.</p>
+          </div>
+        </div>
+        <div class="card-grid">
+          <article class="surface-card">
+            <span class="eyebrow">Owner only</span>
+            <h3>Global health + governance</h3>
+            <ul>
+              <li>Tenant fleet health and lifecycle</li>
+              <li>Runtime posture for bot, worker, and watcher</li>
+              <li>Security center, audit, and request anomalies</li>
+              <li>Backup, restore, and global config</li>
+            </ul>
+          </article>
+          <article class="surface-card">
+            <span class="eyebrow">Tenant only</span>
+            <h3>Scoped server operations</h3>
+            <ul>
+              <li>Shop and economy control</li>
+              <li>Delivery queue and dead-letter handling</li>
+              <li>Wallet adjustments and scoped config patches</li>
+              <li>Tenant-specific notifications and player support</li>
+            </ul>
+          </article>
+          <article class="surface-card">
+            <span class="eyebrow">Player only</span>
+            <h3>Trusted self-service flow</h3>
+            <ul>
+              <li>Wallet, purchases, and redeem state</li>
+              <li>Profile, Steam linking, and transaction history</li>
+              <li>Mobile-friendly browsing and clear status feedback</li>
+              <li>Legacy community features kept separate from core flows</li>
+            </ul>
+          </article>
         </div>
       </section>
 
-      <section class="panel section col-5">
-        <h2 id="marketplace-title">Marketplace</h2>
-        <p class="lead" id="marketplace-lead">พื้นที่สำหรับบริการเสริม, preset package, addon หรือ offering ฝั่ง reseller/tenant</p>
-        <div id="marketplace" class="cards">
-          <div class="loading" id="marketplace-loading">Loading marketplace...</div>
+      <section class="public-panel section">
+        <div class="section-head">
+          <div>
+            <span class="eyebrow">Readiness</span>
+            <h2 class="section-title">Runtime posture</h2>
+            <p class="muted">This landing page stays documentation-oriented rather than marketing-heavy. It exists to explain the platform shape and current operating model.</p>
+          </div>
         </div>
-      </section>
-
-      <section class="panel section col-7">
-        <h2 id="features-title">Platform Surface</h2>
-        <p class="lead" id="features-lead">สิ่งที่ถูกวางไว้ใน platform layer รอบนี้ ครอบคลุมทั้ง billing, legal, multi-tenant, public API, monitoring, backup และ demo flow</p>
-        <ul class="feature-list" id="feature-list">
-          <li>Billing plans + subscription record + MRR overview</li>
-          <li>License + legal acceptance state per tenant</li>
-          <li>Tenant API key, webhook, marketplace offer, agent heartbeat</li>
-          <li>Delivery reconcile + anti-abuse monitoring + auto backup</li>
-          <li>Landing, showcase, trial entrypoint และ public overview API</li>
-        </ul>
-      </section>
-
-      <section class="panel section col-5">
-        <h2 id="legal-title">Legal + Trust</h2>
-        <p class="lead" id="legal-lead">เอกสารทางกฎหมายที่พร้อมใช้กับ onboarding/trial/go-live และผูกกับสถานะ acceptance ในระบบ license</p>
-        <ul class="legal-list" id="legal-list">
-          <li class="empty">Loading legal docs...</li>
-        </ul>
+        <div class="flow-list">
+          <article class="flow-step">
+            <strong>1. Owner controls stay separated</strong>
+            <p class="muted">Platform-wide configuration and risky recovery flows are kept away from tenant day-to-day operations.</p>
+          </article>
+          <article class="flow-step">
+            <strong>2. Tenant controls stay scoped</strong>
+            <p class="muted">Commerce, delivery, and wallet actions remain tied to tenant context instead of a shared global dashboard.</p>
+          </article>
+          <article class="flow-step">
+            <strong>3. Player experience stays focused</strong>
+            <p class="muted">Wallet, purchase, redeem, profile, and Steam linking are first-class flows without leaking operational complexity.</p>
+          </article>
+        </div>
       </section>
     </section>
   </div>
 
   <script>
-    const i18n = {
-      th: {
-        tagline: 'แพลตฟอร์มร้าน, ส่งของ, เว็บผู้เล่น, แอดมิน และ runtime operations',
-        badge: 'Live Platform',
-        heroTitle: 'SCUM Commerce + Operations Control Plane',
-        trialTitle: 'Trial Readiness',
-        trialCopy: 'ตรวจ topology, security และ delivery runtime ก่อนเปิดลูกค้าจริง พร้อม CTA ไปหน้า trial และ go-live runbook',
-        apiTitle: 'API + Tenant',
-        apiCopy: 'รองรับ tenant, subscription, license, API key, outbound webhook, agent heartbeat และ reconcile ผ่าน platform layer เดียวกัน',
-        statTenants: 'Active Tenants',
-        statMrr: 'MRR',
-        statSuccess: 'Delivery Success',
-        statOffers: 'Marketplace Offers',
-        plansTitle: 'Plans',
-        plansLead: 'ราคาและแพ็กเกจจาก config ของระบบ ถูกดึงมาแสดงแบบ live เพื่อใช้เป็นฐานขายงานหรือเปิด trial',
-        plansLoading: 'กำลังโหลดแพ็กเกจ...',
-        marketplaceTitle: 'Marketplace',
-        marketplaceLead: 'พื้นที่สำหรับบริการเสริม, preset package, addon หรือ offering ฝั่ง reseller/tenant',
-        marketplaceLoading: 'กำลังโหลด marketplace...',
-        featuresTitle: 'Platform Surface',
-        featuresLead: 'สิ่งที่ถูกวางไว้ใน platform layer รอบนี้ ครอบคลุมทั้ง billing, legal, multi-tenant, public API, monitoring, backup และ demo flow',
-        legalTitle: 'Legal + Trust',
-        legalLead: 'เอกสารทางกฎหมายที่พร้อมใช้กับ onboarding/trial/go-live และผูกกับสถานะ acceptance ในระบบ license',
-        legalLoading: 'กำลังโหลดเอกสาร...',
-        noMarketplace: 'ยังไม่มีรายการ marketplace',
-        features: [
-          'Billing plans + subscription record + MRR overview',
-          'License + legal acceptance state per tenant',
-          'Tenant API key, webhook, marketplace offer, agent heartbeat',
-          'Delivery reconcile + anti-abuse monitoring + auto backup',
-          'Landing, showcase, trial entrypoint และ public overview API'
-        ],
-        per: { monthly: '/เดือน', yearly: '/ปี', quarterly: '/ไตรมาส', trial: '/ทดลอง', 'one-time': '/ครั้งเดียว' },
-      },
-      en: {
-        tagline: 'Storefront, delivery runtime, player portal, admin control plane, and operations in one stack',
-        badge: 'Live Platform',
-        heroTitle: 'SCUM Commerce + Operations Control Plane',
-        trialTitle: 'Trial Readiness',
-        trialCopy: 'Validate topology, security, and delivery runtime before live customers with a dedicated trial and go-live path.',
-        apiTitle: 'API + Tenant',
-        apiCopy: 'Tenant, subscription, license, API key, outbound webhook, agent heartbeat, and delivery reconcile all run through one platform layer.',
-        statTenants: 'Active Tenants',
-        statMrr: 'MRR',
-        statSuccess: 'Delivery Success',
-        statOffers: 'Marketplace Offers',
-        plansTitle: 'Plans',
-        plansLead: 'Live pricing and plan data pulled from config so the same stack can power sales, demo, and trial flows.',
-        plansLoading: 'Loading plans...',
-        marketplaceTitle: 'Marketplace',
-        marketplaceLead: 'A surface for addons, preset packages, reseller offers, or tenant-specific services.',
-        marketplaceLoading: 'Loading marketplace...',
-        featuresTitle: 'Platform Surface',
-        featuresLead: 'This platform layer now covers billing, legal, serious multi-tenant primitives, public API, monitoring, backups, and demo/trial flow.',
-        legalTitle: 'Legal + Trust',
-        legalLead: 'Legal documents ready for onboarding, trial, and go-live while license acceptance is tracked per tenant.',
-        legalLoading: 'Loading legal documents...',
-        noMarketplace: 'No marketplace offers yet',
-        features: [
-          'Billing plans + subscription records + MRR overview',
-          'License + legal acceptance tracked per tenant',
-          'Tenant API keys, webhooks, marketplace offers, and agent heartbeat',
-          'Delivery reconcile + anti-abuse monitoring + automated backups',
-          'Landing, showcase, trial entrypoint, and public overview API'
-        ],
-        per: { monthly: '/month', yearly: '/year', quarterly: '/quarter', trial: '/trial', 'one-time': '/one-time' },
-      },
-    };
-
-    const state = {
-      locale: 'th',
-      overview: null,
-    };
-
-    function currency(amount, code) {
-      try {
-        return new Intl.NumberFormat(state.locale === 'th' ? 'th-TH' : 'en-US', {
-          style: 'currency',
-          currency: code || 'THB',
-          maximumFractionDigits: 0,
-        }).format(Number(amount || 0) / 100);
-      } catch {
-        return `${Number(amount || 0) / 100} ${code || 'THB'}`;
-      }
-    }
-
-    function applyLocale() {
-      const t = i18n[state.locale];
-      document.documentElement.lang = state.locale;
-      document.getElementById('brand-tagline').textContent = t.tagline;
-      document.getElementById('hero-badge').textContent = t.badge;
-      document.getElementById('hero-title').textContent = t.heroTitle;
-      document.getElementById('trial-title').textContent = t.trialTitle;
-      document.getElementById('trial-copy').textContent = t.trialCopy;
-      document.getElementById('api-title').textContent = t.apiTitle;
-      document.getElementById('api-copy').textContent = t.apiCopy;
-      document.getElementById('stat-tenants-label').textContent = t.statTenants;
-      document.getElementById('stat-mrr-label').textContent = t.statMrr;
-      document.getElementById('stat-success-label').textContent = t.statSuccess;
-      document.getElementById('stat-offers-label').textContent = t.statOffers;
-      document.getElementById('plans-title').textContent = t.plansTitle;
-      document.getElementById('plans-lead').textContent = t.plansLead;
-      document.getElementById('plans-loading').textContent = t.plansLoading;
-      document.getElementById('marketplace-title').textContent = t.marketplaceTitle;
-      document.getElementById('marketplace-lead').textContent = t.marketplaceLead;
-      document.getElementById('marketplace-loading').textContent = t.marketplaceLoading;
-      document.getElementById('features-title').textContent = t.featuresTitle;
-      document.getElementById('features-lead').textContent = t.featuresLead;
-      document.getElementById('legal-title').textContent = t.legalTitle;
-      document.getElementById('legal-lead').textContent = t.legalLead;
-      document.getElementById('locale-th').classList.toggle('active', state.locale === 'th');
-      document.getElementById('locale-en').classList.toggle('active', state.locale === 'en');
-      document.getElementById('feature-list').innerHTML = t.features.map((item) => `<li>${item}</li>`).join('');
-      renderOverview();
-    }
-
-    function renderOverview() {
-      const t = i18n[state.locale];
-      const overview = state.overview;
-      if (!overview) return;
-      const analytics = overview.analytics || {};
-      const billing = overview.billing || {};
-      const marketplace = overview.marketplace || {};
-      const legal = overview.legal || {};
-      document.getElementById('brand-name').textContent = overview.brand?.name || 'SCUM Ops Platform';
-      document.getElementById('hero-description').textContent = overview.brand?.description || '';
-      document.getElementById('stat-tenants').textContent = String(analytics.tenants?.active || 0);
-      document.getElementById('stat-mrr').textContent = currency(analytics.subscriptions?.mrrCents || 0, billing.currency || 'THB');
-      document.getElementById('stat-success').textContent = `${Math.round(Number(analytics.delivery?.successRate || 0) * 100)}%`;
-      document.getElementById('stat-offers').textContent = String(analytics.marketplace?.offers || 0);
-
-      const plans = Array.isArray(billing.plans) ? billing.plans : [];
-      document.getElementById('plans').innerHTML = plans.length > 0
-        ? plans.map((plan) => `
-            <article class="card">
-              <span class="eyebrow">${plan.type || 'subscription'}</span>
-              <h3>${plan.name || plan.id}</h3>
-              <div class="price">${currency(plan.amountCents || 0, billing.currency || 'THB')} ${t.per[plan.billingCycle] || ''}</div>
-              <p>${Array.isArray(plan.features) && plan.features.length > 0 ? plan.features.join(' • ') : plan.id}</p>
-            </article>
-          `).join('')
-        : `<div class="empty">${t.plansLoading}</div>`;
-
-      const offers = Array.isArray(marketplace.offers) ? marketplace.offers : [];
-      document.getElementById('marketplace').innerHTML = offers.length > 0
-        ? offers.map((offer) => `
-            <article class="card">
-              <span class="eyebrow">${offer.kind || 'service'}</span>
-              <h3>${offer.title || offer.id}</h3>
-              <div class="price">${currency(offer.priceCents || 0, offer.currency || billing.currency || 'THB')}</div>
-              <p>${offer.tenantId || ''} ${offer.status ? `• ${offer.status}` : ''}</p>
-            </article>
-          `).join('')
-        : `<div class="empty">${t.noMarketplace}</div>`;
-
-      const docs = Array.isArray(legal.docs) ? legal.docs : [];
-      document.getElementById('legal-list').innerHTML = docs.length > 0
-        ? docs.map((doc) => `<li><a class="btn" href="${doc.url || '#'}">${doc.title || doc.url || 'Document'}</a></li>`).join('')
-        : `<li class="empty">${t.legalLoading}</li>`;
-    }
-
     async function loadOverview() {
       try {
-        const res = await fetch('/api/platform/public/overview', { headers: { accept: 'application/json' } });
-        const payload = await res.json();
-        if (!res.ok || !payload?.ok) throw new Error(payload?.error || 'request-failed');
-        state.overview = payload.data || null;
-        renderOverview();
+        const response = await fetch('/api/platform/public/overview', {
+          headers: { accept: 'application/json' },
+        });
+        const payload = await response.json();
+        if (!response.ok || payload?.ok === false) {
+          throw new Error(payload?.error || 'request-failed');
+        }
+        const overview = payload.data || {};
+        const analytics = overview.analytics || {};
+        document.getElementById('brandTitle').textContent = overview.brand?.name || 'SCUM Commerce + Operations Control Plane';
+        document.getElementById('brandSubtitle').textContent = overview.brand?.description || document.getElementById('brandSubtitle').textContent;
+        document.getElementById('metricTenants').textContent = String(analytics.tenants?.active || 0);
+        document.getElementById('metricDelivery').textContent = `${Math.round(Number(analytics.delivery?.successRate || 0) * 100)}%`;
+        document.getElementById('metricSubscriptions').textContent = String(analytics.subscriptions?.active || 0);
+        document.getElementById('metricOffers').textContent = String(analytics.marketplace?.offers || 0);
       } catch (error) {
-        document.getElementById('hero-description').textContent = `Unable to load public overview: ${error.message}`;
+        document.getElementById('brandSubtitle').textContent = `Unable to load public overview: ${error.message}`;
       }
     }
 
-    document.getElementById('locale-th').addEventListener('click', () => {
-      state.locale = 'th';
-      applyLocale();
-    });
-    document.getElementById('locale-en').addEventListener('click', () => {
-      state.locale = 'en';
-      applyLocale();
-    });
-
-    applyLocale();
     loadOverview();
   </script>
 </body>

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SCUM Player Portal</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/player/assets/ui/player-core.css">
+</head>
+<body>
+  <div class="portal-shell">
+    <header class="portal-header">
+      <div class="portal-identity">
+        <span class="portal-badge">Player Portal</span>
+        <h1>Wallet, purchases, redeem, and account trust</h1>
+        <p>Player-facing portal for wallet visibility, purchase flow, redeem flow, profile review, and Steam linking. Admin operations live in separate consoles.</p>
+      </div>
+      <div class="portal-actions">
+        <button id="refreshBtn" class="button button-primary" type="button">Refresh</button>
+        <button id="logoutBtn" class="button" type="button">Logout</button>
+      </div>
+    </header>
+
+    <section id="statusBanner" class="status-banner status-info">
+      <div>
+        <strong id="statusTitle">Preparing player portal...</strong>
+        <p id="statusDetail">Loading wallet, orders, and account state.</p>
+      </div>
+      <div class="tag-row" id="statusTags"></div>
+    </section>
+
+    <nav class="portal-nav" id="portalNav">
+      <button class="nav-btn active" data-tab="home" type="button">Home</button>
+      <button class="nav-btn" data-tab="wallet" type="button">Wallet</button>
+      <button class="nav-btn" data-tab="shop" type="button">Shop</button>
+      <button class="nav-btn" data-tab="orders" type="button">Orders</button>
+      <button class="nav-btn" data-tab="redeem" type="button">Redeem</button>
+      <button class="nav-btn" data-tab="profile" type="button">Profile</button>
+    </nav>
+
+    <main class="portal-main">
+      <section class="tab-panel active" id="tab-home">
+        <div class="hero-grid">
+          <article class="hero-card profile-card">
+            <div class="profile-head">
+              <img id="profileAvatar" class="avatar" alt="Profile avatar">
+              <div>
+                <strong id="profileName">Player</strong>
+                <span id="profileMeta" class="muted">Discord account</span>
+              </div>
+            </div>
+            <div id="profileQuickMeta" class="tag-row"></div>
+          </article>
+
+          <article class="hero-card">
+            <span class="kicker">Wallet</span>
+            <strong id="homeWalletBalance" class="metric-value">-</strong>
+            <p class="muted">Current balance, reward claims, and recent transaction state.</p>
+            <div class="button-row">
+              <button id="claimDailyBtn" class="button button-primary" type="button">Claim Daily</button>
+              <button id="claimWeeklyBtn" class="button" type="button">Claim Weekly</button>
+            </div>
+          </article>
+
+          <article class="hero-card">
+            <span class="kicker">Latest Order</span>
+            <strong id="homeLatestOrder" class="metric-value">-</strong>
+            <p id="homeLatestOrderDetail" class="muted">No recent order yet.</p>
+          </article>
+        </div>
+
+        <div class="panel-grid two-col">
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Account Overview</h2>
+                <p class="muted">Steam readiness, order pressure, mission claim state, and quick health indicators.</p>
+              </div>
+            </div>
+            <div id="homeOverviewStats" class="stats-grid"></div>
+          </section>
+
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Notifications</h2>
+                <p class="muted">Latest player-facing messages about purchases, delivery, and account requirements.</p>
+              </div>
+            </div>
+            <div id="homeNotifications" class="feed-list"></div>
+          </section>
+        </div>
+
+        <section class="panel-card">
+          <div class="section-head">
+            <div>
+              <h2>Server Snapshot</h2>
+              <p class="muted">Current server presentation, player count, economy basics, and announcement context.</p>
+            </div>
+          </div>
+          <div id="homeServerStats" class="stats-grid"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-wallet">
+        <div class="panel-grid two-col">
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Wallet Summary</h2>
+                <p class="muted">Balance and reward cadence presented in a clear transaction-focused view.</p>
+              </div>
+            </div>
+            <div id="walletSummaryStats" class="stats-grid"></div>
+          </section>
+
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Wallet Guidance</h2>
+                <p class="muted">Every balance change keeps a reason and reference so you can understand where coins came from or went.</p>
+              </div>
+            </div>
+            <div class="tip-stack">
+              <article class="tip-card">
+                <strong>Reward claims are explicit</strong>
+                <p class="muted">Daily and weekly claim buttons will only activate when the cooldown is actually open.</p>
+              </article>
+              <article class="tip-card">
+                <strong>Game items may require Steam</strong>
+                <p class="muted">The shop clearly flags items that need a Steam link before you can complete the purchase flow.</p>
+              </article>
+            </div>
+          </section>
+        </div>
+
+        <section class="panel-card">
+          <div class="section-head">
+            <div>
+              <h2>Wallet Ledger</h2>
+              <p class="muted">Recent wallet changes with deltas, ending balances, reasons, and references.</p>
+            </div>
+          </div>
+          <div id="walletLedgerTable"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-shop">
+        <div class="panel-grid two-col shop-layout">
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Catalog</h2>
+                <p class="muted">Inventory-style browsing for items, bundles, and VIP entries available from this tenant.</p>
+              </div>
+            </div>
+            <div class="toolbar">
+              <input id="shopSearchInput" type="text" placeholder="Search items">
+              <select id="shopKindSelect">
+                <option value="all">All kinds</option>
+                <option value="item">Items</option>
+                <option value="vip">VIP</option>
+              </select>
+            </div>
+            <div id="shopGrid" class="shop-grid"></div>
+          </section>
+
+          <section class="panel-card cart-card">
+            <div class="section-head">
+              <div>
+                <h2>Cart</h2>
+                <p class="muted">Review what will be charged, what needs Steam, and the current order total before checkout.</p>
+              </div>
+            </div>
+            <div id="cartSummary" class="stats-grid compact"></div>
+            <div id="cartRows" class="feed-list"></div>
+            <div class="button-row">
+              <button id="cartClearBtn" class="button" type="button">Clear Cart</button>
+              <button id="cartCheckoutBtn" class="button button-primary" type="button">Checkout Cart</button>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-orders">
+        <div class="panel-grid two-col">
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Order Summary</h2>
+                <p class="muted">Pending, delivered, and failed order states remain visible without needing admin support.</p>
+              </div>
+            </div>
+            <div id="ordersSummaryStats" class="stats-grid"></div>
+          </section>
+
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Trust Signals</h2>
+                <p class="muted">Transaction codes, human-readable states, and short order history make each purchase easier to understand.</p>
+              </div>
+            </div>
+            <div class="tip-stack">
+              <article class="tip-card">
+                <strong>Status stays readable</strong>
+                <p class="muted">Orders show a purchase code, the latest state, and recent history without exposing internal queue details.</p>
+              </article>
+              <article class="tip-card">
+                <strong>Need deeper tools?</strong>
+                <p class="muted">Community-heavy features and older workflows remain available in the legacy portal if you still need them.</p>
+              </article>
+            </div>
+          </section>
+        </div>
+        <section class="panel-card">
+          <div class="section-head">
+            <div>
+              <h2>Purchase History</h2>
+              <p class="muted">Recent orders grouped into clear, mobile-friendly cards.</p>
+            </div>
+          </div>
+          <div id="ordersFeed" class="order-grid"></div>
+        </section>
+      </section>
+
+      <section class="tab-panel" id="tab-redeem">
+        <div class="panel-grid two-col">
+          <form id="redeemForm" class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Redeem Code</h2>
+                <p class="muted">Redeem coins or item entitlements from codes issued by the tenant.</p>
+              </div>
+            </div>
+            <div class="toolbar">
+              <input name="code" type="text" placeholder="Enter redeem code">
+              <button type="submit" class="button button-primary">Redeem</button>
+            </div>
+          </form>
+
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Redeem History</h2>
+                <p class="muted">Review which codes were used and when.</p>
+              </div>
+            </div>
+            <div id="redeemHistoryTable"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="tab-profile">
+        <div class="panel-grid two-col">
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Profile</h2>
+                <p class="muted">Core account details tied to this portal session.</p>
+              </div>
+            </div>
+            <div id="profileTable"></div>
+          </section>
+
+          <form id="steamLinkForm" class="panel-card">
+            <div class="section-head">
+              <div>
+                <h2>Steam Link</h2>
+                <p class="muted">Link SteamID to unlock in-game item purchases and delivery-safe workflows.</p>
+              </div>
+            </div>
+            <div class="toolbar stack">
+              <input name="steamId" type="text" placeholder="SteamID 15-25 digits">
+              <div class="button-row">
+                <button type="submit" class="button button-primary">Link Steam</button>
+                <button id="unlinkSteamBtn" type="button" class="button">Unlink</button>
+              </div>
+            </div>
+            <div id="steamLinkMeta" class="feed-list compact"></div>
+          </form>
+        </div>
+
+        <section class="panel-card">
+          <div class="section-head">
+            <div>
+              <h2>Steam Link History</h2>
+              <p class="muted">Simple history view of the current Steam binding state.</p>
+            </div>
+          </div>
+          <div id="steamHistoryTable"></div>
+        </section>
+
+        <section class="panel-card">
+          <div class="section-head">
+            <div>
+              <h2>Need legacy community features?</h2>
+              <p class="muted">Map, wheel, missions, party chat, and older experimental flows remain available in the legacy portal without cluttering the main player journey.</p>
+            </div>
+            <div class="button-row">
+              <a class="button" href="/player/legacy">Open Legacy Portal</a>
+            </div>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="/player/assets/ui/player-core.js"></script>
+</body>
+</html>

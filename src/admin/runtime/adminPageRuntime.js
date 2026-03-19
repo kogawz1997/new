@@ -21,6 +21,8 @@ function getAssetContentType(ext) {
 function createAdminPageRuntime(options = {}) {
   const {
     dashboardHtmlPath,
+    ownerConsoleHtmlPath,
+    tenantConsoleHtmlPath,
     loginHtmlPath,
     assetsDirPath,
     scumItemsDirPath,
@@ -29,6 +31,8 @@ function createAdminPageRuntime(options = {}) {
   } = options;
 
   let cachedDashboardHtml = null;
+  let cachedOwnerConsoleHtml = null;
+  let cachedTenantConsoleHtml = null;
   let cachedLoginHtml = null;
 
   async function tryServeAdminStaticAsset(req, res, pathname) {
@@ -135,6 +139,20 @@ function createAdminPageRuntime(options = {}) {
     return cachedDashboardHtml;
   }
 
+  function getOwnerConsoleHtml() {
+    if (!cachedOwnerConsoleHtml) {
+      cachedOwnerConsoleHtml = fs.readFileSync(ownerConsoleHtmlPath, 'utf8');
+    }
+    return cachedOwnerConsoleHtml;
+  }
+
+  function getTenantConsoleHtml() {
+    if (!cachedTenantConsoleHtml) {
+      cachedTenantConsoleHtml = fs.readFileSync(tenantConsoleHtmlPath, 'utf8');
+    }
+    return cachedTenantConsoleHtml;
+  }
+
   function getLoginHtml() {
     if (!cachedLoginHtml) {
       cachedLoginHtml = fs.readFileSync(loginHtmlPath, 'utf8');
@@ -146,6 +164,8 @@ function createAdminPageRuntime(options = {}) {
     tryServeAdminStaticAsset,
     tryServeStaticScumIcon,
     getDashboardHtml,
+    getOwnerConsoleHtml,
+    getTenantConsoleHtml,
     getLoginHtml,
   };
 }

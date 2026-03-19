@@ -2,6 +2,11 @@ const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { economy } = require('../config');
 const { getWalletSnapshot } = require('../services/playerQueryService');
 const { checkRewardClaimForUser, claimRewardForUser } = require('../services/rewardService');
+const {
+  createDiscordCard,
+  createMetricFields,
+  formatCoins,
+} = require('../utils/discordEmbedTheme');
 
 function msToDaysHours(ms) {
   const totalHours = Math.ceil(ms / (60 * 60 * 1000));
@@ -22,8 +27,19 @@ module.exports = {
 
     if (!check.ok) {
       const wallet = await getWalletSnapshot(userId);
+      const embed = createDiscordCard({
+        context: interaction,
+        tone: 'warn',
+        authorName: 'Weekly Reward',
+        title: 'รับรายสัปดาห์ไปแล้ว',
+        fields: createMetricFields([
+          { name: 'Balance', value: formatCoins(wallet.balance || 0, economy.currencySymbol) },
+          { name: 'พร้อมรับอีกครั้งใน', value: msToDaysHours(check.remainingMs), inline: false },
+        ]),
+        footerText: 'ระบบจะปลดล็อกให้อัตโนมัติเมื่อครบเวลา',
+      });
       return interaction.reply({
-        content: `คุณรับรายสัปดาห์ไปแล้ว ตอนนี้คุณมี ${economy.currencySymbol} **${Number(wallet.balance || 0).toLocaleString()}**\nโปรดลองใหม่อีกครั้งในอีก **${msToDaysHours(check.remainingMs)}**`,
+        embeds: [embed],
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -36,8 +52,18 @@ module.exports = {
       });
     }
 
-    return interaction.reply(
-      `คุณได้รับรายสัปดาห์ ${economy.currencySymbol} **${Number(result.reward || 0).toLocaleString()}**!\nยอดคงเหลือใหม่: ${economy.currencySymbol} **${Number(result.balance || 0).toLocaleString()}**`,
-    );
+    const embed = createDiscordCard({
+      context: interaction,
+      tone: 'success',
+      authorName: 'Weekly Reward',
+      title: 'รับรางวัลรายสัปดาห์สำเร็จ',
+      fields: createMetricFields([
+        { name: 'Reward', value: formatCoins(result.reward || 0, economy.currencySymbol) },
+        { name: 'New Balance', value: formatCoins(result.balance || 0, economy.currencySymbol) },
+      ]),
+      footerText: 'กลับมารับได้อีกครั้งในสัปดาห์ถัดไป',
+    });
+
+    return interaction.reply({ embeds: [embed] });
   },
 };

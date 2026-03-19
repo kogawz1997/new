@@ -11,14 +11,23 @@ function getIconContentType(ext) {
   return 'image/webp';
 }
 
+function getPortalAssetContentType(ext) {
+  const normalized = String(ext || '').toLowerCase();
+  if (normalized === '.css') return 'text/css; charset=utf-8';
+  if (normalized === '.js') return 'application/javascript; charset=utf-8';
+  return 'application/octet-stream';
+}
+
 function createPortalPageAssetRuntime(options = {}) {
   const {
     isProduction,
     loginHtmlPath,
     playerHtmlPath,
+    legacyPlayerHtmlPath,
     landingHtmlPath,
     trialHtmlPath,
     showcaseHtmlPath,
+    publicAssetsDirPath,
     docsDirPath,
     scumItemsDirPath,
     faviconSvg,
@@ -27,14 +36,18 @@ function createPortalPageAssetRuntime(options = {}) {
     buildSecurityHeaders,
     escapeHtml,
   } = options;
+  const resolvedLegacyPlayerHtmlPath = legacyPlayerHtmlPath || playerHtmlPath;
+  const resolvedPublicAssetsDirPath = publicAssetsDirPath || path.join(path.dirname(playerHtmlPath), 'assets');
 
   let cachedLoginHtml = null;
   let cachedPlayerHtml = null;
+  let cachedLegacyPlayerHtml = null;
   let cachedLandingHtml = null;
   let cachedTrialHtml = null;
   let cachedShowcaseHtml = null;
   let cachedLoginHtmlMtimeMs = 0;
   let cachedPlayerHtmlMtimeMs = 0;
+  let cachedLegacyPlayerHtmlMtimeMs = 0;
   let cachedLandingHtmlMtimeMs = 0;
   let cachedTrialHtmlMtimeMs = 0;
   let cachedShowcaseHtmlMtimeMs = 0;
@@ -113,6 +126,55 @@ function createPortalPageAssetRuntime(options = {}) {
     }
   }
 
+  async function tryServePortalStaticAsset(req, res, pathname) {
+    if (String(req.method || '').toUpperCase() !== 'GET') return false;
+    const prefix = '/player/assets/ui/';
+    if (!String(pathname || '').startsWith(prefix)) return false;
+
+    let relativeName = '';
+    try {
+      relativeName = decodeURIComponent(String(pathname || '').slice(prefix.length));
+    } catch {
+      return false;
+    }
+    if (!relativeName || relativeName.includes('..')) {
+      sendJson(res, 404, { ok: false, error: 'Not found' });
+      return true;
+    }
+
+    const ext = path.extname(relativeName).toLowerCase();
+    if (ext !== '.css' && ext !== '.js') {
+      sendJson(res, 404, { ok: false, error: 'Not found' });
+      return true;
+    }
+
+    const absPath = path.resolve(resolvedPublicAssetsDirPath, relativeName);
+    if (!absPath.startsWith(resolvedPublicAssetsDirPath)) {
+      sendJson(res, 404, { ok: false, error: 'Not found' });
+      return true;
+    }
+
+    try {
+      const stat = await fs.promises.stat(absPath);
+      if (!stat.isFile()) {
+        sendJson(res, 404, { ok: false, error: 'Not found' });
+        return true;
+      }
+      res.writeHead(
+        200,
+        buildSecurityHeaders({
+          'Content-Type': getPortalAssetContentType(ext),
+          'Cache-Control': 'public, max-age=300',
+        }),
+      );
+      await pipeline(fs.createReadStream(absPath), res);
+      return true;
+    } catch {
+      sendJson(res, 404, { ok: false, error: 'Not found' });
+      return true;
+    }
+  }
+
   function getPlayerHtml() {
     const mtimeMs = getFileMtimeMs(playerHtmlPath);
     if (!cachedPlayerHtml || !isProduction || mtimeMs > cachedPlayerHtmlMtimeMs) {
@@ -120,6 +182,15 @@ function createPortalPageAssetRuntime(options = {}) {
       cachedPlayerHtmlMtimeMs = mtimeMs;
     }
     return cachedPlayerHtml;
+  }
+
+  function getLegacyPlayerHtml() {
+    const mtimeMs = getFileMtimeMs(resolvedLegacyPlayerHtmlPath);
+    if (!cachedLegacyPlayerHtml || !isProduction || mtimeMs > cachedLegacyPlayerHtmlMtimeMs) {
+      cachedLegacyPlayerHtml = loadHtmlTemplate(resolvedLegacyPlayerHtmlPath);
+      cachedLegacyPlayerHtmlMtimeMs = mtimeMs;
+    }
+    return cachedLegacyPlayerHtml;
   }
 
   function getLandingHtml() {
@@ -157,12 +228,13 @@ function createPortalPageAssetRuntime(options = {}) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>${escapeHtml(title)}</title>
   <style>
-    body{margin:0;background:#0c1318;color:#e9f3f3;font-family:ui-sans-serif,system-ui,sans-serif}
-    .shell{width:min(980px,calc(100% - 32px));margin:0 auto;padding:28px 0 44px}
-    .card{background:#121d24;border:1px solid rgba(255,255,255,.08);border-radius:20px;padding:22px;box-shadow:0 24px 56px rgba(0,0,0,.28)}
-    a{color:#8fd4c8}
+    body{margin:0;background:linear-gradient(155deg,#071018,#0c151e 48%,#142231);color:#edf3fb;font-family:ui-sans-serif,system-ui,sans-serif}
+    .shell{width:min(980px,calc(100% - 24px));margin:0 auto;padding:22px 0 42px}
+    .card{background:rgba(17,28,38,.94);border:1px solid rgba(171,194,219,.16);border-radius:24px;padding:22px;box-shadow:0 24px 72px rgba(0,0,0,.34)}
+    a{color:#94d0ff}
     h1{margin:0 0 16px;font-size:32px}
-    pre{white-space:pre-wrap;line-height:1.7;font-size:14px;color:#bcd0cf}
+    p{color:#a6b8cb}
+    pre{white-space:pre-wrap;line-height:1.7;font-size:14px;color:#d8e3ef}
   </style>
 </head>
 <body>
@@ -201,8 +273,10 @@ function createPortalPageAssetRuntime(options = {}) {
 
   return {
     sendFavicon,
+    tryServePortalStaticAsset,
     tryServeStaticScumIcon,
     getPlayerHtml,
+    getLegacyPlayerHtml,
     getLandingHtml,
     getTrialHtml,
     getShowcaseHtml,

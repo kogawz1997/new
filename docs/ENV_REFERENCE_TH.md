@@ -123,6 +123,21 @@
 
 - `ADMIN_WEB_SESSION_TTL_HOURS`
   - อายุ session ของแอดมิน
+- `ADMIN_WEB_SESSION_COOKIE_NAME`
+  - ชื่อ cookie สำหรับ session (ค่า default: `scum_admin_session`)
+- `ADMIN_WEB_SESSION_COOKIE_PATH`
+  - path ของ cookie (ค่า default: `/admin`)
+- `ADMIN_WEB_SESSION_COOKIE_SAMESITE`
+  - ค่า SameSite ของ cookie (รองรับ `Strict|Lax|None`)
+  - ค่า default: `Strict` (แนะนำสำหรับ security)
+- `ADMIN_WEB_SESSION_COOKIE_DOMAIN`
+  - domain สำหรับ scope ของ cookie (ค่า default: ว่าง = ผูกกับ host ปัจจุบัน)
+- `ADMIN_WEB_SESSION_IDLE_MINUTES`
+  - หมดอายุเมื่อ idle เกินกี่นาที (ค่า default: `120`)
+- `ADMIN_WEB_SESSION_MAX_PER_USER`
+  - จำกัดจำนวน session ต่อผู้ใช้ (ค่า default: `5`)
+- `ADMIN_WEB_SESSION_BIND_USER_AGENT`
+  - บังคับให้ session ถูก bind กับ `User-Agent` เพื่อกันการขโมย session (ค่า default: `true`)
 - `ADMIN_WEB_2FA_ENABLED`
   - เปิด 2FA สำหรับ admin login
 - `ADMIN_WEB_2FA_SECRET`
@@ -131,6 +146,9 @@
   - บังคับ step-up auth สำหรับ mutation เสี่ยง เช่น config / restore / bulk / platform secrets
 - `ADMIN_WEB_STEP_UP_TTL_MINUTES`
   - อายุการยืนยัน step-up ต่อ session ก่อนต้องกรอกรหัส 2FA ใหม่
+- `ADMIN_WEB_ALLOW_TOKEN_SENSITIVE_MUTATIONS`
+  - ถ้า `true` จะอนุญาต token auth (header/query) เข้าถึง endpoint ที่เป็น mutation เสี่ยงโดยไม่ต้อง step-up auth
+  - ค่า default: `false` (แนะนำให้ `false` ใน production)
 - `ADMIN_WEB_SECURE_COOKIE`
   - `true` เมื่อใช้งานผ่าน HTTPS จริง
 - `ADMIN_WEB_HSTS_ENABLED`
@@ -356,10 +374,17 @@
 
 - `WEB_PORTAL_SESSION_TTL_HOURS`
   - อายุ session ของผู้เล่น
+- `WEB_PORTAL_SESSION_COOKIE_NAME`
+  - ชื่อ cookie สำหรับ session (ค่า default: `scum_portal_session`)
+- `WEB_PORTAL_SESSION_COOKIE_PATH`
+  - path ของ cookie (ค่า default: `/`)
+- `WEB_PORTAL_COOKIE_DOMAIN`
+  - domain สำหรับ scope ของ cookie (ค่า default: ว่าง = ผูกกับ host ปัจจุบัน)
 - `WEB_PORTAL_SECURE_COOKIE`
   - `true` เมื่อรันผ่าน HTTPS จริง
 - `WEB_PORTAL_COOKIE_SAMESITE`
-  - ค่า SameSite ของ cookie
+  - ค่า SameSite ของ cookie (รองรับ `Strict|Lax|None`)
+  - ค่า default: `Lax`
 - `WEB_PORTAL_ENFORCE_ORIGIN_CHECK`
   - เปิด origin check กัน CSRF
 

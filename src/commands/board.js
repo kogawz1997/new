@@ -1,12 +1,17 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const { economy } = require('../config');
 const {
   listTopWalletSnapshots,
   listStatsSnapshots,
 } = require('../services/playerQueryService');
+const {
+  createDiscordCard,
+  createSection,
+  formatCoins,
+} = require('../utils/discordEmbedTheme');
 
 function rankLabel(index) {
-  return `#${index + 1}`;
+  return ['🥇', '🥈', '🥉'][index] || `#${index + 1}`;
 }
 
 module.exports = {
@@ -39,7 +44,8 @@ module.exports = {
     const limit = interaction.options.getInteger('limit') || 10;
 
     let rows = [];
-    let title = 'ตารางคะแนน';
+    let title = 'Leaderboard';
+    let tone = 'brand';
 
     if (type === 'economy') {
       const wallets = await listTopWalletSnapshots(limit);
@@ -51,10 +57,11 @@ module.exports = {
         wallets.map(async (wallet, index) => {
           const user = await interaction.client.users.fetch(wallet.userId).catch(() => null);
           const name = user ? user.tag : `<@${wallet.userId}>`;
-          return `${rankLabel(index)} **${name}** - ${economy.currencySymbol} ${Number(wallet.balance || 0).toLocaleString()}`;
+          return `${rankLabel(index)} **${name}** • ${formatCoins(wallet.balance || 0, economy.currencySymbol)}`;
         }),
       );
-      title = 'กระดานเศรษฐกิจ';
+      title = 'Economy Board';
+      tone = 'economy';
     } else {
       const stats = listStatsSnapshots();
       if (stats.length === 0) {
@@ -63,24 +70,26 @@ module.exports = {
 
       if (type === 'kills') {
         stats.sort((a, b) => Number(b.kills || 0) - Number(a.kills || 0));
-        title = 'กระดานสังหาร';
+        title = 'Kill Board';
+        tone = 'combat';
         rows = await Promise.all(
           stats.slice(0, limit).map(async (entry, index) => {
             const user = await interaction.client.users.fetch(entry.userId).catch(() => null);
             const name = user ? user.tag : `<@${entry.userId}>`;
-            return `${rankLabel(index)} **${name}** - ${Number(entry.kills || 0)} คิล`;
+            return `${rankLabel(index)} **${name}** • ${Number(entry.kills || 0)} kills`;
           }),
         );
       } else if (type === 'playtime') {
         stats.sort(
           (a, b) => Number(b.playtimeMinutes || 0) - Number(a.playtimeMinutes || 0),
         );
-        title = 'กระดานเวลาเล่น';
+        title = 'Playtime Board';
+        tone = 'info';
         rows = await Promise.all(
           stats.slice(0, limit).map(async (entry, index) => {
             const user = await interaction.client.users.fetch(entry.userId).catch(() => null);
             const name = user ? user.tag : `<@${entry.userId}>`;
-            return `${rankLabel(index)} **${name}** - ${Math.floor(Number(entry.playtimeMinutes || 0) / 60)} ชม.`;
+            return `${rankLabel(index)} **${name}** • ${Math.floor(Number(entry.playtimeMinutes || 0) / 60)} ชม.`;
           }),
         );
       } else {
@@ -93,7 +102,8 @@ module.exports = {
             : Number(b.kills || 0) / Number(b.deaths || 1);
           return kdB - kdA;
         });
-        title = 'กระดาน K/D';
+        title = 'K/D Board';
+        tone = 'brand';
         rows = await Promise.all(
           stats.slice(0, limit).map(async (entry, index) => {
             const user = await interaction.client.users.fetch(entry.userId).catch(() => null);
@@ -101,18 +111,20 @@ module.exports = {
             const kd = Number(entry.deaths || 0) === 0
               ? Number(entry.kills || 0)
               : Number(entry.kills || 0) / Number(entry.deaths || 1);
-            return `${rankLabel(index)} **${name}** - K/D ${kd.toFixed(2)} (${Number(entry.kills || 0)}/${Number(entry.deaths || 0)})`;
+            return `${rankLabel(index)} **${name}** • K/D ${kd.toFixed(2)} (${Number(entry.kills || 0)}/${Number(entry.deaths || 0)})`;
           }),
         );
       }
     }
 
-    const embed = new EmbedBuilder()
-      .setColor(0x00bcd4)
-      .setTitle(title)
-      .setDescription(rows.join('\n'))
-      .setFooter({ text: `ขอโดย ${interaction.user.tag}` })
-      .setTimestamp();
+    const embed = createDiscordCard({
+      context: interaction,
+      tone,
+      authorName: 'Leaderboard Board',
+      title,
+      description: createSection('อันดับล่าสุด', rows),
+      footerText: `ขอโดย ${interaction.user.tag}`,
+    });
 
     return interaction.reply({ embeds: [embed] });
   },

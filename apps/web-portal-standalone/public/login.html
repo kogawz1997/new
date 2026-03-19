@@ -1,5 +1,5 @@
-﻿<!doctype html>
-<html lang="th">
+<!doctype html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -7,214 +7,48 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&family=Teko:wght@500;700&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --bg1: #0c120f;
-      --bg2: #162118;
-      --bg3: #273628;
-      --line: rgba(178, 205, 133, 0.28);
-      --text: #f1f7ea;
-      --muted: #afc2a2;
-      --accent: #c9d36f;
-      --accent2: #e8a64f;
-      --danger: #ff9e94;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      display: grid;
-      place-items: center;
-      padding: 18px;
-      font-family: "Rajdhani", sans-serif;
-      color: var(--text);
-      background:
-        radial-gradient(900px 500px at 0% 0%, rgba(201, 211, 111, 0.18), transparent 60%),
-        radial-gradient(900px 540px at 100% 100%, rgba(232, 166, 79, 0.2), transparent 58%),
-        linear-gradient(155deg, var(--bg1), var(--bg2) 44%, var(--bg3));
-    }
-
-    .card {
-      width: min(920px, 100%);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      background: linear-gradient(165deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
-      box-shadow: 0 24px 50px rgba(7, 11, 6, 0.64);
-      overflow: hidden;
-      display: grid;
-      grid-template-columns: 1.1fr 1fr;
-    }
-
-    .left {
-      padding: 28px;
-      border-right: 1px solid var(--line);
-      display: grid;
-      gap: 12px;
-      background: linear-gradient(145deg, rgba(0, 0, 0, 0.12), rgba(0, 0, 0, 0.28));
-    }
-
-    .tag {
-      width: fit-content;
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px solid var(--line);
-      font-size: 13px;
-      color: var(--muted);
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-    }
-
-    h1 {
-      margin: 0;
-      font-family: "Teko", sans-serif;
-      font-size: clamp(42px, 6vw, 62px);
-      line-height: 0.9;
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
-    }
-
-    .left p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 19px;
-      line-height: 1.45;
-      max-width: 30ch;
-    }
-
-    .spec {
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px 12px;
-      background: rgba(255,255,255,0.05);
-      display: grid;
-      gap: 2px;
-    }
-
-    .spec .k {
-      font-size: 12px;
-      color: var(--muted);
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-    }
-
-    .spec .v {
-      font-size: 19px;
-      font-weight: 700;
-    }
-
-    .right {
-      padding: 28px;
-      display: grid;
-      gap: 14px;
-      align-content: center;
-    }
-
-    .right h2 {
-      margin: 0;
-      font-family: "Teko", sans-serif;
-      font-size: 44px;
-      line-height: 0.9;
-      letter-spacing: 0.7px;
-      text-transform: uppercase;
-    }
-
-    .right p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 18px;
-      line-height: 1.35;
-    }
-
-    .discord-btn {
-      border: none;
-      border-radius: 12px;
-      padding: 14px;
-      font: inherit;
-      font-size: 18px;
-      font-weight: 700;
-      color: #07142d;
-      cursor: pointer;
-      background: linear-gradient(135deg, #6576ff, #88a9ff);
-      box-shadow: 0 14px 24px rgba(27, 72, 182, 0.44);
-      transition: transform 140ms ease;
-    }
-
-    .discord-btn:hover { transform: translateY(-1px); }
-
-    .error {
-      min-height: 22px;
-      color: var(--danger);
-      font-size: 16px;
-      font-weight: 700;
-    }
-
-    .hint {
-      margin: 0;
-      font-size: 14px;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-
-    .links {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
-    .links a {
-      color: var(--accent);
-      text-decoration: none;
-      font-size: 15px;
-    }
-
-    .links a:hover {
-      text-decoration: underline;
-    }
-
-    @media (max-width: 860px) {
-      .card { grid-template-columns: 1fr; }
-      .left { border-right: 0; border-bottom: 1px solid var(--line); }
-    }
-  </style>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/player/assets/ui/portal-public.css">
 </head>
 <body>
-  <section class="card">
-    <aside class="left">
-      <span class="tag">SCUM • PLAYER PORTAL</span>
-      <h1>PLAYER<br>ACCESS</h1>
-      <p>ศูนย์ผู้เล่นสำหรับดูยอดเหรียญ ร้านค้า ประวัติซื้อ แลกโค้ด เช่ามอไซ และค่าหัว จากจุดเดียว</p>
-      <div class="spec">
-        <span class="k">Auth Method</span>
-        <span class="v">Discord OAuth 2.0</span>
-      </div>
-      <div class="spec">
-        <span class="k">Portal Type</span>
-        <span class="v">Player Only</span>
-      </div>
-      <div class="spec">
-        <span class="k">Admin Console</span>
-        <span class="v">แยกไปที่ระบบแอดมินเดิม</span>
-      </div>
-    </aside>
+  <div class="public-shell signin-layout">
+    <section class="signin-card public-panel">
+      <aside class="signin-side">
+        <span class="public-badge">Player Portal</span>
+        <h2>Trusted player access</h2>
+        <p>Use Discord sign-in to access wallet, purchases, redeem flow, Steam linking, and transaction history. Admin and platform controls stay in separate consoles.</p>
+        <div class="hint-list">
+          <article class="hint-card">
+            <strong>Player only</strong>
+            <p class="muted">This surface is for community players. Platform owner and tenant admins should use the admin web.</p>
+          </article>
+          <article class="hint-card">
+            <strong>Safe purchase flow</strong>
+            <p class="muted">Order status, delivery state, and Steam-link requirements are shown inside the portal after sign-in.</p>
+          </article>
+          <article class="hint-card">
+            <strong>Auth method</strong>
+            <p class="muted">Discord OAuth 2.0 is used to identify the player account tied to this portal session.</p>
+          </article>
+        </div>
+      </aside>
 
-    <div class="right">
-      <h2>Sign In</h2>
-      <p>เข้าสู่ระบบด้วย Discord เพื่อยืนยันตัวตนผู้เล่นก่อนใช้งานพอร์ทัล</p>
-      <button class="discord-btn" id="discordBtn" type="button">เข้าสู่ระบบด้วย Discord</button>
-      <div id="errorText" class="error">__ERROR_MESSAGE__</div>
-      <p class="hint">หากล็อกอินไม่ได้ ให้ตรวจค่า OAuth ในไฟล์ `.env` ของเว็บ standalone</p>
-      <div class="links">
-        <a href="/landing">ดูหน้า Landing</a>
-        <a href="/showcase">ดูหน้า Showcase ระบบ</a>
-        <a href="/trial">ดูหน้า Trial</a>
-        <a href="/admin">ไปหน้าแอดมิน</a>
+      <div class="signin-form">
+        <span class="public-badge">Sign In</span>
+        <h3>Enter the portal</h3>
+        <p class="muted">Continue with Discord to open the player-facing portal experience.</p>
+        <button class="button button-primary" id="discordBtn" type="button">Continue with Discord</button>
+        <div id="errorText" class="error">__ERROR_MESSAGE__</div>
+        <p class="muted">If sign-in fails, verify the standalone portal OAuth settings in the runtime environment.</p>
+        <div class="links">
+          <a class="button" href="/landing">Platform overview</a>
+          <a class="button" href="/showcase">Feature showcase</a>
+          <a class="button" href="/trial">Trial checklist</a>
+          <a class="button" href="/admin">Admin consoles</a>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+  </div>
 
   <script>
     document.getElementById('discordBtn').addEventListener('click', () => {

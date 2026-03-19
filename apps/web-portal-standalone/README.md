@@ -1,4 +1,4 @@
-﻿# Standalone SCUM Player Portal
+# Standalone SCUM Player Portal
 
 เว็บนี้เป็น **Player Portal แบบแยก process** และ **ไม่พึ่ง `/admin/api`** จากบอทหลัก
 
@@ -125,6 +125,30 @@ copy apps\web-portal-standalone\.env.example apps\web-portal-standalone\.env
 - ถ้าต้องการล็อกเฉพาะคน:
   - `WEB_PORTAL_PLAYER_OPEN_ACCESS=false`
   - แล้วตั้ง `WEB_PORTAL_ALLOWED_DISCORD_IDS` หรือ `WEB_PORTAL_REQUIRE_GUILD_MEMBER=true`
+
+### 4.1 Session / Cookies / Origin check (ตั้งค่าแบบละเอียด)
+
+เว็บนี้จะสร้าง session ผู้เล่นผ่าน Discord OAuth แล้วเก็บไว้ใน cookie
+
+ค่าสำคัญ (ค่า default ที่ระบบใช้):
+- `WEB_PORTAL_SESSION_COOKIE_NAME` (default: `scum_portal_session`)
+- `WEB_PORTAL_SESSION_COOKIE_PATH` (default: `/`)
+- `WEB_PORTAL_COOKIE_DOMAIN` (default: ว่าง = ผูกกับ host ปัจจุบันเท่านั้น)
+- `WEB_PORTAL_COOKIE_SAMESITE` (default: `Lax`)
+- `WEB_PORTAL_SECURE_COOKIE`
+  - ต้องเป็น `true` เมื่อเว็บถูก expose ผ่าน HTTPS (สำคัญมากสำหรับ browser)
+- `WEB_PORTAL_ENFORCE_ORIGIN_CHECK` (default: `true`)
+  - เปิดการป้องกัน CSRF: ถ้าคำขอ “ข้าม origin” ถูกมองว่าไม่ปลอดภัย ระบบจะปฏิเสธ
+
+คำแนะนำ production:
+- ตั้ง `WEB_PORTAL_SECURE_COOKIE=true`
+- ตั้ง `WEB_PORTAL_COOKIE_SAMESITE=Lax` (ค่าเริ่มต้น) หรือใช้ `Strict` เฉพาะเมื่อมั่นใจว่า flow OAuth ไม่สะดุด
+- ถ้าใช้หลาย subdomain และต้องการให้ cookie ใช้งานร่วมกันข้าม subdomain ให้ตั้ง `WEB_PORTAL_COOKIE_DOMAIN`
+  - ตัวอย่าง: `player.example.com` (ปรับตามโดเมนจริง)
+
+ตรวจสอบ/ทดสอบหลังตั้งค่า:
+1. Login แล้วเข้า `/player` ได้
+2. กดเมนูที่เรียก `POST` (เช่น daily/weekly claim, shop buy/checkout) แล้วไม่โดน 403 `Cross-site request denied`
 
 ---
 

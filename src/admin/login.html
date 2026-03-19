@@ -1,49 +1,29 @@
-﻿<!doctype html>
-<html lang="th">
+<!doctype html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SCUM Admin Access</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=Teko:wght@500;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-1: #0f1510;
-      --bg-2: #161f14;
-      --bg-3: #243322;
-      --text: #eff6e8;
-      --muted: #a7b89d;
-      --line: rgba(176, 200, 138, 0.22);
-      --surface: rgba(19, 27, 17, 0.84);
-      --surface-strong: rgba(10, 15, 10, 0.9);
-      --accent: #b7ce86;
-      --accent-2: #d4af6a;
-      --danger: #ff8f86;
-      --btn-text: #13180f;
-      --glow-a: 152, 189, 112;
-      --glow-b: 206, 166, 96;
-      --shadow-lg: 0 24px 50px rgba(7, 10, 6, 0.65);
-      --shadow-md: 0 14px 28px rgba(8, 12, 7, 0.44);
-    }
-
-    :root[data-theme="neon"] {
-      --bg-1: #041225;
-      --bg-2: #0a1e38;
-      --bg-3: #153457;
-      --text: #edf4ff;
-      --muted: #a4b8df;
-      --line: rgba(113, 172, 255, 0.24);
-      --surface: rgba(10, 23, 41, 0.86);
-      --surface-strong: rgba(6, 12, 24, 0.92);
-      --accent: #2fe0ba;
-      --accent-2: #4ea6ff;
-      --danger: #ff7185;
-      --btn-text: #061327;
-      --glow-a: 46, 228, 189;
-      --glow-b: 84, 158, 255;
-      --shadow-lg: 0 24px 50px rgba(2, 7, 17, 0.68);
-      --shadow-md: 0 14px 28px rgba(2, 7, 17, 0.46);
+      --bg: #091118;
+      --bg-alt: #0f1822;
+      --panel: rgba(16, 25, 35, 0.92);
+      --panel-soft: rgba(20, 31, 46, 0.82);
+      --line: rgba(171, 194, 219, 0.16);
+      --line-strong: rgba(212, 227, 242, 0.28);
+      --text: #edf3fb;
+      --muted: #9fb3c8;
+      --accent: #94d0ff;
+      --success: #88ddb2;
+      --warning: #efc26d;
+      --danger: #ef8c7d;
+      --radius-lg: 22px;
+      --radius-md: 16px;
+      --shadow: 0 30px 80px rgba(0, 0, 0, 0.42);
     }
 
     * { box-sizing: border-box; }
@@ -53,148 +33,105 @@
       min-height: 100vh;
       display: grid;
       place-items: center;
-      font-family: "Barlow Condensed", "Teko", sans-serif;
-      letter-spacing: 0.2px;
+      padding: 18px;
       color: var(--text);
       background:
-        radial-gradient(900px 520px at 6% 5%, rgba(var(--glow-a), 0.22) 0%, transparent 60%),
-        radial-gradient(1000px 560px at 102% 100%, rgba(var(--glow-b), 0.24) 0%, transparent 58%),
-        linear-gradient(160deg, var(--bg-1), var(--bg-2) 46%, var(--bg-3));
-      padding: 18px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    body::before {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background-image:
-        linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-      background-size: 28px 28px;
-      opacity: 0.12;
-    }
-
-    body::after {
-      content: "";
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      background: repeating-linear-gradient(
-        0deg,
-        rgba(0, 0, 0, 0) 0,
-        rgba(0, 0, 0, 0) 2px,
-        rgba(0, 0, 0, 0.06) 3px
-      );
-      opacity: 0.35;
-      mix-blend-mode: soft-light;
+        radial-gradient(1000px 640px at 100% 0%, rgba(84, 181, 255, 0.12), transparent 56%),
+        radial-gradient(860px 560px at 0% 100%, rgba(136, 221, 178, 0.08), transparent 58%),
+        linear-gradient(155deg, #071018, var(--bg) 48%, #12202d);
+      font-family: "IBM Plex Sans Thai", "Segoe UI", sans-serif;
     }
 
     .screen {
-      width: min(1020px, 100%);
+      width: min(1120px, 100%);
       border: 1px solid var(--line);
-      border-radius: 18px;
-      background: linear-gradient(170deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)), var(--surface);
-      box-shadow: var(--shadow-lg);
-      backdrop-filter: blur(10px);
+      border-radius: var(--radius-lg);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02)),
+        var(--panel);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
       overflow: hidden;
       display: grid;
-      grid-template-columns: 1.08fr 1fr;
-      position: relative;
-      z-index: 1;
+      grid-template-columns: 1.04fr 0.96fr;
+    }
+
+    .hero,
+    .auth {
+      padding: 24px;
+      display: grid;
+      gap: 14px;
     }
 
     .hero {
-      padding: 28px;
       border-right: 1px solid var(--line);
-      background:
-        linear-gradient(140deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
-        radial-gradient(120% 100% at 0% 0%, rgba(var(--glow-a), 0.14), transparent 60%),
-        var(--surface-strong);
-      display: grid;
-      gap: 14px;
       align-content: start;
+      background:
+        radial-gradient(860px 420px at 0% 0%, rgba(84, 181, 255, 0.1), transparent 62%),
+        var(--panel-soft);
     }
 
     .tag {
       width: fit-content;
-      border: 1px solid var(--line);
+      min-height: 30px;
+      padding: 0 12px;
+      display: inline-flex;
+      align-items: center;
       border-radius: 999px;
-      padding: 6px 12px;
-      font-size: 14px;
-      color: var(--muted);
-      letter-spacing: 0.8px;
-      text-transform: uppercase;
+      border: 1px solid var(--line);
+      color: var(--accent);
       background: rgba(255, 255, 255, 0.05);
-    }
-
-    h1 {
-      margin: 0;
-      font-family: "Teko", sans-serif;
-      font-size: clamp(44px, 7vw, 62px);
-      line-height: 0.88;
-      letter-spacing: 0.8px;
+      font-family: "JetBrains Mono", monospace;
+      font-size: 12px;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
     }
 
-    .hero p {
+    h1,
+    h2 {
+      margin: 0;
+      font-family: "Barlow Condensed", sans-serif;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      line-height: 0.92;
+    }
+
+    h1 { font-size: clamp(44px, 6vw, 68px); }
+    h2 { font-size: 42px; }
+
+    p,
+    .hint,
+    label span {
       margin: 0;
       color: var(--muted);
-      font-size: 18px;
-      line-height: 1.45;
-      max-width: 28ch;
+      line-height: 1.55;
     }
 
     .specs {
       display: grid;
-      gap: 8px;
-      margin-top: 4px;
+      gap: 10px;
     }
 
     .spec {
       border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px 12px;
-      background: rgba(255, 255, 255, 0.05);
+      border-radius: var(--radius-md);
+      padding: 12px 14px;
+      background: rgba(255, 255, 255, 0.04);
       display: grid;
-      gap: 2px;
+      gap: 4px;
     }
 
     .spec .k {
-      font-size: 13px;
-      color: var(--muted);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
       text-transform: uppercase;
-      letter-spacing: 0.9px;
     }
 
     .spec .v {
       font-size: 18px;
       font-weight: 700;
-    }
-
-    .auth {
-      padding: 28px;
-      display: grid;
-      gap: 14px;
-      align-content: center;
-    }
-
-    .auth h2 {
-      margin: 0;
-      font-family: "Teko", sans-serif;
-      font-size: 42px;
-      line-height: 0.9;
-      letter-spacing: 0.7px;
-      text-transform: uppercase;
-    }
-
-    .auth .sub {
-      margin: 0;
-      color: var(--muted);
-      font-size: 18px;
-      line-height: 1.35;
     }
 
     .theme-switch {
@@ -205,160 +142,156 @@
       border-radius: 12px;
       padding: 6px;
       background: rgba(255, 255, 255, 0.04);
+      width: fit-content;
     }
 
     .theme-switch button {
       border: 1px solid var(--line);
       background: rgba(255, 255, 255, 0.03);
       color: var(--text);
-      border-radius: 9px;
-      font-family: inherit;
-      font-size: 14px;
-      font-weight: 700;
-      padding: 9px 10px;
+      border-radius: 10px;
+      min-height: 38px;
+      padding: 0 12px;
       cursor: pointer;
-      transition: 160ms ease;
     }
 
     .theme-switch button.active {
       border-color: transparent;
-      background: linear-gradient(135deg, var(--accent-2), var(--accent));
-      color: var(--btn-text);
-      box-shadow: var(--shadow-md);
+      background: linear-gradient(135deg, rgba(94, 182, 255, 0.96), rgba(189, 231, 255, 0.9));
+      color: #07131d;
+      font-weight: 700;
     }
 
     form {
       display: grid;
-      gap: 11px;
-      margin-top: 3px;
+      gap: 12px;
     }
 
     label {
       display: grid;
-      gap: 5px;
-      font-size: 15px;
-      color: var(--muted);
-      letter-spacing: 0.5px;
+      gap: 6px;
     }
 
     input,
     button {
       width: 100%;
-      border-radius: 11px;
-      padding: 12px;
+      border-radius: 14px;
+      padding: 12px 14px;
       border: 1px solid var(--line);
       outline: none;
-      font-family: inherit;
-      font-size: 18px;
+      font: inherit;
       color: var(--text);
       background: rgba(255, 255, 255, 0.05);
-      transition: border-color 160ms ease, box-shadow 180ms ease, transform 120ms ease;
     }
 
     input:focus {
-      border-color: rgba(160, 205, 255, 0.8);
-      box-shadow: 0 0 0 2px rgba(90, 167, 255, 0.24);
-      background: rgba(255, 255, 255, 0.08);
+      border-color: rgba(148, 208, 255, 0.58);
+      box-shadow: 0 0 0 2px rgba(84, 181, 255, 0.12);
     }
 
-    button {
-      border: none;
+    #loginBtn,
+    #discordSsoBtn {
       cursor: pointer;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      background: linear-gradient(135deg, var(--accent-2), var(--accent));
-      color: var(--btn-text);
-      text-transform: uppercase;
+      transition: transform 140ms ease, border-color 140ms ease;
     }
 
-    button:hover { transform: translateY(-1px); }
-    button:active { transform: translateY(0); }
-    button:disabled { opacity: 0.72; cursor: wait; }
+    #loginBtn:hover,
+    #discordSsoBtn:hover {
+      transform: translateY(-1px);
+      border-color: var(--line-strong);
+    }
+
+    #loginBtn {
+      background: linear-gradient(135deg, rgba(148, 208, 255, 0.96), rgba(187, 231, 255, 0.92));
+      color: #08131a;
+      border-color: transparent;
+      font-weight: 700;
+    }
 
     #discordSsoBtn {
-      background: linear-gradient(135deg, #6576ff, #8ca5ff);
-      color: #07142d;
       display: none;
     }
 
     .error {
       min-height: 22px;
       color: var(--danger);
-      font-size: 16px;
-      font-weight: 600;
-      letter-spacing: 0.2px;
-    }
-
-    .hint {
-      margin: 0;
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.35;
+      font-weight: 700;
     }
 
     @media (max-width: 920px) {
-      .screen { grid-template-columns: 1fr; }
-      .hero { border-right: 0; border-bottom: 1px solid var(--line); }
+      .screen {
+        grid-template-columns: 1fr;
+      }
+
+      .hero {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
     }
 
     @media (max-width: 620px) {
       .hero,
-      .auth { padding: 18px; }
-      .auth h2 { font-size: 34px; }
-      .auth .sub,
-      .hero p { font-size: 16px; }
+      .auth {
+        padding: 18px;
+      }
+
+      h2 {
+        font-size: 34px;
+      }
     }
   </style>
 </head>
 <body>
   <section class="screen">
     <aside class="hero">
-      <div class="tag">SCUM • ADMIN BUNKER</div>
-      <h1>TACTICAL<br>CONTROL</h1>
-      <p>แดชบอร์ดรวมศูนย์สำหรับควบคุมเศรษฐกิจ ร้านค้า คิว RCON และการปฏิบัติการของเซิร์ฟเวอร์ SCUM</p>
+      <div class="tag">Admin Access</div>
+      <h1>Owner and tenant consoles</h1>
+      <p>Sign in to reach the role-appropriate admin surface. Platform owners land in the owner console. Tenant-scoped operators land in the tenant console.</p>
       <div class="specs">
         <div class="spec">
-          <span class="k">Login Source</span>
-          <span class="v">Database (`admin_web_users`)</span>
+          <span class="k">Auth stack</span>
+          <span class="v">Database login, Session, 2FA, Rate Limit</span>
         </div>
         <div class="spec">
-          <span class="k">Security Layer</span>
-          <span class="v">Session + 2FA + Rate Limit</span>
+          <span class="k">Owner console</span>
+          <span class="v">Global health, tenant fleet, security, runtime, recovery</span>
         </div>
         <div class="spec">
-          <span class="k">Ops Mode</span>
-          <span class="v">Live Update + Alert</span>
+          <span class="k">Tenant console</span>
+          <span class="v">Scoped config, delivery, wallet, player operations</span>
         </div>
       </div>
     </aside>
 
     <div class="auth">
-      <h2>Sign In</h2>
-      <p class="sub">เข้าสู่ระบบเพื่อเข้าศูนย์ควบคุมหลัก</p>
-      <div class="theme-switch" role="group" aria-label="เลือกธีม">
-        <button id="themeBtnMilitary" type="button">Military Tactical</button>
-        <button id="themeBtnNeon" type="button">Neon Cyber</button>
+      <span class="tag">Sign In</span>
+      <h2>Enter admin web</h2>
+      <p>Use your admin account to open the correct console automatically after authentication.</p>
+
+      <div class="theme-switch" role="group" aria-label="Choose theme">
+        <button id="themeBtnMilitary" type="button">Tactical</button>
+        <button id="themeBtnNeon" type="button">High Contrast</button>
       </div>
 
       <form id="loginForm" autocomplete="on">
         <label>
-          <span>ชื่อผู้ใช้</span>
-          <input id="usernameInput" name="username" autocomplete="username" placeholder="เช่น admin-owner" required>
+          <span>Username</span>
+          <input id="usernameInput" name="username" autocomplete="username" placeholder="admin-owner" required>
         </label>
         <label>
-          <span>รหัสผ่าน</span>
+          <span>Password</span>
           <input id="passwordInput" name="password" type="password" autocomplete="current-password" required>
         </label>
         <label>
-          <span>รหัส 2FA (ถ้ามี)</span>
+          <span>2FA Code (optional)</span>
           <input id="otpInput" name="otp" inputmode="numeric" pattern="\\d{6}" maxlength="6" placeholder="123456">
         </label>
-        <button id="loginBtn" type="submit">เข้าสู่ศูนย์ควบคุม</button>
+        <button id="loginBtn" type="submit">Sign In</button>
       </form>
 
-      <button id="discordSsoBtn" type="button">เข้าสู่ระบบด้วย Discord SSO</button>
+      <button id="discordSsoBtn" type="button">Continue with Discord SSO</button>
       <div id="errorText" class="error"></div>
-      <p id="sourceHint" class="hint">บัญชีสำหรับล็อกอินถูกอ่านจากฐานข้อมูลเป็นหลัก หากยังไม่มีบัญชี ระบบจะ bootstrap จากค่า env อัตโนมัติครั้งแรก</p>
+      <p id="sourceHint" class="hint">Admin users are read from the database first. Session policy, 2FA, and rate limiting remain enforced after the redesign.</p>
     </div>
   </section>
 
@@ -386,6 +319,11 @@
     function applyTheme(themeName, persist = true) {
       const resolved = normalizeThemeName(themeName);
       document.documentElement.setAttribute('data-theme', resolved);
+      if (resolved === 'neon') {
+        document.documentElement.style.setProperty('--accent', '#53e3ba');
+      } else {
+        document.documentElement.style.removeProperty('--accent');
+      }
       themeBtnMilitary?.classList.toggle('active', resolved === 'military');
       themeBtnNeon?.classList.toggle('active', resolved === 'neon');
       if (persist) {
@@ -423,9 +361,9 @@
         body: payload,
         credentials: 'same-origin',
       });
-      const data = await res.json().catch(() => ({ ok: false, error: 'รูปแบบข้อมูลไม่ถูกต้อง' }));
+      const data = await res.json().catch(() => ({ ok: false, error: 'Invalid response format' }));
       if (!res.ok || data.ok === false) {
-        throw new Error(data.error || `คำขอล้มเหลว (${res.status})`);
+        throw new Error(data.error || `Request failed (${res.status})`);
       }
       return data;
     }
@@ -446,7 +384,7 @@
           discordSsoBtn.style.display = 'block';
         }
         if (providers?.data?.loginSource === 'database' && sourceHint) {
-          sourceHint.textContent = 'ระบบล็อกอินใช้งานฐานข้อมูลโดยตรง (table: admin_web_users) และรองรับ Session + 2FA + Rate Limit';
+          sourceHint.textContent = 'Database-backed admin accounts remain the primary login source. Session, 2FA, and rate limit policy are unchanged.';
         }
       } catch {
         // ignore
@@ -466,7 +404,7 @@
       errorText.textContent = '';
       loginBtn.disabled = true;
       const originalText = loginBtn.textContent;
-      loginBtn.textContent = 'กำลังตรวจสอบ...';
+      loginBtn.textContent = 'Signing in...';
       try {
         await api('/admin/api/login', 'POST', {
           username: usernameInput.value.trim(),
@@ -475,7 +413,7 @@
         });
         window.location.replace('/admin');
       } catch (error) {
-        errorText.textContent = error.message || 'เข้าสู่ระบบไม่สำเร็จ';
+        errorText.textContent = error.message || 'Sign in failed';
         if (/2FA|OTP/i.test(errorText.textContent)) {
           otpInput.focus();
         } else {

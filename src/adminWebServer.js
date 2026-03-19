@@ -402,6 +402,8 @@ const {
   normalizeRole,
   normalizeSameSite,
 });
+const ownerConsoleHtmlPath = path.join(__dirname, 'admin', 'owner-console.html');
+const tenantConsoleHtmlPath = path.join(__dirname, 'admin', 'tenant-console.html');
 const sessions = new Map();
 const discordOauthStates = new Map();
 const secureEqual = createSecureEqual(crypto);
@@ -571,6 +573,8 @@ const {
   getLoginHtml,
 } = createAdminPageRuntime({
   dashboardHtmlPath,
+  ownerConsoleHtmlPath,
+  tenantConsoleHtmlPath,
   loginHtmlPath,
   assetsDirPath: adminAssetsDirPath,
   scumItemsDirPath,
@@ -696,7 +700,10 @@ const handleAdminPublicRoute = createAdminPublicRoutes({
   sendText,
   sendHtml,
   isAuthorized,
+  getAuthContext,
   getLoginHtml,
+  getOwnerConsoleHtml,
+  getTenantConsoleHtml,
   getDashboardHtml,
   getPersistenceStatus,
   getDeliveryMetricsSnapshot,

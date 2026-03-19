@@ -255,4 +255,83 @@ DELIVERY_NATIVE_PROOF_WAIT_FOR_STATE_MS=15000
 DELIVERY_NATIVE_PROOF_POLL_INTERVAL_MS=1500
 ```
 
+### Web Setup (Admin Web + Player Portal) แบบละเอียด
+
+#### Admin Web (แนะนำสำหรับ production)
+
+โฟลเดอร์ admin web: `src/adminWebServer.js` (รันผ่าน runtime bot)
+
+ตัวอย่าง `.env` ที่แนะนำ (ปรับโดเมน/พอร์ตตามของจริง):
+```env
+ADMIN_WEB_HOST=0.0.0.0
+ADMIN_WEB_PORT=3200
+
+# CSRF hardening / origin allowlist
+ADMIN_WEB_ENFORCE_ORIGIN_CHECK=true
+ADMIN_WEB_ALLOWED_ORIGINS=https://admin.genz.noah-dns.online
+ADMIN_WEB_TRUST_PROXY=true
+
+# Cookie security
+ADMIN_WEB_SECURE_COOKIE=true
+ADMIN_WEB_HSTS_ENABLED=true
+ADMIN_WEB_SESSION_COOKIE_NAME=scum_admin_session
+ADMIN_WEB_SESSION_COOKIE_PATH=/admin
+ADMIN_WEB_SESSION_COOKIE_SAMESITE=Strict
+
+# Auth hardening (แนะนำเปิด)
+ADMIN_WEB_2FA_ENABLED=true
+ADMIN_WEB_2FA_SECRET=put_a_strong_totp_secret_here
+ADMIN_WEB_STEP_UP_ENABLED=true
+
+# ถ้าเปิด Discord SSO สำหรับ admin
+ADMIN_WEB_SSO_DISCORD_ENABLED=true
+ADMIN_WEB_SSO_DISCORD_CLIENT_ID=...
+ADMIN_WEB_SSO_DISCORD_CLIENT_SECRET=...
+ADMIN_WEB_SSO_DISCORD_REDIRECT_URI=https://admin.genz.noah-dns.online/admin/auth/discord/callback
+ADMIN_WEB_SSO_DISCORD_GUILD_ID=...
+```
+
+#### Player Portal (แนะนำสำหรับ production)
+
+โฟลเดอร์ portal: `apps/web-portal-standalone/` (รันแยก process)
+
+ตัวอย่าง `.env` (ไฟล์ของ portal) ที่แนะนำ:
+```env
+WEB_PORTAL_MODE=player
+WEB_PORTAL_HOST=0.0.0.0
+WEB_PORTAL_PORT=3300
+
+WEB_PORTAL_BASE_URL=https://player.genz.noah-dns.online
+WEB_PORTAL_LEGACY_ADMIN_URL=https://admin.genz.noah-dns.online/admin
+
+# Session / cookies
+WEB_PORTAL_SESSION_TTL_HOURS=12
+WEB_PORTAL_SECURE_COOKIE=true
+WEB_PORTAL_COOKIE_SAMESITE=Lax
+WEB_PORTAL_ENFORCE_ORIGIN_CHECK=true
+WEB_PORTAL_SESSION_COOKIE_NAME=scum_portal_session
+WEB_PORTAL_SESSION_COOKIE_PATH=/
+WEB_PORTAL_COOKIE_DOMAIN=
+
+# Discord OAuth
+WEB_PORTAL_DISCORD_CLIENT_ID=...
+WEB_PORTAL_DISCORD_CLIENT_SECRET=...
+WEB_PORTAL_DISCORD_REDIRECT_PATH=/auth/discord/callback
+```
+
+#### วิธีเช็กว่าตั้งค่าเว็บเสร็จแล้ว
+
+```bash
+npm run doctor:web-standalone:prod
+npm run security:check
+npm run readiness:prod
+npm run smoke:postdeploy
+```
+
+ถ้า smoke script ใช้ public base url ผ่าน env แยก ให้ตั้ง:
+```bat
+set SMOKE_ADMIN_BASE_URL=https://admin.genz.noah-dns.online/admin
+set SMOKE_PLAYER_BASE_URL=https://player.genz.noah-dns.online
+```
+
 For the full env reference, see [docs/ENV_REFERENCE_TH.md](./docs/ENV_REFERENCE_TH.md).

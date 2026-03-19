@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, EmbedBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder, MessageFlags } = require('discord.js');
 const { economy, channels } = require('../config');
 const { resolveItemIconUrl } = require('../services/itemIconService');
 const { findShopItemView } = require('../services/playerQueryService');
@@ -9,18 +9,37 @@ const {
   isGameItemShopKind,
   buildBundleSummary,
 } = require('../services/shopService');
+const {
+  createDiscordCard,
+  createMetricFields,
+  createSection,
+  formatCoins,
+} = require('../utils/discordEmbedTheme');
 
-function getDeliveryText(result) {
+function getDeliveryStatus(result) {
   if (result?.queued) {
-    return '\nสถานะการส่งของ: ระบบอัตโนมัติกำลังดำเนินการ';
+    return 'เข้าคิวส่งอัตโนมัติแล้ว';
   }
   if (result?.reason === 'item-not-configured') {
-    return '\nสถานะการส่งของ: สินค้านี้ยังไม่ได้ตั้งค่าคำสั่งส่งของอัตโนมัติ';
+    return 'ยังไม่ได้ตั้งค่าคำสั่งส่งอัตโนมัติ';
   }
   if (result?.reason === 'delivery-disabled') {
-    return '\nสถานะการส่งของ: ปิดระบบส่งของอัตโนมัติอยู่';
+    return 'ระบบส่งอัตโนมัติถูกปิดอยู่';
   }
-  return '\nสถานะการส่งของ: รอทีมงานจัดการ';
+  return 'รอทีมงานจัดการ';
+}
+
+function buildPurchaseEmbed(interaction, options = {}) {
+  return createDiscordCard({
+    context: interaction,
+    tone: options.tone || 'success',
+    authorName: options.authorName || 'Purchase Receipt',
+    title: options.title,
+    description: options.description,
+    fields: options.fields,
+    thumbnail: options.thumbnail,
+    footerText: options.footerText || 'ระบบบันทึกคำสั่งซื้อเรียบร้อยแล้ว',
+  });
 }
 
 module.exports = {
@@ -40,7 +59,7 @@ module.exports = {
 
     if (!item) {
       return interaction.reply({
-        content: 'ไม่พบสินค้าที่ต้องการ กรุณาตรวจสอบชื่อหรือรหัสอีกครั้ง (`/shop` เพื่อดูรายการทั้งหมด)',
+        content: 'ไม่พบสินค้าที่ต้องการ กรุณาตรวจสอบชื่อหรือรหัสอีกครั้ง แล้วดูรายการด้วย `/shop`',
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -56,13 +75,23 @@ module.exports = {
     if (!result.ok) {
       if (result.reason === 'steam-link-required') {
         return interaction.reply({
-          content: 'ต้องผูก SteamID ก่อนซื้อสินค้าไอเทมในเกม ใช้ `/linksteam set` แล้วลองใหม่',
+          content: 'ต้องผูก SteamID ก่อนซื้อไอเทมในเกม ใช้ `/linksteam set` แล้วลองใหม่',
           flags: MessageFlags.Ephemeral,
         });
       }
       if (result.reason === 'insufficient-balance') {
+        const embed = buildPurchaseEmbed(interaction, {
+          tone: 'warn',
+          title: 'เหรียญไม่พอ',
+          fields: createMetricFields([
+            { name: 'สินค้า', value: item.name, inline: false },
+            { name: 'ต้องใช้', value: formatCoins(item.price || 0, economy.currencySymbol) },
+            { name: 'ยอดปัจจุบัน', value: formatCoins(result.balance || 0, economy.currencySymbol) },
+          ]),
+          footerText: 'เติมเหรียญแล้วลองใหม่อีกครั้ง',
+        });
         return interaction.reply({
-          content: `ยอดเหรียญของคุณไม่พอ ต้องการ ${economy.currencySymbol} **${Number(item.price || 0).toLocaleString()}** แต่คุณมี ${economy.currencySymbol} **${Number(result.balance || 0).toLocaleString()}**`,
+          embeds: [embed],
           flags: MessageFlags.Ephemeral,
         });
       }
@@ -73,43 +102,35 @@ module.exports = {
     }
 
     const { purchase, delivery } = result;
-    const deliveryText = getDeliveryText(delivery);
+    const deliveryStatus = getDeliveryStatus(delivery);
     const kind = normalizeShopKind(item.kind);
     const isVip = isVipShopKind(kind);
     const isGameItem = isGameItemShopKind(kind);
     const bundle = buildBundleSummary(item, 5);
     const iconUrl = resolveItemIconUrl(item);
 
-    const replyPayload = {
-      content:
-        `ซื้อ **${item.name}** สำเร็จ\n`
-        + `ประเภท: **${kind.toUpperCase()}**\n`
-        + `ราคา: ${economy.currencySymbol} **${Number(item.price || 0).toLocaleString()}**\n`
-        + `${isGameItem ? `${bundle.long}\n` : isVip ? '' : 'การส่งมอบ: **ทีมงานจัดการในเกม**\n'}`
-        + `โค้ดอ้างอิง: \`${purchase.code}\`${deliveryText}`,
-    };
+    const embed = buildPurchaseEmbed(interaction, {
+      title: 'สั่งซื้อสำเร็จ',
+      description: [
+        createSection('สินค้า', [
+          `**${item.name}**`,
+          `รหัส: \`${item.id}\``,
+          `ประเภท: **${kind.toUpperCase()}**`,
+        ]),
+        createSection('การส่งมอบ', [
+          isGameItem ? bundle.long : isVip ? 'แพ็กเกจ VIP จะเปิดใช้งานทันที' : 'ทีมงานจัดการในเกม',
+          `สถานะ: **${deliveryStatus}**`,
+        ]),
+      ].join('\n\n'),
+      fields: createMetricFields([
+        { name: 'ราคา', value: formatCoins(item.price || 0, economy.currencySymbol) },
+        { name: 'Order Code', value: `\`${purchase.code}\`` },
+      ]),
+      thumbnail: iconUrl,
+      footerText: 'เก็บรหัสอ้างอิงนี้ไว้หากต้องติดต่อทีมงาน',
+    });
 
-    if (iconUrl) {
-      replyPayload.embeds = [
-        new EmbedBuilder()
-          .setColor(0x22c55e)
-          .setTitle(`สินค้า: ${item.name}`)
-          .setDescription(
-            [
-              `รหัส: \`${item.id}\``,
-              `ประเภท: **${kind.toUpperCase()}**`,
-              ...(isGameItem
-                ? [bundle.long]
-                : isVip
-                  ? []
-                  : ['การส่งมอบ: **ทีมงานจัดการในเกม**']),
-            ].join('\n'),
-          )
-          .setThumbnail(iconUrl),
-      ];
-    }
-
-    await interaction.reply(replyPayload);
+    await interaction.reply({ embeds: [embed] });
 
     try {
       const guild = interaction.guild;
@@ -118,9 +139,23 @@ module.exports = {
           (channel) => channel.name === channels.shopLog,
         );
         if (logChannel && logChannel.isTextBased()) {
-          await logChannel.send(
-            `การซื้อ | ผู้ใช้: ${interaction.user} | สินค้า: **${item.name}** (\`${item.id}\`) | ประเภท: ${kind.toUpperCase()} | รายการ: ${isGameItem ? bundle.short : isVip ? 'VIP' : 'MANUAL'} | ราคา: ${economy.currencySymbol} **${Number(item.price || 0).toLocaleString()}** | โค้ด: \`${purchase.code}\` | ส่งอัตโนมัติ: ${delivery.queued ? 'เข้าคิวแล้ว' : delivery.reason || 'แอดมินจัดการ'}`,
-          );
+          const logEmbed = buildPurchaseEmbed(interaction, {
+            tone: 'admin',
+            authorName: 'Shop Activity',
+            title: 'New Purchase',
+            description: createSection('ผู้ซื้อ', [`${interaction.user}`]),
+            fields: createMetricFields([
+              { name: 'สินค้า', value: `${item.name} (\`${item.id}\`)`, inline: false },
+              { name: 'ประเภท', value: kind.toUpperCase() },
+              { name: 'ราคา', value: formatCoins(item.price || 0, economy.currencySymbol) },
+              { name: 'รายการส่งมอบ', value: isGameItem ? bundle.short : isVip ? 'VIP' : 'MANUAL', inline: false },
+              { name: 'Order Code', value: `\`${purchase.code}\`` },
+              { name: 'Delivery', value: deliveryStatus, inline: false },
+            ]),
+            thumbnail: iconUrl,
+            footerText: 'shop-log',
+          });
+          await logChannel.send({ embeds: [logEmbed] });
         }
       }
     } catch (error) {

@@ -1,7 +1,6 @@
 ﻿const {
   SlashCommandBuilder,
   PermissionFlagsBits,
-  EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
@@ -27,6 +26,12 @@ const {
   buildTopEconomyEmbed,
   registerLeaderboardPanelMessage,
 } = require('../services/leaderboardPanels');
+const {
+  createDiscordCard,
+  createMetricFields,
+  createSection,
+  formatCoins,
+} = require('../utils/discordEmbedTheme');
 
 function buildDeliverySummaryLines(item, maxRows = 4) {
   const summary = buildBundleSummary(item, maxRows);
@@ -51,21 +56,20 @@ function buildShopEmbed(item, imageUrl) {
         `**ประเภท:** ${kind.toUpperCase()}`,
         '**การส่งมอบ:** ทีมงานจัดการในเกม',
       ];
-  const embed = new EmbedBuilder()
-    .setColor(0x22c55e)
-    .setTitle(item.name)
-    .setDescription(
-      [
-        ...metaLines,
-        '',
-        '**รายละเอียด:**',
-        item.description || '-',
-        '',
-        '----------------',
-        `**ราคา: ${Number(item.price || 0).toLocaleString()}** เหรียญ`,
-        '----------------',
-      ].join('\n'),
-    );
+  const embed = createDiscordCard({
+    tone: 'economy',
+    authorName: 'Featured Item',
+    title: item.name,
+    description: [
+      createSection('ประเภทและการส่งมอบ', metaLines),
+      createSection('รายละเอียด', [item.description || '-']),
+    ].join('\n\n'),
+    fields: createMetricFields([
+      { name: 'ราคา', value: formatCoins(item.price || 0), inline: false },
+      { name: 'รหัสสินค้า', value: `\`${item.id}\``, inline: false },
+    ]),
+    footerText: 'กดปุ่มด้านล่างเพื่อซื้อหรือเพิ่มลงตะกร้า',
+  });
 
   if (resolvedImageUrl) {
     embed.setImage(resolvedImageUrl);
@@ -225,16 +229,17 @@ module.exports = {
 };
 
 async function postWelcomePack(interaction) {
-  const embed = new EmbedBuilder()
-    .setColor(0x5865f2)
-    .setTitle('แพ็กต้อนรับและลงทะเบียน')
-    .setDescription(
-      [
-        'กดปุ่มด้านล่างเพื่อรับแพ็กต้อนรับและใช้งานเมนูหลัก',
-        `รับเหรียญเริ่มต้นและเปิดเมนูหลักของ **${serverInfo.name}**`,
-      ].join('\n'),
-    )
-    .setFooter({ text: '1 บัญชี / รับได้ 1 ครั้ง' });
+  const embed = createDiscordCard({
+    context: interaction,
+    tone: 'brand',
+    authorName: 'Welcome Center',
+    title: 'แพ็กต้อนรับและลงทะเบียน',
+    description: createSection('เริ่มต้นใช้งาน', [
+      'กดปุ่มด้านล่างเพื่อรับแพ็กต้อนรับและใช้งานเมนูหลัก',
+      `เริ่มต้นกับ **${serverInfo.name}** ได้ทันที`,
+    ]),
+    footerText: '1 บัญชี / รับได้ 1 ครั้ง',
+  });
 
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -268,19 +273,17 @@ async function postWelcomePack(interaction) {
 async function postVerify(interaction) {
   const imageUrl = interaction.options.getString('image_url');
 
-  const embed = new EmbedBuilder()
-    .setColor(0x32d74b)
-    .setTitle('ยืนยันตัวตน')
-    .setDescription(
-      [
-        'กรุณากดปุ่มด้านล่างเพื่อยืนยัน SteamID',
-        '',
-        '**กรุณายืนยัน SteamID ก่อนเข้าใช้งานเซิร์ฟเวอร์**',
-        '',
-        'ระบบจะลิงก์บัญชี Discord ของคุณกับ SteamID64 อัตโนมัติ',
-      ].join('\n'),
-    )
-    .setFooter({ text: serverInfo.name });
+  const embed = createDiscordCard({
+    context: interaction,
+    tone: 'success',
+    authorName: 'Verification Panel',
+    title: 'ยืนยันตัวตน',
+    description: createSection('ขั้นตอนสำคัญ', [
+      'กรุณายืนยัน SteamID ก่อนเข้าใช้งานเซิร์ฟเวอร์',
+      'ระบบจะลิงก์บัญชี Discord ของคุณกับ SteamID64 อัตโนมัติ',
+    ]),
+    footerText: serverInfo.name,
+  });
 
   if (imageUrl) {
     embed.setImage(imageUrl);
@@ -297,17 +300,17 @@ async function postVerify(interaction) {
 }
 
 async function postTicketAdmin(interaction) {
-  const embed = new EmbedBuilder()
-    .setColor(0x7289da)
-    .setTitle('แพเนลช่วยเหลือทิคเก็ต')
-    .setDescription(
-      [
-        'ต้องการความช่วยเหลือเรื่องอะไร?',
-        'ยินดีต้อนรับสู่ช่องทิคเก็ต หากคุณมีคำถามหรือปัญหา',
-        'กรุณากดปุ่ม **เปิดทิคเก็ต** ด้านล่างเพื่อติดต่อทีมงาน',
-      ].join('\n'),
-    )
-    .setFooter({ text: `${serverInfo.name} ฝ่ายซัพพอร์ต` });
+  const embed = createDiscordCard({
+    context: interaction,
+    tone: 'support',
+    authorName: 'Support Desk',
+    title: 'แพเนลช่วยเหลือทิคเก็ต',
+    description: createSection('ต้องการความช่วยเหลือ', [
+      'หากคุณมีคำถามหรือปัญหาเกี่ยวกับเซิร์ฟเวอร์',
+      'กรุณากดปุ่ม **เปิดทิคเก็ต** ด้านล่างเพื่อติดต่อทีมงาน',
+    ]),
+    footerText: `${serverInfo.name} ฝ่ายซัพพอร์ต`,
+  });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
@@ -320,8 +323,8 @@ async function postTicketAdmin(interaction) {
 }
 
 async function postTopKiller(interaction) {
-  const embed = buildTopKillerEmbed(interaction.client, interaction.guildId);
-  await interaction.reply({ embeds: [embed] });
+  const embeds = buildTopKillerEmbed(interaction.client, interaction.guildId);
+  await interaction.reply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
   const message = await interaction.fetchReply().catch(() => null);
   if (message) {
     registerLeaderboardPanelMessage('topKiller', message);
@@ -329,8 +332,8 @@ async function postTopKiller(interaction) {
 }
 
 async function postTopGunKill(interaction) {
-  const embed = buildTopGunKillEmbed();
-  await interaction.reply({ embeds: [embed] });
+  const embeds = buildTopGunKillEmbed();
+  await interaction.reply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
   const message = await interaction.fetchReply().catch(() => null);
   if (message) {
     registerLeaderboardPanelMessage('topGunKill', message);
@@ -338,8 +341,8 @@ async function postTopGunKill(interaction) {
 }
 
 async function postTopKd(interaction) {
-  const embed = buildTopKdEmbed(interaction.client, interaction.guildId);
-  await interaction.reply({ embeds: [embed] });
+  const embeds = buildTopKdEmbed(interaction.client, interaction.guildId);
+  await interaction.reply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
   const message = await interaction.fetchReply().catch(() => null);
   if (message) {
     registerLeaderboardPanelMessage('topKd', message);
@@ -347,8 +350,8 @@ async function postTopKd(interaction) {
 }
 
 async function postTopPlaytime(interaction) {
-  const embed = buildTopPlaytimeEmbed(interaction.client, interaction.guildId);
-  await interaction.reply({ embeds: [embed] });
+  const embeds = buildTopPlaytimeEmbed(interaction.client, interaction.guildId);
+  await interaction.reply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
   const message = await interaction.fetchReply().catch(() => null);
   if (message) {
     registerLeaderboardPanelMessage('topPlaytime', message);
@@ -356,8 +359,8 @@ async function postTopPlaytime(interaction) {
 }
 
 async function postTopEconomy(interaction) {
-  const embed = await buildTopEconomyEmbed(interaction.client, interaction.guildId);
-  await interaction.reply({ embeds: [embed] });
+  const embeds = await buildTopEconomyEmbed(interaction.client, interaction.guildId);
+  await interaction.reply({ embeds: Array.isArray(embeds) ? embeds : [embeds] });
   const message = await interaction.fetchReply().catch(() => null);
   if (message) {
     registerLeaderboardPanelMessage('topEconomy', message);

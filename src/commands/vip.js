@@ -1,6 +1,5 @@
 const {
   SlashCommandBuilder,
-  EmbedBuilder,
   MessageFlags,
 } = require('discord.js');
 const { roles } = require('../config');
@@ -9,6 +8,12 @@ const {
   getVipPlan,
   getMembership,
 } = require('../services/vipService');
+const {
+  createDiscordCard,
+  createMetricFields,
+  createSection,
+  formatCoins,
+} = require('../utils/discordEmbedTheme');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -51,17 +56,23 @@ module.exports = {
 
 async function handleList(interaction) {
   const plans = require('../config').vip.plans;
-  const lines = plans.map(
-    (plan) =>
-      `รหัส: \`${plan.id}\` | **${plan.name}** | ${plan.durationDays} วัน | ราคา: ${plan.priceCoins.toLocaleString()} เหรียญ\n${plan.description}`,
+  const embeds = plans.map((plan, index) =>
+    createDiscordCard({
+      context: interaction,
+      tone: 'vip',
+      authorName: 'VIP Plans',
+      title: `${plan.name}`,
+      description: createSection('รายละเอียด', [plan.description]),
+      fields: createMetricFields([
+        { name: 'Plan ID', value: `\`${plan.id}\`` },
+        { name: 'Duration', value: `${plan.durationDays} วัน` },
+        { name: 'Price', value: formatCoins(plan.priceCoins) },
+      ]),
+      footerText: `แพ็กเกจ ${index + 1} / ${plans.length}`,
+    }),
   );
 
-  const embed = new EmbedBuilder()
-    .setTitle('แพ็กเกจ VIP')
-    .setDescription(lines.join('\n\n'))
-    .setColor(0xffd700);
-
-  await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+  await interaction.reply({ embeds, flags: MessageFlags.Ephemeral });
 }
 
 async function handleBuy(interaction) {
@@ -82,8 +93,19 @@ async function handleBuy(interaction) {
   });
   if (!result.ok) {
     if (result.reason === 'insufficient-balance') {
+      const embed = createDiscordCard({
+        context: interaction,
+        tone: 'warn',
+        authorName: 'VIP Purchase',
+        title: 'เหรียญไม่พอ',
+        fields: createMetricFields([
+          { name: 'Required', value: formatCoins(plan.priceCoins) },
+          { name: 'Current Balance', value: formatCoins(result.balance || 0) },
+        ]),
+        footerText: 'เติมเหรียญหรือเลือกแพ็กเกจที่เล็กลงแล้วลองใหม่',
+      });
       return interaction.reply({
-        content: `เหรียญไม่พอ ต้องการ ${plan.priceCoins.toLocaleString()} เหรียญ แต่คุณมีเพียง ${Number(result.balance || 0).toLocaleString()} เหรียญ`,
+        embeds: [embed],
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -104,26 +126,40 @@ async function handleBuy(interaction) {
     }
   }
 
-  await interaction.reply(
-    `เปิดใช้งาน **${plan.name}** สำเร็จแล้ว\nหมดอายุ: <t:${Math.floor(
-      result.membership.expiresAt.getTime() / 1000,
-    )}:F>\nยอดคงเหลือ: **${Number(result.balance || 0).toLocaleString()}** เหรียญ`,
-  );
+  const embed = createDiscordCard({
+    context: interaction,
+    tone: 'vip',
+    authorName: 'VIP Purchase',
+    title: 'เปิดใช้งาน VIP สำเร็จ',
+    description: createSection('แพ็กเกจ', [
+      `คุณได้รับ **${plan.name}**`,
+      `หมดอายุ <t:${Math.floor(result.membership.expiresAt.getTime() / 1000)}:F>`,
+    ]),
+    fields: createMetricFields([
+      { name: 'Plan', value: plan.name },
+      { name: 'Remaining Balance', value: formatCoins(result.balance || 0) },
+    ]),
+    footerText: 'สิทธิ์ VIP จะมีผลกับระบบที่ผูก role และ privileges ไว้',
+  });
+
+  await interaction.reply({ embeds: [embed] });
 }
 
 async function handlePerks(interaction) {
-  const lines = [
-    '- คิวเข้าเซิร์ฟไวขึ้น (ตามที่เซิร์ฟเวอร์ตั้งค่า)',
-    '- ยศ VIP พร้อมสีชื่อพิเศษ',
-    '- ห้องคุยเฉพาะ VIP',
-    '- โบนัสเหรียญรายวัน/รายสัปดาห์ตามนโยบายเซิร์ฟเวอร์',
-    '- สิทธิ์หรือของตกแต่งพิเศษอื่น ๆ ตามที่ทีมงานประกาศ',
-  ];
-
-  const embed = new EmbedBuilder()
-    .setTitle('สิทธิ์ของ VIP')
-    .setDescription(lines.join('\n'))
-    .setColor(0xffa500);
+  const embed = createDiscordCard({
+    context: interaction,
+    tone: 'vip',
+    authorName: 'VIP Benefits',
+    title: 'สิทธิ์ของ VIP',
+    description: createSection('สิทธิประโยชน์', [
+      'คิวเข้าเซิร์ฟไวขึ้นตามที่เซิร์ฟเวอร์ตั้งค่า',
+      'ยศ VIP พร้อมสีชื่อพิเศษ',
+      'เข้าถึงห้องคุยเฉพาะ VIP',
+      'โบนัสเหรียญตามนโยบายเซิร์ฟเวอร์',
+      'สิทธิ์ตกแต่งหรือสิทธิ์พิเศษอื่นตามประกาศทีมงาน',
+    ], { bullets: true }),
+    footerText: 'รายละเอียดจริงขึ้นอยู่กับแพ็กเกจและ runtime config ปัจจุบัน',
+  });
 
   await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
@@ -131,18 +167,35 @@ async function handlePerks(interaction) {
 async function handleStatus(interaction) {
   const membership = getMembership(interaction.user.id);
   if (!membership) {
+    const embed = createDiscordCard({
+      context: interaction,
+      tone: 'neutral',
+      authorName: 'VIP Status',
+      title: 'ยังไม่มี VIP ที่ใช้งานอยู่',
+      footerText: 'ใช้ /vip list เพื่อดูแพ็กเกจที่เปิดขาย',
+    });
     return interaction.reply({
-      content: 'คุณยังไม่มี VIP ที่ใช้งานอยู่',
+      embeds: [embed],
       flags: MessageFlags.Ephemeral,
     });
   }
 
   const plan = getVipPlan(membership.planId);
   const name = plan ? plan.name : membership.planId;
+  const embed = createDiscordCard({
+    context: interaction,
+    tone: 'vip',
+    authorName: 'VIP Status',
+    title: name,
+    fields: createMetricFields([
+      { name: 'Plan', value: name },
+      { name: 'Expires', value: `<t:${Math.floor(membership.expiresAt.getTime() / 1000)}:F>`, inline: false },
+    ]),
+    footerText: 'สถานะ VIP ปัจจุบันของบัญชีคุณ',
+  });
+
   await interaction.reply({
-    content: `คุณมี VIP: **${name}**\nหมดอายุ: <t:${Math.floor(
-      membership.expiresAt.getTime() / 1000,
-    )}:F>`,
+    embeds: [embed],
     flags: MessageFlags.Ephemeral,
   });
 }

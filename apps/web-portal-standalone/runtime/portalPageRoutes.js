@@ -11,6 +11,7 @@ function createPortalPageRoutes(deps) {
     captureAuthToken,
     createCaptureSession,
     buildSessionCookie,
+    tryServePortalStaticAsset,
     tryServeStaticScumIcon,
     buildLegacyAdminUrl,
     getCanonicalRedirectUrl,
@@ -23,6 +24,7 @@ function createPortalPageRoutes(deps) {
     getShowcaseHtml,
     getTrialHtml,
     getPlayerHtml,
+    getLegacyPlayerHtml,
     getPlatformPublicOverview,
     isDiscordStartPath,
     isDiscordCallbackPath,
@@ -31,6 +33,12 @@ function createPortalPageRoutes(deps) {
     getSession,
     renderLoginPage,
   } = deps;
+  const servePortalStaticAsset = typeof tryServePortalStaticAsset === 'function'
+    ? tryServePortalStaticAsset
+    : async () => false;
+  const serveLegacyPlayerHtml = typeof getLegacyPlayerHtml === 'function'
+    ? getLegacyPlayerHtml
+    : getPlayerHtml;
 
   return async function handlePortalPageRoute(context) {
     const {
@@ -40,6 +48,10 @@ function createPortalPageRoutes(deps) {
       pathname,
       method,
     } = context;
+
+    if (await servePortalStaticAsset(req, res, pathname)) {
+      return true;
+    }
 
     if (await tryServeStaticScumIcon(req, res, pathname)) {
       return true;
@@ -144,6 +156,11 @@ function createPortalPageRoutes(deps) {
       return true;
     }
 
+    if (pathname === '/player/legacy/' && method === 'GET') {
+      sendRedirect(res, '/player/legacy');
+      return true;
+    }
+
     if (pathname === '/player/login/') {
       sendRedirect(res, '/player/login');
       return true;
@@ -180,6 +197,16 @@ function createPortalPageRoutes(deps) {
         return true;
       }
       sendHtml(res, 200, getPlayerHtml());
+      return true;
+    }
+
+    if (pathname === '/player/legacy' && method === 'GET') {
+      const session = getSession(req);
+      if (!session) {
+        sendRedirect(res, '/player/login');
+        return true;
+      }
+      sendHtml(res, 200, serveLegacyPlayerHtml());
       return true;
     }
 

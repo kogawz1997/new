@@ -1,9 +1,8 @@
-﻿const crypto = require('node:crypto');
+const crypto = require('node:crypto');
 const {
   SlashCommandBuilder,
   PermissionFlagsBits,
   ChannelType,
-  EmbedBuilder,
   MessageFlags,
 } = require('discord.js');
 const { channels, roles } = require('../config');
@@ -13,6 +12,11 @@ const {
   claimSupportTicket,
   closeSupportTicket,
 } = require('../services/ticketService');
+const {
+  createDiscordCard,
+  createMetricFields,
+  createSection,
+} = require('../utils/discordEmbedTheme');
 
 const CATEGORIES = [
   'แจ้งผู้เล่นโกง',
@@ -33,6 +37,19 @@ function hasTicketCreatePermissions(guild, parent) {
   ];
   const perms = parent ? parent.permissionsFor(me) : me.permissions;
   return perms?.has(required);
+}
+
+function buildTicketEmbed(interaction, options = {}) {
+  return createDiscordCard({
+    context: interaction,
+    tone: options.tone || 'support',
+    authorName: options.authorName || 'Support Ticket',
+    title: options.title,
+    description: options.description,
+    fields: options.fields,
+    thumbnail: options.thumbnail,
+    footerText: options.footerText || 'ทีมงานจะเข้ามาดูแลตามคิวที่ได้รับ',
+  });
 }
 
 module.exports = {
@@ -128,7 +145,7 @@ async function handleOpen(interaction) {
   if (!hasTicketCreatePermissions(guild, parent)) {
     return interaction.reply({
       content:
-        'บอทไม่มีสิทธิ์พอสำหรับสร้างทิคเก็ต (ต้องมีสิทธิ์ ดูช่อง, ส่งข้อความ, จัดการช่อง, จัดการยศ ในหมวดที่ใช้)',
+        'บอทไม่มีสิทธิ์พอสำหรับสร้างทิคเก็ต ต้องมีสิทธิ์ดูช่อง ส่งข้อความ จัดการช่อง และจัดการยศในหมวดนี้',
       flags: MessageFlags.Ephemeral,
     });
   }
@@ -181,7 +198,7 @@ async function handleOpen(interaction) {
     if (error && error.code === 50013) {
       return interaction.reply({
         content:
-          'สร้างทิคเก็ตไม่สำเร็จ เพราะบอทยังไม่มีสิทธิ์ในเซิร์ฟเวอร์/หมวดนี้ กรุณาให้สิทธิ์จัดการช่องและจัดการยศ แล้วลองใหม่',
+          'สร้างทิคเก็ตไม่สำเร็จ เพราะบอทยังไม่มีสิทธิ์ในเซิร์ฟเวอร์หรือหมวดนี้ กรุณาให้สิทธิ์แล้วลองใหม่',
         flags: MessageFlags.Ephemeral,
       });
     }
@@ -202,19 +219,22 @@ async function handleOpen(interaction) {
     });
   }
 
-  const embed = new EmbedBuilder()
-    .setTitle(`🎫 ทิคเก็ต - ${category}`)
-    .setDescription(
-      [
-        `ผู้ร้องเรียน: ${interaction.user}`,
-        `หมวด: **${category}**`,
-        '',
-        `รายละเอียด: ${reason}`,
-        '',
-        'ทีมงานจะเข้ามาดูแลคุณให้เร็วที่สุด',
-      ].join('\n'),
-    )
-    .setColor(0x00bfff);
+  const embed = buildTicketEmbed(interaction, {
+    title: `Ticket • ${category}`,
+    description: [
+      createSection('ผู้แจ้ง', [`${interaction.user}`]),
+      createSection('รายละเอียด', [reason]),
+      createSection('ขั้นตอนถัดไป', [
+        'อธิบายรายละเอียดเพิ่มได้ทันทีในช่องนี้',
+        'แนบภาพหรือคลิปถ้ามีหลักฐาน',
+        'ทีมงานจะมารับเรื่องตามลำดับคิว',
+      ], { bullets: true }),
+    ].join('\n\n'),
+    thumbnail:
+      interaction.user.displayAvatarURL?.({ extension: 'png', size: 256 })
+      || interaction.user.avatarURL?.({ extension: 'png', size: 256 })
+      || null,
+  });
 
   const mentionText = staffRoleIds.map((roleId) => `<@&${roleId}>`).join(' ');
   const payload = mentionText
@@ -223,8 +243,18 @@ async function handleOpen(interaction) {
 
   await newChannel.send(payload).catch(() => newChannel.send({ embeds: [embed] }));
 
+  const replyEmbed = buildTicketEmbed(interaction, {
+    tone: 'success',
+    title: 'สร้างทิคเก็ตเรียบร้อย',
+    fields: createMetricFields([
+      { name: 'หมวด', value: category },
+      { name: 'ห้อง', value: `${newChannel}`, inline: false },
+    ]),
+    footerText: 'เปิดห้องแล้ว สามารถเข้าไปคุยกับทีมงานได้ทันที',
+  });
+
   await interaction.reply({
-    content: `สร้างทิคเก็ตแล้ว: ${newChannel}`,
+    embeds: [replyEmbed],
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -250,9 +280,28 @@ async function handleClaim(interaction) {
     });
   }
 
-  await channel.send(`🔔 ${interaction.user} รับเรื่องทิคเก็ตนี้แล้ว`);
+  await channel.send({
+    embeds: [
+      buildTicketEmbed(interaction, {
+        tone: 'brand',
+        title: 'มีทีมงานรับเรื่องแล้ว',
+        description: createSection('เจ้าหน้าที่', [`${interaction.user}`]),
+        footerText: `Ticket ID: ${result.ticket.id}`,
+      }),
+    ],
+  });
   await interaction.reply({
-    content: `คุณรับทิคเก็ตนี้แล้ว (รหัส: ${result.ticket.id})`,
+    embeds: [
+      buildTicketEmbed(interaction, {
+        tone: 'success',
+        title: 'รับเรื่องสำเร็จ',
+        fields: createMetricFields([
+          { name: 'Ticket ID', value: result.ticket.id },
+          { name: 'Staff', value: `${interaction.user}` },
+        ]),
+        footerText: 'ระบบบันทึกเจ้าหน้าที่ผู้รับเรื่องแล้ว',
+      }),
+    ],
     flags: MessageFlags.Ephemeral,
   });
 }
@@ -276,7 +325,13 @@ async function handleClose(interaction) {
   }
 
   await interaction.reply({
-    content: 'กำลังปิดและลบห้อง ticket...',
+    embeds: [
+      buildTicketEmbed(interaction, {
+        tone: 'warn',
+        title: 'กำลังปิดทิคเก็ต',
+        footerText: 'ระบบจะลบห้องหลังจากปิดสถานะเรียบร้อย',
+      }),
+    ],
     flags: MessageFlags.Ephemeral,
   });
 
@@ -284,10 +339,17 @@ async function handleClose(interaction) {
     await channel.delete('Ticket closed by staff');
   } catch (error) {
     if (error?.code === 50013) {
-      await channel.send('🔒 ปิด ticket แล้ว (แต่ลบห้องไม่สำเร็จ)').catch(() => null);
+      await channel.send({
+        embeds: [
+          buildTicketEmbed(interaction, {
+            tone: 'warn',
+            title: 'ปิด ticket แล้ว แต่ลบห้องไม่สำเร็จ',
+            footerText: 'ตรวจสิทธิ์ Manage Channels และลำดับยศของบอท',
+          }),
+        ],
+      }).catch(() => null);
       await interaction.followUp({
-        content:
-          'ปิด ticket แล้ว แต่ลบห้องไม่ได้ (ตรวจสิทธิ์ Manage Channels และลำดับยศของบอท)',
+        content: 'ปิด ticket แล้ว แต่ลบห้องไม่ได้ ตรวจสิทธิ์ Manage Channels และลำดับยศของบอท',
         flags: MessageFlags.Ephemeral,
       });
       return;
@@ -314,9 +376,15 @@ async function handleTranscript(interaction) {
     : [];
 
   const content = lines.join('\n').slice(0, 1900) || 'ไม่มีข้อความในทิคเก็ตนี้ หรือข้อมูลสั้นมาก';
+  const embed = buildTicketEmbed(interaction, {
+    tone: 'admin',
+    title: 'Ticket Transcript',
+    description: createSection('100 ข้อความล่าสุด', [`\`\`\`\n${content}\n\`\`\``]),
+    footerText: `Ticket Channel: ${channel.name}`,
+  });
 
   await interaction.reply({
-    content: 'สรุปข้อความ (100 ข้อความล่าสุด):\n' + content,
+    embeds: [embed],
     flags: MessageFlags.Ephemeral,
   });
 }
